@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nickel-lang/json-schema-store/main/tauri/v2/schema.json",
+  "productName": "AI Proxy",
+  "version": "0.2.0",
+  "identifier": "com.ai-proxy.app",
+  "build": {
+    "beforeDevCommand": "bun run dev:vite",
+    "devUrl": "http://127.0.0.1:5205",
+    "beforeBuildCommand": "bun run build:vite",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "AI Proxy",
+        "decorations": false,
+        "dragDropEnabled": false,
+        "width": 1000,
+        "height": 650,
+        "minWidth": 900,
+        "minHeight": 600,
+        "visible": false,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: https: http:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost https: http:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

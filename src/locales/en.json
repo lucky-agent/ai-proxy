@@ -1,0 +1,88 @@
+{
+  "app": {
+    "running": "Running",
+    "stopped": "Stopped",
+    "start": "Start",
+    "stop": "Stop"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "traffic": {
+    "requests": "{{count}} requests",
+    "requestsTo": "{{count}} requests to {{domain}}",
+    "clear": "Clear"
+  },
+  "hosts": {
+    "title": "Hosts",
+    "all": "All"
+  },
+  "requestList": {
+    "id": "#",
+    "method": "Method",
+    "url": "URL",
+    "status": "Status",
+    "duration": "Duration",
+    "time": "Time",
+    "edited": "Edited",
+    "emptyTitle": "No traffic captured yet.",
+    "emptyHint": "Start the proxy to intercept requests.",
+    "pending": "..."
+  },
+  "detail": {
+    "selectHint": "Select a request to view details",
+    "pending": "Pending",
+    "headers": "Header",
+    "body": "Body",
+    "raw": "Raw",
+    "request": "Request",
+    "response": "Response",
+    "responsePending": "Response not yet received",
+    "noHeaders": "No headers",
+    "noBody": "No body",
+    "noRequestBody": "Request body not captured",
+    "formatJson": "Format",
+    "compressJson": "Minify",
+    "copyUri": "Copy URI",
+    "copyBody": "Copy body",
+    "copyRaw": "Copy raw",
+    "copied": "Copied",
+    "enableWrap": "Wrap lines",
+    "disableWrap": "Unwrap lines",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Configure proxy listen address and upstream behavior.",
+    "loading": "Loading...",
+    "listenHost": "Listen Host",
+    "listenPort": "Listen Port",
+    "upstreamProxy": "Use system proxy for upstream requests",
+    "theme": "Theme",
+    "language": "Language",
+    "languageEn": "English",
+    "languageZh": "中文",
+    "languageSystem": "Follow system",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving..."
+  },
+  "tray": {
+    "show": "Show",
+    "settings": "Settings",
+    "quit": "Quit"
+  },
+  "menu": {
+    "settings": "Settings",
+    "about": "About",
+    "quit": "Quit"
+  },
+  "about": {
+    "description": "A MITM reverse proxy for intercepting and inspecting HTTP/HTTPS traffic.",
+    "version": "Version {{version}}",
+    "close": "Close"
+  }
+}

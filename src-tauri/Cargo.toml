@@ -1,0 +1,42 @@
+[package]
+name         = "ai-proxy"
+version      = "0.2.0"
+description  = "AI Proxy - Anthropic/OpenAI API MITM Proxy"
+authors      = ["lokistars"]
+edition      = "2024"
+rust-version = "1.91.1"
+
+[lib]
+name       = "ai_proxy_lib"
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = [
+  "fs",
+  "time",
+  "macros",
+  "rt",
+  "rt-multi-thread",
+  "signal",
+  "sync",
+] }
+log = "0.4"
+tauri-plugin-log = "2"
+chrono = "0.4"
+rama = { git = "https://github.com/plabayo/rama", features = [
+  "http-full",
+  "rustls",
+  "ring",
+] }
+bytes = "1"
+uuid = { version = "1", features = ["v4"] }
+dirs = "6"
+base64 = "0.22"
+rcgen = { version = "0.14", features = ["ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

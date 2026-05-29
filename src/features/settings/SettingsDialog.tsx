@@ -1,0 +1,175 @@
+import { useEffect, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { useLocale } from '@/hooks/useLocale'
+import type { Theme } from '@/hooks/useTheme'
+import type { LocaleSetting } from '@/i18n'
+import type { ProxyConfig } from '@/types/settings'
+
+interface Props {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  theme: Theme
+  onThemeChange: (theme: Theme) => void
+}
+
+const inputClass =
+  'h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+
+const selectClass =
+  'h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+
+export default function SettingsDialog({ open, onOpenChange, theme, onThemeChange }: Props) {
+  const { t, setLocale } = useLocale()
+  const [proxy, setProxy] = useState<ProxyConfig>({
+    listen_host: '127.0.0.1',
+    listen_port: 5201,
+    upstream_proxy: false,
+  })
+  const [language, setLanguage] = useState<LocaleSetting>('system')
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setLoading(true)
+    setError('')
+    Promise.all([
+      invoke<{ proxy: ProxyConfig }>('get_settings'),
+      invoke<LocaleSetting>('get_locale'),
+    ])
+      .then(([settings, locale]) => {
+        setProxy(settings.proxy)
+        setLanguage(locale)
+      })
+      .catch((err) => setError(String(err)))
+      .finally(() => setLoading(false))
+  }, [open])
+
+  async function handleSave() {
+    setSaving(true)
+    setError('')
+    try {
+      await invoke('save_settings', { proxy })
+      setLocale(language)
+      onOpenChange(false)
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t('settings.title')}</DialogTitle>
+          <DialogDescription>{t('settings.description')}</DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <p className="text-sm text-muted-foreground">{t('settings.loading')}</p>
+        ) : (
+          <div className="grid gap-3">
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                {t('settings.language')}
+              </span>
+              <select
+                className={selectClass}
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as LocaleSetting)}>
+                <option value="system">{t('settings.languageSystem')}</option>
+                <option value="en">{t('settings.languageEn')}</option>
+                <option value="zh">{t('settings.languageZh')}</option>
+              </select>
+            </label>
+            <div className="grid gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                {t('settings.theme')}
+              </span>
+              <div className="flex w-fit items-center gap-0.5 rounded-md border border-border bg-muted/50 p-0.5">
+                {(
+                  [
+                    { value: 'light' as Theme, icon: SunIcon },
+                    { value: 'dark' as Theme, icon: MoonIcon },
+                    { value: 'system' as Theme, icon: MonitorIcon },
+                  ] as const
+                ).map(({ value, icon: Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => onThemeChange(value)}
+                    className={`inline-flex size-7 items-center justify-center rounded-[4px] transition-colors ${
+                      theme === value
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title={t(`theme.${value}`)}>
+                    <Icon className="size-3.5" />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                {t('settings.listenHost')}
+              </span>
+              <input
+                className={inputClass}
+                value={proxy.listen_host}
+                onChange={(e) => setProxy((p) => ({ ...p, listen_host: e.target.value }))}
+              />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                {t('settings.listenPort')}
+              </span>
+              <input
+                className={inputClass}
+                type="number"
+                min={1}
+                max={65535}
+                value={proxy.listen_port}
+                onChange={(e) =>
+                  setProxy((p) => ({ ...p, listen_port: Number(e.target.value) || 0 }))
+                }
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={proxy.upstream_proxy}
+                onChange={(e) => setProxy((p) => ({ ...p, upstream_proxy: e.target.checked }))}
+                className="size-3.5 rounded border-border"
+              />
+              <span>{t('settings.upstreamProxy')}</span>
+            </label>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('settings.cancel')}
+          </Button>
+          <Button onClick={handleSave} disabled={loading || saving}>
+            {saving ? t('settings.saving') : t('settings.save')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

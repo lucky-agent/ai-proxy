@@ -1,6 +1,9 @@
 # ide
 /.idea
 /.vscode
+/.claude
+/.cursor
+/.agents
 *.swp
 *.swo
 *~
@@ -11,10 +14,16 @@ Thumbs.db
 desktop.ini
 
 
+
 # rust
 /logs/
 /target/
+src-tauri/target/
 **/*.rs.bk
+
+# web
+dist/
+node_modules/
 
 # other
 *.orig

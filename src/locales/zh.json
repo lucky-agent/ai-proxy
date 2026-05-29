@@ -1,0 +1,88 @@
+{
+  "app": {
+    "running": "运行中",
+    "stopped": "已停止",
+    "start": "启动",
+    "stop": "停止"
+  },
+  "theme": {
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "traffic": {
+    "requests": "{{count}} 条请求",
+    "requestsTo": "{{domain}} 的 {{count}} 条请求",
+    "clear": "清空"
+  },
+  "hosts": {
+    "title": "主机",
+    "all": "全部"
+  },
+  "requestList": {
+    "id": "序号",
+    "method": "方法",
+    "url": "URL",
+    "status": "状态",
+    "duration": "耗时",
+    "time": "时间",
+    "edited": "已编辑",
+    "emptyTitle": "暂无流量记录。",
+    "emptyHint": "启动代理以拦截请求。",
+    "pending": "..."
+  },
+  "detail": {
+    "selectHint": "选择一条请求查看详情",
+    "pending": "等待中",
+    "headers": "Header",
+    "body": "Body",
+    "raw": "Raw",
+    "request": "Request",
+    "response": "Response",
+    "responsePending": "尚未收到响应",
+    "noHeaders": "无请求头",
+    "noBody": "无正文",
+    "noRequestBody": "未捕获请求正文",
+    "formatJson": "格式化",
+    "compressJson": "压缩",
+    "copyUri": "复制 URI",
+    "copyBody": "复制正文",
+    "copyRaw": "复制原始内容",
+    "copied": "已复制",
+    "enableWrap": "自动换行",
+    "disableWrap": "取消换行",
+    "expandAll": "全部展开",
+    "collapseAll": "全部折叠"
+  },
+  "settings": {
+    "title": "设置",
+    "description": "配置代理监听地址与上游行为。",
+    "loading": "加载中...",
+    "listenHost": "监听地址",
+    "listenPort": "监听端口",
+    "upstreamProxy": "上游请求使用系统代理",
+    "theme": "主题",
+    "language": "语言",
+    "languageEn": "English",
+    "languageZh": "中文",
+    "languageSystem": "跟随系统",
+    "cancel": "取消",
+    "save": "保存",
+    "saving": "保存中..."
+  },
+  "tray": {
+    "show": "显示",
+    "settings": "设置",
+    "quit": "退出"
+  },
+  "menu": {
+    "settings": "设置",
+    "about": "关于",
+    "quit": "退出"
+  },
+  "about": {
+    "description": "用于拦截与查看 HTTP/HTTPS 流量的 MITM 反向代理。",
+    "version": "版本 {{version}}",
+    "close": "关闭"
+  }
+}
