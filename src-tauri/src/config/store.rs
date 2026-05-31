@@ -10,6 +10,7 @@ use crate::config::LogConfig;
 /// 应用数据存储路径管理，默认路径在用户目录的 .ai-proxy 下
 pub struct Store {
     data_dir: Arc<Mutex<PathBuf>>,
+    scripts_dir: PathBuf,
 }
 
 impl Store {
@@ -21,18 +22,31 @@ impl Store {
             .expect("Failed to determine data directory")
             .join(".ai-proxy");
         std::fs::create_dir_all(&data_dir).expect("Failed to create .ai-proxy directory");
+        let scripts_dir = data_dir.join("scripts");
+        std::fs::create_dir_all(&scripts_dir).ok();
         Self {
             data_dir: Arc::new(Mutex::new(data_dir)),
+            scripts_dir,
         }
     }
 
     pub fn data_dir(&self) -> PathBuf {
-        self.data_dir.lock().unwrap().clone()
+        self.data_dir
+            .lock()
+            .expect("Failed to lock data directory")
+            .clone()
+    }
+
+    pub fn scripts_dir(&self) -> &PathBuf {
+        &self.scripts_dir
     }
 
     pub fn build_log_plugin(log: &LogConfig) -> tauri_plugin_log::Builder {
         let log_dir = PathBuf::from(log.dir.as_ref().unwrap());
-        let mut targets = vec![Target::new(TargetKind::Folder { path: log_dir, file_name: None })];
+        let mut targets = vec![Target::new(TargetKind::Folder {
+            path: log_dir,
+            file_name: None,
+        })];
         if log.console {
             targets.push(Target::new(TargetKind::Stdout));
         }

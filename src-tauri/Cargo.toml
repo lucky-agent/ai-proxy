@@ -39,4 +39,9 @@ uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 base64 = "0.22"
 rcgen = { version = "0.14", features = ["ring"] }
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = [
+  "ring",
+  "std",
+  "tls12",
+] }
+rquickjs = { version = "0.12" }

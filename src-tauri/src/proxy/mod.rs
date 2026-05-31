@@ -30,11 +30,18 @@ pub struct ProxyServer {
     app_handle: AppHandle,
     shutdown_rx: oneshot::Receiver<()>,
     data_dir: std::path::PathBuf,
+    scripts: Vec<String>,
 }
 
 impl ProxyServer {
-    pub fn new(config: ProxyConfig, app_handle: AppHandle, shutdown_rx: oneshot::Receiver<()>, data_dir: std::path::PathBuf) -> Self {
-        Self { config, app_handle, shutdown_rx, data_dir }
+    pub fn new(
+        config: ProxyConfig,
+        app_handle: AppHandle,
+        shutdown_rx: oneshot::Receiver<()>,
+        data_dir: std::path::PathBuf,
+        scripts: Vec<String>,
+    ) -> Self {
+        Self { config, app_handle, shutdown_rx, data_dir, scripts }
     }
 
     pub async fn run(self) -> Result<(), BoxError> {
@@ -42,6 +49,7 @@ impl ProxyServer {
             cert::MitmCertProvider::try_new(&self.data_dir).context("MITM cert provider")?;
         let mitm_tls_service_data = provider.into_tls_acceptor_data();
 
+        let scripts = self.scripts.clone();
         let listen_addr = format!("{}:{}", &self.config.listen_host, &self.config.listen_port);
 
         let app_handle = self.app_handle.clone();
@@ -69,6 +77,7 @@ impl ProxyServer {
                     exec: exec.clone(),
                     app_handle,
                     upstream_proxy: self.config.upstream_proxy,
+                    scripts,
                 };
 
                 let http_mitm_service = new_http_mitm_proxy();

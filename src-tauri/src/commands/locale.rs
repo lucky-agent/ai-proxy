@@ -1,6 +1,6 @@
-use crate::tray::update_tray_menu;
 use crate::AppState;
 use crate::config::Settings;
+use crate::tray::update_tray_menu;
 
 #[tauri::command]
 pub fn get_locale(state: tauri::State<'_, AppState>) -> Result<String, String> {
@@ -25,7 +25,9 @@ pub fn set_locale(
     let data_dir = state.store.data_dir();
     let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
     settings.ui.language = language.clone();
-    settings.save_to_path(&data_dir).map_err(|e| e.to_string())?;
+    settings
+        .save_to_path(&data_dir)
+        .map_err(|e| e.to_string())?;
 
     {
         let mut s = state.settings.lock().unwrap();
@@ -34,8 +36,7 @@ pub fn set_locale(
         }
     }
 
-    let resolved = resolve_locale_for_tray(&language);
-    update_tray_menu(&app_handle, resolved).map_err(|e| e.to_string())?;
+    update_tray_menu(&app_handle, &language).map_err(|e| e.to_string())?;
 
     Ok(language)
 }
@@ -46,11 +47,4 @@ pub fn sync_tray_locale(app_handle: tauri::AppHandle, locale: String) -> Result<
         return Err(format!("Invalid locale: {}. Must be en or zh.", locale));
     }
     update_tray_menu(&app_handle, &locale).map_err(|e| e.to_string())
-}
-
-pub fn resolve_locale_for_tray(language: &str) -> &str {
-    match language {
-        "zh" | "en" => language,
-        _ => "en",
-    }
 }

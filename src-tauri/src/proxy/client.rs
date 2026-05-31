@@ -1,20 +1,21 @@
 use std::convert::Infallible;
 use std::time::Instant;
 
-use rama::Layer;
-use rama::Service;
 use rama::extensions::ExtensionsRef;
 use rama::http::client::EasyHttpWebClient;
 use rama::http::layer::decompression::DecompressionLayer;
 use rama::http::layer::map_response_body::MapResponseBodyLayer;
-use rama::http::{Request, Response, Version};
+use rama::http::{Body, Request, Response, StatusCode, Version};
+use rama::layer::Layer;
 use rama::service::BoxService;
+use rama::service::Service;
 use rama::tls::rustls::client::TlsConnectorDataBuilder;
 use serde_json::json;
 use tauri::Emitter;
 
 use super::parser::{error_response, log_request, log_response};
 use super::state::State;
+use crate::script;
 
 pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible> {
     let app_handle = req
@@ -23,25 +24,71 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
         .unwrap()
         .app_handle
         .clone();
-    let (req, method, uri, request_id) = log_request(req, &app_handle);
+    let scripts = req.extensions().get_ref::<State>().unwrap().scripts.clone();
 
+    let has_scripts = !scripts.is_empty();
+
+    // ---- request phase ----
+    let (req, method, uri, request_id) = if has_scripts {
+        let (parts, body) = req.into_parts();
+        let body_str = script::collect_body_str(body).await;
+        let req_data = script::RequestData::from_rama_parts(&parts, &body_str);
+
+        match script::run_request_hooks(&scripts, &req_data) {
+            None => {
+                log::info!("[script] request blocked");
+                let _ = app_handle.emit(
+                    "proxy:error",
+                    json!({"id": "blocked", "error": "Request blocked by script"}),
+                );
+                return Ok(Response::builder()
+                    .status(StatusCode::FORBIDDEN)
+                    .body(Body::from("Blocked by script"))
+                    .unwrap());
+            }
+            Some(modified) => {
+                let req = modified.apply(parts);
+                log_request(req, &app_handle)
+            }
+        }
+    } else {
+        log_request(req, &app_handle)
+    };
+
+    // ---- forward to upstream ----
     let state = req.extensions().get_ref::<State>().unwrap();
     let executor = state.exec.clone();
     let client = build_upstream_service(executor, state.upstream_proxy);
-
     let start_time = Instant::now();
 
     match client.serve(req).await {
         Ok(resp) => {
             let duration_ms = start_time.elapsed().as_millis() as u64;
-            Ok(log_response(
-                resp,
-                method,
-                uri,
-                &request_id,
-                duration_ms,
-                &app_handle,
-            ))
+
+            if has_scripts {
+                let (parts, body) = resp.into_parts();
+                let body_str = script::collect_body_str(body).await;
+                let resp_data = script::ResponseData::from_rama_parts(&parts, &body_str);
+                let modified = script::run_response_hooks(&scripts, &resp_data);
+                let resp = modified.apply(parts);
+                Ok(log_response(
+                    resp,
+                    method,
+                    uri,
+                    &request_id,
+                    duration_ms,
+                    &app_handle,
+                ))
+            } else {
+                Ok(log_response(
+                    resp,
+                    method,
+                    uri,
+                    &request_id,
+                    duration_ms,
+                    &app_handle,
+                ))
+            }
         }
         Err(err) => {
             log::error!("error proxying request [{} {}]: {err:?}", method, uri);

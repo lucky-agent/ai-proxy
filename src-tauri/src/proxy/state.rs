@@ -9,4 +9,5 @@ pub(crate) struct State {
     pub(crate) exec: Executor,
     pub(crate) app_handle: AppHandle,
     pub(crate) upstream_proxy: bool,
+    pub(crate) scripts: Vec<String>,
 }

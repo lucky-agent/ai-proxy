@@ -102,6 +102,12 @@ impl Default for UiConfig {
     }
 }
 
+impl UiConfig {
+    pub fn tray_locale(&self) -> &str {
+        if self.language == "zh" { "zh" } else { "en" }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Settings {
     /// 代理配置
@@ -135,16 +141,14 @@ impl Settings {
             let default = Settings::default();
             let content = serde_json::to_string_pretty(&default)
                 .context("Failed to serialize default settings")?;
-            std::fs::write(&config_path, content)
-                .context("Failed to write default config file")?;
+            std::fs::write(&config_path, content).context("Failed to write default config file")?;
             info!("Created default config at {}", config_path.display());
         }
 
         info!("Loading configuration from {}", config_path.display());
         let content =
             std::fs::read_to_string(&config_path).context("Failed to read config file")?;
-        let mut settings: Settings =
-            serde_json::from_str(&content).context("json parse error")?;
+        let mut settings: Settings = serde_json::from_str(&content).context("json parse error")?;
         settings.resolve_log_dir(dir);
         info!("Configuration loaded successfully");
         Ok(settings)
@@ -152,10 +156,8 @@ impl Settings {
 
     pub(crate) fn save_to_path(&self, dir: &Path) -> Result<(), BoxError> {
         let config_path = dir.join(CONFIG_FILE_NAME);
-        let content = serde_json::to_string_pretty(self)
-            .context("Failed to serialize settings")?;
-        std::fs::write(&config_path, content)
-            .context("Failed to write config file")?;
+        let content = serde_json::to_string_pretty(self).context("Failed to serialize settings")?;
+        std::fs::write(&config_path, content).context("Failed to write config file")?;
         info!("Configuration saved to {}", config_path.display());
         Ok(())
     }

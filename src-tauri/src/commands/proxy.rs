@@ -1,6 +1,6 @@
 use crate::AppState;
-use crate::config::Settings;
 use crate::proxy::ProxyServer;
+use crate::script;
 use tokio::sync::oneshot;
 
 #[tauri::command]
@@ -9,7 +9,8 @@ pub async fn start_proxy(
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
     let data_dir = state.store.data_dir();
-    let settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let scripts_dir = state.store.scripts_dir().clone();
+    let settings = state.settings.lock().unwrap().as_ref().unwrap().clone();
 
     {
         let mut running = state.running.lock().unwrap();
@@ -19,20 +20,25 @@ pub async fn start_proxy(
         *running = true;
     }
 
-    {
-        let mut s = state.settings.lock().unwrap();
-        *s = Some(settings.clone());
-    }
-
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     {
         let mut signal = state.shutdown_signal.lock().unwrap();
         *signal = Some(shutdown_tx);
     }
 
-    let listen_addr = format!("{}:{}", settings.proxy.listen_host, settings.proxy.listen_port);
+    let scripts = script::load_scripts(&scripts_dir);
+    log::info!(
+        "Loaded {} scripts from {}",
+        scripts.len(),
+        scripts_dir.display()
+    );
+
+    let listen_addr = format!(
+        "{}:{}",
+        settings.proxy.listen_host, settings.proxy.listen_port
+    );
     log::info!("Proxy started on {}", listen_addr);
-    let server = ProxyServer::new(settings.proxy, app_handle, shutdown_rx, data_dir);
+    let server = ProxyServer::new(settings.proxy, app_handle, shutdown_rx, data_dir, scripts);
 
     tauri::async_runtime::spawn(async move {
         if let Err(err) = server.run().await {
