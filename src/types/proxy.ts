@@ -4,6 +4,7 @@ export interface RequestEvent {
   uri: string
   timestamp: number
   headers: Record<string, string>
+  query_params?: Record<string, string>
 }
 
 export interface ResponseEvent {
@@ -29,18 +30,27 @@ export interface RequestBodyChunkEvent {
   chunk: string
 }
 
+export type ProxyEvent =
+  | { type: "request"; id: string; method: string; uri: string; timestamp: number; headers: Record<string, string> }
+  | { type: "request_chunk"; id: string; chunk: string }
+  | { type: "response"; id: string; status: number; timestamp: number; duration_ms: number; headers: Record<string, string> }
+  | { type: "response_chunk"; id: string; chunk: string }
+  | { type: "error"; id: string; error: string }
+
 export interface TrafficEntry {
   id: string
   method: string
   uri: string
+  requestNumber: number
   requestTimestamp: number
   requestHeaders: Record<string, string>
-  requestBody: string | null
-  status: number | null
-  responseTimestamp: number | null
-  durationMs: number | null
-  responseHeaders: Record<string, string> | null
-  responseBody: string | null
-  error: string | null
-  edited?: boolean
+ requestBody: string | null
+  requestQuery?: Record<string, string>
+ status: number | null
+ responseTimestamp: number | null
+ durationMs: number | null
+ responseHeaders: Record<string, string> | null
+ responseBody: string | null
+ error: string | null
+ edited?: boolean
 }

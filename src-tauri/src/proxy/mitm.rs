@@ -11,21 +11,23 @@ use rama::http::layer::{
     trace::TraceLayer,
 };
 use rama::http::server::HttpServer;
+use rama::layer::AddInputExtensionLayer;
 use rama::layer::ConsumeErrLayer;
 use rama::service::service_fn;
 use rama::tls::rustls::server::TlsAcceptorLayer;
 
 use super::client::http_mitm_proxy;
 use super::state::State;
+use super::state::ViaConnectTunnel;
 
 pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infallible> {
-    let http_service = new_http_mitm_proxy();
-
     let state = upgraded.extensions().get_ref::<State>().unwrap();
-    let executor = state.exec.clone();
-    let http_transport_service = HttpServer::auto(executor).service(http_service);
+    let executor = state.exec().clone();
+    let http_mitm_service =
+        AddInputExtensionLayer::new(ViaConnectTunnel).into_layer(new_http_mitm_proxy());
+    let http_transport_service = HttpServer::auto(executor).service(http_mitm_service);
 
-    let https_service = TlsAcceptorLayer::new(state.mitm_tls_service_data.clone())
+    let https_service = TlsAcceptorLayer::new(state.mitm_tls_service_data().clone())
         .with_store_client_hello(true)
         .into_layer(http_transport_service);
 
@@ -35,7 +37,8 @@ pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infalli
     Ok(())
 }
 
-pub(crate) fn new_http_mitm_proxy() -> impl Service<rama::http::Request, Output = rama::http::Response, Error = Infallible> + Clone {
+pub(crate) fn new_http_mitm_proxy()
+-> impl Service<rama::http::Request, Output = rama::http::Response, Error = Infallible> + Clone {
     Arc::new(
         (
             MapResponseBodyLayer::new_boxed_streaming_body(),
@@ -47,3 +50,4 @@ pub(crate) fn new_http_mitm_proxy() -> impl Service<rama::http::Request, Output 
             .into_layer(service_fn(http_mitm_proxy)),
     )
 }
+

@@ -10,23 +10,30 @@ use rama::layer::Layer;
 use rama::service::BoxService;
 use rama::service::Service;
 use rama::tls::rustls::client::TlsConnectorDataBuilder;
-use serde_json::json;
-use tauri::Emitter;
+use tauri::Manager;
 
-use super::parser::{error_response, log_request, log_response};
+use super::events::ProxyEvent;
+use super::parser;
 use super::state::State;
+use super::state::ViaConnectTunnel;
+use crate::AppState;
 use crate::script;
 
 pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible> {
-    let app_handle = req
+    let state = req
         .extensions()
         .get_ref::<State>()
-        .unwrap()
-        .app_handle
-        .clone();
-    let scripts = req.extensions().get_ref::<State>().unwrap().scripts.clone();
+        .cloned()
+        .expect("State not found in request extensions");
 
-    let has_scripts = !scripts.is_empty();
+    let from_connect_tunnel = req.extensions().get_ref::<ViaConnectTunnel>().is_some();
+
+    let event_channel = {
+        let app_state = state.app_handle().state::<AppState>();
+        app_state.event_channel()
+    };
+
+    let has_scripts = !state.scripts().is_empty();
 
     // ---- request phase ----
     let (req, method, uri, request_id) = if has_scripts {
@@ -34,31 +41,53 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
         let body_str = script::collect_body_str(body).await;
         let req_data = script::RequestData::from_rama_parts(&parts, &body_str);
 
-        match script::run_request_hooks(&scripts, &req_data) {
+        match script::run_request_hooks(state.scripts(), &req_data) {
+            Some(modified) => {
+                let req = modified.apply(parts);
+                parser::log_request(req, &event_channel)
+            }
             None => {
                 log::info!("[script] request blocked");
-                let _ = app_handle.emit(
-                    "proxy:error",
-                    json!({"id": "blocked", "error": "Request blocked by script"}),
-                );
+                if let Some(ref ch) = event_channel {
+                    ch.send(ProxyEvent::Error {
+                        id: "blocked".into(),
+                        error: "Request blocked by script".into(),
+                    })
+                    .ok();
+                }
                 return Ok(Response::builder()
                     .status(StatusCode::FORBIDDEN)
                     .body(Body::from("Blocked by script"))
                     .unwrap());
             }
-            Some(modified) => {
-                let req = modified.apply(parts);
-                log_request(req, &app_handle)
-            }
         }
     } else {
-        log_request(req, &app_handle)
+        parser::log_request(req, &event_channel)
     };
 
+    // ---- direct request detection ----
+    // 相对 URI（无 host）说明请求目标是代理自身，直接返回，不转发
+    if !from_connect_tunnel {
+        log::info!("Direct request to proxy: {}, returning directly", req.uri());
+        // Consume body to trigger RequestChunk events
+        let (_, body) = req.into_parts();
+        let _ = script::collect_body_str(body).await;
+        let resp = Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(Body::from(r#"{"code":0,"msg":"success"}"#))
+            .unwrap();
+        return Ok(parser::log_response(
+            resp,
+            method,
+            uri,
+            &request_id,
+            0,
+            &event_channel,
+        ));
+    }
     // ---- forward to upstream ----
-    let state = req.extensions().get_ref::<State>().unwrap();
-    let executor = state.exec.clone();
-    let client = build_upstream_service(executor, state.upstream_proxy);
+    let client = build_upstream_service(state.exec().clone(), state.upstream_proxy());
     let start_time = Instant::now();
 
     match client.serve(req).await {
@@ -69,37 +98,37 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
                 let (parts, body) = resp.into_parts();
                 let body_str = script::collect_body_str(body).await;
                 let resp_data = script::ResponseData::from_rama_parts(&parts, &body_str);
-                let modified = script::run_response_hooks(&scripts, &resp_data);
+                let modified = script::run_response_hooks(state.scripts(), &resp_data);
                 let resp = modified.apply(parts);
-                Ok(log_response(
+                Ok(parser::log_response(
                     resp,
                     method,
                     uri,
                     &request_id,
                     duration_ms,
-                    &app_handle,
+                    &event_channel,
                 ))
             } else {
-                Ok(log_response(
+                Ok(parser::log_response(
                     resp,
                     method,
                     uri,
                     &request_id,
                     duration_ms,
-                    &app_handle,
+                    &event_channel,
                 ))
             }
         }
         Err(err) => {
             log::error!("error proxying request [{} {}]: {err:?}", method, uri);
-            let _ = app_handle.emit(
-                "proxy:error",
-                json!({
-                    "id": request_id,
-                    "error": format!("{err:?}"),
-                }),
-            );
-            Ok(error_response())
+            if let Some(ref ch) = event_channel {
+                ch.send(ProxyEvent::Error {
+                    id: request_id,
+                    error: format!("{err:?}"),
+                })
+                .ok();
+            }
+            Ok(parser::error_response())
         }
     }
 }
@@ -146,3 +175,5 @@ fn build_upstream_service(
         .into_layer(client)
         .boxed()
 }
+
+

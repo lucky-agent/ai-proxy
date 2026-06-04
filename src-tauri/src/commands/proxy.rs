@@ -1,6 +1,9 @@
 use crate::AppState;
+use crate::bail;
 use crate::proxy::ProxyServer;
+use crate::proxy::events::ProxyEvent;
 use crate::script;
+use tauri::ipc::Channel;
 use tokio::sync::oneshot;
 
 #[tauri::command]
@@ -8,23 +11,17 @@ pub async fn start_proxy(
     state: tauri::State<'_, AppState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    let data_dir = state.store.data_dir();
-    let scripts_dir = state.store.scripts_dir().clone();
-    let settings = state.settings.lock().unwrap().as_ref().unwrap().clone();
+    let data_dir = state.store().data_dir();
+    let scripts_dir = state.store().scripts_dir().clone();
+    let settings = state.settings();
 
-    {
-        let mut running = state.running.lock().unwrap();
-        if *running {
-            return Err("Proxy is already running".to_string());
-        }
-        *running = true;
+    if state.running() {
+        bail!("Proxy is already running");
     }
+    state.set_running(true);
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-    {
-        let mut signal = state.shutdown_signal.lock().unwrap();
-        *signal = Some(shutdown_tx);
-    }
+    state.set_shutdown_signal(shutdown_tx);
 
     let scripts = script::load_scripts(&scripts_dir);
     log::info!(
@@ -51,14 +48,12 @@ pub async fn start_proxy(
 
 #[tauri::command]
 pub fn stop_proxy(state: tauri::State<'_, AppState>) -> Result<String, String> {
-    let mut running = state.running.lock().unwrap();
-    if !*running {
+    if !state.running() {
         return Err("Proxy is not running".to_string());
     }
-    *running = false;
+    state.set_running(false);
 
-    let signal = state.shutdown_signal.lock().unwrap().take();
-    if let Some(tx) = signal {
+    if let Some(tx) = state.take_shutdown_signal() {
         tx.send(()).ok();
     }
 
@@ -68,17 +63,15 @@ pub fn stop_proxy(state: tauri::State<'_, AppState>) -> Result<String, String> {
 
 #[tauri::command]
 pub fn get_status(state: tauri::State<'_, AppState>) -> String {
-    let running = state.running.lock().unwrap();
-    if *running {
-        let s = state.settings.lock().unwrap();
-        match &*s {
-            Some(settings) => format!(
-                "Running on {}:{}",
-                settings.proxy.listen_host, settings.proxy.listen_port
-            ),
-            None => "Running (config unavailable)".to_string(),
-        }
+    if state.running() {
+        let s = state.settings();
+        format!("Running on {}:{}", s.proxy.listen_host, s.proxy.listen_port)
     } else {
         "Stopped".to_string()
     }
+}
+
+#[tauri::command]
+pub fn subscribe_proxy_events(state: tauri::State<'_, AppState>, channel: Channel<ProxyEvent>) {
+    state.set_event_channel(channel);
 }

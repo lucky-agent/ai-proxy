@@ -4,7 +4,7 @@ use crate::tray::update_tray_menu;
 
 #[tauri::command]
 pub fn get_locale(state: tauri::State<'_, AppState>) -> Result<String, String> {
-    let data_dir = state.store.data_dir();
+    let data_dir = state.store().data_dir();
     let settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
     Ok(settings.ui.language)
 }
@@ -22,19 +22,14 @@ pub fn set_locale(
         ));
     }
 
-    let data_dir = state.store.data_dir();
+    let data_dir = state.store().data_dir();
     let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
     settings.ui.language = language.clone();
     settings
         .save_to_path(&data_dir)
         .map_err(|e| e.to_string())?;
 
-    {
-        let mut s = state.settings.lock().unwrap();
-        if s.is_some() {
-            *s = Some(settings);
-        }
-    }
+    state.set_settings(settings);
 
     update_tray_menu(&app_handle, &language).map_err(|e| e.to_string())?;
 

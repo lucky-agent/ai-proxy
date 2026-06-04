@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use rama::Layer;
 use rama::error::{BoxError, ErrorContext};
-use rama::http::layer::upgrade::{DefaultHttpProxyConnectReplyService, UpgradeLayer};
 use rama::http::layer::trace::TraceLayer;
+use rama::http::layer::upgrade::{DefaultHttpProxyConnectReplyService, UpgradeLayer};
 use rama::http::matcher::MethodMatcher;
 use rama::http::server::HttpServer;
 use rama::layer::{AddInputExtensionLayer, ConsumeErrLayer};
@@ -21,6 +21,7 @@ use state::State;
 
 pub(crate) mod cert;
 pub(crate) mod client;
+pub(crate) mod events;
 pub(crate) mod mitm;
 pub(crate) mod parser;
 pub(crate) mod state;
@@ -41,7 +42,13 @@ impl ProxyServer {
         data_dir: std::path::PathBuf,
         scripts: Vec<String>,
     ) -> Self {
-        Self { config, app_handle, shutdown_rx, data_dir, scripts }
+        Self {
+            config,
+            app_handle,
+            shutdown_rx,
+            data_dir,
+            scripts,
+        }
     }
 
     pub async fn run(self) -> Result<(), BoxError> {
@@ -60,9 +67,8 @@ impl ProxyServer {
             log::info!("Shutdown signal received");
         });
 
-        // Build TcpListener with a graceful executor so serve() responds to shutdown
-        let tcp_exec = Executor::graceful(graceful.guard());
-        let tcp_service = TcpListener::build(tcp_exec)
+        let exec = Executor::graceful(graceful.guard());
+        let tcp_service = TcpListener::build(exec.clone())
             .bind_address(&listen_addr)
             .await
             .context(format!("bind tcp proxy to {listen_addr} failed"))?;
@@ -70,17 +76,15 @@ impl ProxyServer {
         log::info!("MITM Proxy server listening on http://{}", listen_addr);
 
         graceful.spawn_task_fn({
-            move |guard| async move {
-                let exec = Executor::graceful(guard.clone());
-                let state = State {
+            move |_guard| async move {
+                let state = State::new(
                     mitm_tls_service_data,
-                    exec: exec.clone(),
+                    exec.clone(),
                     app_handle,
-                    upstream_proxy: self.config.upstream_proxy,
+                    self.config.upstream_proxy,
                     scripts,
-                };
+                );
 
-                let http_mitm_service = new_http_mitm_proxy();
                 let http_service = HttpServer::auto(exec.clone()).service(std::sync::Arc::new(
                     (
                         TraceLayer::new_for_http(),
@@ -92,7 +96,7 @@ impl ProxyServer {
                             service_fn(http_connect_proxy),
                         ),
                     )
-                        .into_layer(http_mitm_service),
+                        .into_layer(new_http_mitm_proxy()),
                 ));
 
                 tcp_service
@@ -115,3 +119,4 @@ impl ProxyServer {
         Ok(())
     }
 }
+

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useState, useCallback, useRef, useMemo, useEffect, memo, type ReactNode } from 'react'
 import type { TrafficEntry } from '@/types/proxy'
+import FormDataView from './FormDataView'
 import { useTheme } from '@/hooks/useTheme'
 import { useShiki } from '@/hooks/useShiki'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
@@ -12,17 +13,19 @@ import {
   ArrowLeftToLine,
   ChevronRight,
   ChevronDown,
+  XIcon,
 } from 'lucide-react'
 
 const MIN_REQUEST_RATIO = 0.15
 const MAX_REQUEST_RATIO = 0.85
 
-type PanelTab = 'header' | 'body' | 'raw'
+type PanelTab = 'header' | 'query' | 'body' | 'raw' | 'form'
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 
 interface Props {
   entry: TrafficEntry | undefined
+  onClose?: () => void
 }
 
 const TABS: { id: PanelTab; labelKey: string }[] = [
@@ -31,10 +34,23 @@ const TABS: { id: PanelTab; labelKey: string }[] = [
   { id: 'raw', labelKey: 'detail.raw' },
 ]
 
+const requestTabs: (hasQuery: boolean) => { id: PanelTab; labelKey: string }[] = (hasQuery) => {
+  const base: { id: PanelTab; labelKey: string }[] = [
+    { id: 'header', labelKey: 'detail.headers' },
+  ]
+  if (hasQuery) base.push({ id: 'query', labelKey: 'detail.query' })
+  base.push({ id: 'form', labelKey: 'detail.formData' })
+  base.push(
+    { id: 'body', labelKey: 'detail.body' },
+    { id: 'raw', labelKey: 'detail.raw' },
+  )
+  return base
+}
+
 // ---------------------------------------------------------------------------
 // DetailPanel — 入口
 // ---------------------------------------------------------------------------
-export default function DetailPanel({ entry }: Props) {
+export default function DetailPanel({ entry, onClose }: Props) {
   const { t } = useTranslation()
   const [requestTab, setRequestTab] = useState<PanelTab>('header')
   const [responseTab, setResponseTab] = useState<PanelTab>('header')
@@ -103,7 +119,7 @@ export default function DetailPanel({ entry }: Props) {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      <SummaryBar entry={entry} />
+      <SummaryBar entry={entry} onClose={onClose} />
 
       <div
         ref={containerRef}
@@ -117,7 +133,7 @@ export default function DetailPanel({ entry }: Props) {
             title={t('detail.request')}
             tab={requestTab}
             onTabChange={setRequestTab}
-            tabs={TABS}
+            tabs={requestTabs(!!entry.requestQuery && Object.keys(entry.requestQuery).length > 0)}
             onTitleClick={handleRequestTitleClick}>
             <PanelContent tab={requestTab} side="request" entry={entry} />
           </SidePanel>
@@ -158,7 +174,7 @@ export default function DetailPanel({ entry }: Props) {
 // ---------------------------------------------------------------------------
 // SummaryBar
 // ---------------------------------------------------------------------------
-function SummaryBar({ entry }: { entry: TrafficEntry }) {
+function SummaryBar({ entry, onClose }: { entry: TrafficEntry; onClose?: () => void }) {
   const { t } = useTranslation()
   const { copied, copy } = useCopyToClipboard()
 
@@ -183,6 +199,14 @@ function SummaryBar({ entry }: { entry: TrafficEntry }) {
       <span className="min-w-0 flex-1 truncate text-primary" title={entry.uri}>
         {entry.uri}
       </span>
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          title="关闭详情">
+          <XIcon className="size-3" />
+        </button>
+      )}
       <button
         onClick={() => copy(entry.uri)}
         className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -221,6 +245,16 @@ function PanelContent({
     ) : (
       <EmptyContent label={t('detail.responsePending')} />
     )
+  }
+
+  if (tab === 'query' && side === 'request') {
+    const queryData = entry.requestQuery ?? {}
+    return <KeyValueTable data={queryData} emptyLabel={t('detail.noQuery')} />
+  }
+
+  if (tab === 'form' && side === 'request') {
+    const formCt = entry.requestHeaders['content-type'] ?? entry.requestHeaders['Content-Type'] ?? ''
+    return <FormDataView body={entry.requestBody ?? ''} contentType={formCt} />
   }
 
   if (tab === 'body') {
@@ -484,16 +518,22 @@ function RawView({ content }: { content: string }) {
   const { copied, copy } = useCopyToClipboard()
 
   return (
-    <div className="relative group/mini min-h-0 flex-1 overflow-auto">
-      <button
-        onClick={() => copy(content)}
-        className="absolute top-1.5 right-1.5 z-10 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-all opacity-0 group-hover/mini:opacity-100"
-        title={copied ? 'Copied' : 'Copy'}>
-        {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
-      </button>
-      <pre className="whitespace-pre-wrap break-all px-3 py-2 text-xs text-foreground/80 font-mono">
-        {content}
-      </pre>
+    <div className="flex flex-col h-full">
+      <div className="relative min-h-0 flex-1 group/mini">
+        <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 opacity-0 group-hover/mini:opacity-100 transition-all">
+          <button
+            onClick={() => copy(content)}
+            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+            title={copied ? 'Copied' : 'Copy'}>
+            {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
+          </button>
+        </div>
+        <div className="absolute inset-0 overflow-auto">
+          <pre className="whitespace-pre-wrap break-all px-3 py-2 text-xs text-foreground/80 font-mono">
+            {content}
+          </pre>
+        </div>
+      </div>
     </div>
   )
 }
@@ -771,8 +811,8 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="relative group/mini min-h-0 flex-1 overflow-auto">
-        {/* 浮动操作栏 — 展示区右上角，hover 显示 */}
+      <div className="relative min-h-0 flex-1 group/mini">
+        {/* 操作栏 — 悬浮在右上角，不占空间，不随滚动消失 */}
         <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 opacity-0 group-hover/mini:opacity-100 transition-all">
           <button
             onClick={() => setWrapped(w => !w)}
@@ -807,17 +847,22 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
             )}
           </button>
         </div>
-        {isJson && useTreeView && parsedJson ? (
-          <JsonTreeView
-            data={parsedJson}
-            defaultExpanded={allExpanded}
-            depth={0}
-            wrapped={wrapped}
-          />
-        ) : (
-          <SyntaxHighlightedBody content={displayBody} lang={lang} wrapped={wrapped} />
-        )}
+        {/* 可滚动的内容区 — 用 absolute 填满父级 */}
+        <div className="absolute inset-0 overflow-auto">
+          {isJson && useTreeView && parsedJson ? (
+            <JsonTreeView
+              data={parsedJson}
+              defaultExpanded={allExpanded}
+              depth={0}
+              wrapped={wrapped}
+            />
+          ) : (
+            <SyntaxHighlightedBody content={displayBody} lang={lang} wrapped={wrapped} />
+          )}
+        </div>
       </div>
     </div>
   )
 })
+
+

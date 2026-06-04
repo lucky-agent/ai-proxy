@@ -1,19 +1,66 @@
 use std::collections::HashMap;
 
-use rama::http::{Body, Method, Request, Response, StatusCode, Uri};
-use rama::futures::StreamExt;
 use log::info;
-use serde_json::json;
-use tauri::{AppHandle, Emitter};
+use rama::futures::StreamExt;
+use rama::http::{Body, Method, Request, Response, StatusCode, Uri};
+use tauri::ipc::Channel;
 use uuid::Uuid;
 
-/// Log request and emit Tauri event. Returns (modified request, method, uri, request_id).
-pub(crate) fn log_request(req: Request, app_handle: &AppHandle) -> (Request, Method, Uri, String) {
+use super::events::ProxyEvent;
+
+/// 简易 URL 百分号解码
+fn url_decode(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut chars = input.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '%' {
+            let hex: String = chars.by_ref().take(2).collect();
+            if hex.len() == 2 {
+                if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                    result.push(byte as char);
+                    continue;
+                }
+            }
+            // 无效的百分号编码，保留原样
+            result.push('%');
+            result.push_str(&hex);
+        } else if ch == '+' {
+            result.push(' ');
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+
+pub(crate) enum ChunkKind {
+    RequestChunk,
+    ResponseChunk,
+}
+
+/// Log request and emit via channel. Returns (modified request, method, uri, request_id).
+pub(crate) fn log_request(
+    req: Request,
+    event_channel: &Option<Channel<ProxyEvent>>,
+) -> (Request, Method, Uri, String) {
     let method = req.method().clone();
     let uri = req.uri().clone();
     let request_id = Uuid::new_v4().to_string();
-
-    let request_timestamp = chrono::Utc::now().timestamp_millis();
+    let query_params: HashMap<String, String> = uri
+        .query()
+        .map(|q| {
+            q.split('&')
+                .filter_map(|pair| {
+                    let mut parts = pair.splitn(2, '=');
+                    let key = parts.next()?.to_string();
+                    let value = parts.next().unwrap_or("").to_string();
+                    let decoded_key = url_decode(&key);
+                    let decoded_value = url_decode(&value);
+                    Some((decoded_key, decoded_value))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
     let (parts, body) = req.into_parts();
 
@@ -23,55 +70,43 @@ pub(crate) fn log_request(req: Request, app_handle: &AppHandle) -> (Request, Met
         .filter_map(|(name, value)| Some((name.to_string(), value.to_str().ok()?.to_string())))
         .collect();
 
-    let _ = app_handle.emit(
-        "proxy:request",
-        json!({
-            "id": request_id,
-            "method": method.to_string(),
-            "uri": uri.to_string(),
-            "timestamp": request_timestamp,
-            "headers": req_headers,
-        }),
-    );
+    if let Some(ch) = event_channel {
+        ch.send(ProxyEvent::Request {
+            id: request_id.clone(),
+            method: method.to_string(),
+            uri: uri.to_string(),
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            headers: req_headers,
+            query_params,
+        })
+        .ok();
+    }
 
-    let log_method = method.clone();
-    let log_uri = uri.clone();
-    let rid = request_id.clone();
-    let ah = app_handle.clone();
-    let logged_body = Body::from_stream(body.into_data_stream().map(move |result| {
-        if let Ok(ref bytes) = result {
-            let chunk_str = String::from_utf8_lossy(bytes);
-            info!("Request chunk [{} {}]: {}", log_method, log_uri, chunk_str);
-            let _ = ah.emit(
-                "proxy:request-chunk",
-                json!({
-                    "id": rid,
-                    "chunk": chunk_str.into_owned(),
-                }),
-            );
-        }
-        result
-    }));
+    let logged_body = log_body_chunks(
+        body,
+        "Request".into(),
+        ChunkKind::RequestChunk,
+        method.clone(),
+        uri.clone(),
+        request_id.clone(),
+        event_channel.clone(),
+    );
 
     let req = Request::from_parts(parts, logged_body);
     (req, method, uri, request_id)
 }
 
-/// Log response and emit Tauri event.
-/// Headers/status are emitted immediately; each body chunk is emitted
-/// as a separate `proxy:response-chunk` event, preserving streaming behavior.
+/// Log response and emit via channel.
 pub(crate) fn log_response(
     resp: Response,
     method: Method,
     uri: Uri,
     request_id: &str,
     duration_ms: u64,
-    app_handle: &AppHandle,
+    event_channel: &Option<Channel<ProxyEvent>>,
 ) -> Response {
     let status = resp.status();
     info!("Response [{} {}] {}", method, uri, status);
-
-    let response_timestamp = chrono::Utc::now().timestamp_millis();
 
     let (parts, body) = resp.into_parts();
 
@@ -81,38 +116,59 @@ pub(crate) fn log_response(
         .filter_map(|(name, value)| Some((name.to_string(), value.to_str().ok()?.to_string())))
         .collect();
 
-    let _ = app_handle.emit(
-        "proxy:response",
-        json!({
-            "id": request_id,
-            "status": status.as_u16(),
-            "timestamp": response_timestamp,
-            "duration_ms": duration_ms,
-            "headers": resp_headers,
-        }),
+    if let Some(ch) = event_channel {
+        ch.send(ProxyEvent::Response {
+            id: request_id.to_string(),
+            status: status.as_u16(),
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            duration_ms,
+            headers: resp_headers,
+        })
+        .ok();
+    }
+
+    let logged_body = log_body_chunks(
+        body,
+        "Response".into(),
+        ChunkKind::ResponseChunk,
+        method,
+        uri,
+        request_id.into(),
+        event_channel.clone(),
     );
 
-    let log_method = method.clone();
-    let log_uri = uri.clone();
-    let rid = request_id.to_string();
-    let ah = app_handle.clone();
+    Response::from_parts(parts, logged_body)
+}
 
-    let logged_body = Body::from_stream(body.into_data_stream().map(move |result| {
+fn log_body_chunks(
+    body: Body,
+    label: String,
+    kind: ChunkKind,
+    method: Method,
+    uri: Uri,
+    request_id: String,
+    event_channel: Option<Channel<ProxyEvent>>,
+) -> Body {
+    Body::from_stream(body.into_data_stream().map(move |result| {
         if let Ok(ref bytes) = result {
             let chunk_str = String::from_utf8_lossy(bytes);
-            info!("Response chunk [{} {}]: {}", log_method, log_uri, chunk_str);
-            let _ = ah.emit(
-                "proxy:response-chunk",
-                json!({
-                    "id": rid,
-                    "chunk": chunk_str.into_owned(),
-                }),
-            );
+            info!("{label} chunk [{} {}]: {chunk_str}", method, uri);
+            if let Some(ref ch) = event_channel {
+                let event = match kind {
+                    ChunkKind::RequestChunk => ProxyEvent::RequestChunk {
+                        id: request_id.clone(),
+                        chunk: chunk_str.into_owned(),
+                    },
+                    ChunkKind::ResponseChunk => ProxyEvent::ResponseChunk {
+                        id: request_id.clone(),
+                        chunk: chunk_str.into_owned(),
+                    },
+                };
+                ch.send(event).ok();
+            }
         }
         result
-    }));
-
-    Response::from_parts(parts, logged_body)
+    }))
 }
 
 /// Build an error response for proxy forwarding failures.

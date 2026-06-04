@@ -1,5 +1,5 @@
 // A simple error type for formatted error messages
-#[warn(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct FormattedError(pub(crate) String);
 
 impl std::fmt::Display for FormattedError {
@@ -21,7 +21,7 @@ impl std::error::Error for FormattedError {}
 macro_rules! bail {
     ($msg:literal) => {
         return Err(::core::convert::Into::into(
-            ::rama::error::extra::OpaqueError::from_static_str($msg),
+            ::rama::error::extra::OpaqueError::from_static_str($msg).to_string(),
         ))
     };
     ($fmt:expr, $($arg:tt)*) => {
@@ -35,7 +35,7 @@ macro_rules! bail {
 #[macro_export]
 macro_rules! anyhow {
     ($msg:literal) => {
-        ::rama::error::extra::OpaqueError::from_static_str($msg)
+        ::rama::error::extra::OpaqueError::from_static_str($msg).to_string()
     };
     ($fmt:expr, $($arg:tt)*) => {
         $crate::utils::macros::FormattedError(format!($fmt, $($arg)*))

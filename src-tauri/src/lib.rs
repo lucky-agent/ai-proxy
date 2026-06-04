@@ -4,16 +4,12 @@ mod proxy;
 mod script;
 mod tray;
 pub mod utils;
-
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-
+use proxy::state::AppState;
 use tauri::{Emitter, Manager, RunEvent};
-use tokio::sync::oneshot;
 
 use crate::commands::{
     get_locale, get_settings, get_status, get_theme, save_settings, set_locale, set_theme,
-    start_proxy, stop_proxy, sync_tray_locale,
+    start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
 };
 use crate::config::{Settings, Store, UiConfig};
 
@@ -27,7 +23,7 @@ fn show_main_window(app: &tauri::AppHandle) {
 
 pub(crate) fn open_settings_from_tray(app: &tauri::AppHandle) {
     if let Some(state) = app.try_state::<AppState>() {
-        state.pending_open_settings.store(true, Ordering::SeqCst);
+        state.set_pending_open_settings(true);
     }
 
     show_main_window(app);
@@ -35,19 +31,11 @@ pub(crate) fn open_settings_from_tray(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         if window.is_focused().unwrap_or(false) {
             if let Some(state) = app.try_state::<AppState>() {
-                state.pending_open_settings.store(false, Ordering::SeqCst);
+                state.set_pending_open_settings(false);
             }
             let _ = window.emit("open-settings", ());
         }
     }
-}
-
-pub(crate) struct AppState {
-    settings: Arc<Mutex<Option<Settings>>>,
-    running: Arc<Mutex<bool>>,
-    store: Store,
-    shutdown_signal: Arc<Mutex<Option<oneshot::Sender<()>>>>,
-    pending_open_settings: Arc<AtomicBool>,
 }
 
 fn app_setup(app: &mut tauri::App, ui: &UiConfig) -> Result<(), Box<dyn std::error::Error>> {
@@ -68,7 +56,7 @@ fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
         let app = window.app_handle();
         let should_open = app
             .try_state::<AppState>()
-            .is_some_and(|state| state.pending_open_settings.swap(false, Ordering::SeqCst));
+            .is_some_and(|state| state.take_pending_open_settings());
         if should_open {
             let _ = window.emit("open-settings", ());
         }
@@ -90,13 +78,7 @@ pub fn run() {
 
     let app = tauri::Builder::default()
         .plugin(Store::build_log_plugin(&settings.log).build())
-        .manage(AppState {
-            settings: Arc::new(Mutex::new(None)),
-            running: Arc::new(Mutex::new(false)),
-            store,
-            shutdown_signal: Arc::new(Mutex::new(None)),
-            pending_open_settings: Arc::new(AtomicBool::new(false)),
-        })
+        .manage(AppState::new(store, settings))
         .setup(move |app| app_setup(app, &ui))
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
@@ -109,6 +91,7 @@ pub fn run() {
             save_settings,
             get_locale,
             set_locale,
+            subscribe_proxy_events,
             sync_tray_locale,
         ])
         .build(tauri::generate_context!())
@@ -119,13 +102,11 @@ pub fn run() {
     app.run(|app_handle, event| {
         if let RunEvent::ExitRequested { .. } = &event {
             if let Some(state) = app_handle.try_state::<AppState>() {
-                let mut r = state.running.lock().unwrap();
-                if *r {
-                    *r = false;
+                if state.running() {
+                    state.set_running(false);
                     log::info!("Proxy stopped (app exiting)");
                 }
-                let signal = state.shutdown_signal.lock().unwrap().take();
-                if let Some(tx) = signal {
+                if let Some(tx) = state.take_shutdown_signal() {
                     tx.send(()).ok();
                 }
             }
