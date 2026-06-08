@@ -2,6 +2,7 @@ use log::info;
 use rama::error::{BoxError, ErrorContext};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::path::PathBuf;
 
 const CONFIG_FILE_NAME: &str = "setting.json";
 
@@ -163,18 +164,24 @@ impl Settings {
     }
 
     fn resolve_log_dir(&mut self, data_dir: &Path) {
-        match &self.log.dir {
+        let resolved: PathBuf = match &self.log.dir {
             None => {
-                self.log.dir = Some(data_dir.join("logs").to_string_lossy().to_string());
+                data_dir.join("logs")
             }
             Some(dir) => {
                 let path = Path::new(dir);
                 if !path.is_absolute() {
-                    self.log.dir = Some(data_dir.join(path).to_string_lossy().to_string());
+                    data_dir.join(path)
+                } else {
+                    path.to_path_buf()
                 }
             }
-        }
-        let log_dir = Path::new(self.log.dir.as_ref().unwrap());
-        std::fs::create_dir_all(log_dir).expect("Failed to create log directory");
+        };
+        self.log.dir = Some(resolved.to_string_lossy().into_owned());
+        std::fs::create_dir_all(&resolved).unwrap_or_else(|e| {
+            log::error!("Failed to create log directory {}: {}", resolved.display(), e);
+        });
     }
 }
+
+

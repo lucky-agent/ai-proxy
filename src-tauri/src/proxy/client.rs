@@ -1,4 +1,4 @@
-use std::convert::Infallible;
+﻿use std::convert::Infallible;
 use std::time::Instant;
 
 use rama::extensions::ExtensionsRef;
@@ -36,16 +36,16 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
     let has_scripts = !state.scripts().is_empty();
 
     // ---- request phase ----
-    let (req, method, uri, request_id) = if has_scripts {
-        let (parts, body) = req.into_parts();
-        let body_str = script::collect_body_str(body).await;
+    let (parts, body) = req.into_parts();
+    let body_str = script::collect_body_str(body).await;
+
+    let (method, uri, request_id) = parser::log_request(&parts, &body_str, &event_channel);
+
+    let req = if has_scripts {
         let req_data = script::RequestData::from_rama_parts(&parts, &body_str);
 
         match script::run_request_hooks(state.scripts(), &req_data) {
-            Some(modified) => {
-                let req = modified.apply(parts);
-                parser::log_request(req, &event_channel)
-            }
+            Some(modified) => modified.apply(parts),
             None => {
                 log::info!("[script] request blocked");
                 if let Some(ref ch) = event_channel {
@@ -58,36 +58,25 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
                 return Ok(Response::builder()
                     .status(StatusCode::FORBIDDEN)
                     .body(Body::from("Blocked by script"))
-                    .unwrap());
+                    .expect("valid status code and body for blocked response"));
             }
         }
     } else {
-        parser::log_request(req, &event_channel)
+        Request::from_parts(parts, Body::from(body_str))
     };
 
     // ---- direct request detection ----
-    // 相对 URI（无 host）说明请求目标是代理自身，直接返回，不转发
+    // Non-tunnel request → direct to proxy, return directly
     if !from_connect_tunnel {
-        log::info!("Direct request to proxy: {}, returning directly", req.uri());
-        // Consume body to trigger RequestChunk events
-        let (_, body) = req.into_parts();
-        let _ = script::collect_body_str(body).await;
-        let resp = Response::builder()
-            .status(StatusCode::OK)
-            .header("Content-Type", "application/json")
-            .body(Body::from(r#"{"code":0,"msg":"success"}"#))
-            .unwrap();
-        return Ok(parser::log_response(
-            resp,
+        return Ok(parser::direct_response(
             method,
             uri,
             &request_id,
-            0,
             &event_channel,
         ));
     }
     // ---- forward to upstream ----
-    let client = build_upstream_service(state.exec().clone(), state.upstream_proxy());
+    let client = build_upstream_service(state.exec().clone(), state.upstream_proxy(), true);
     let start_time = Instant::now();
 
     match client.serve(req).await {
@@ -133,16 +122,21 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
     }
 }
 
-fn build_upstream_service(
+pub(crate) fn build_upstream_service(
     executor: rama::rt::Executor,
     upstream_proxy: bool,
+    skip_tls_verify: bool,
 ) -> BoxService<Request, Response, rama::error::BoxError> {
-    let tls_config = TlsConnectorDataBuilder::new()
+    let tls_builder = TlsConnectorDataBuilder::new()
         .with_alpn_protocols_http_auto()
         .try_with_env_key_logger()
-        .expect("with env key logger")
-        .with_no_cert_verifier()
-        .build();
+        .expect("with env key logger");
+
+    let tls_config = if skip_tls_verify {
+        tls_builder.with_no_cert_verifier().build()
+    } else {
+        tls_builder.build()
+    };
 
     let client = if upstream_proxy {
         EasyHttpWebClient::connector_builder()
@@ -175,5 +169,3 @@ fn build_upstream_service(
         .into_layer(client)
         .boxed()
 }
-
-

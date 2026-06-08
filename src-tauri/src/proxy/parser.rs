@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use log::info;
 use rama::futures::StreamExt;
-use rama::http::{Body, Method, Request, Response, StatusCode, Uri};
+use rama::http::{Body, Method, Response, StatusCode, Uri};
 use tauri::ipc::Channel;
 use uuid::Uuid;
 
@@ -33,18 +33,14 @@ fn url_decode(input: &str) -> String {
     result
 }
 
-pub(crate) enum ChunkKind {
-    RequestChunk,
-    ResponseChunk,
-}
-
 /// Log request and emit via channel. Returns (modified request, method, uri, request_id).
 pub(crate) fn log_request(
-    req: Request,
+    parts: &rama::http::request::Parts,
+    body_str: &str,
     event_channel: &Option<Channel<ProxyEvent>>,
-) -> (Request, Method, Uri, String) {
-    let method = req.method().clone();
-    let uri = req.uri().clone();
+) -> (Method, Uri, String) {
+    let method = parts.method.clone();
+    let uri = parts.uri.clone();
     let request_id = Uuid::new_v4().to_string();
     let query_params: HashMap<String, String> = uri
         .query()
@@ -60,9 +56,7 @@ pub(crate) fn log_request(
                 })
                 .collect()
         })
-        .unwrap_or_default();
-
-    let (parts, body) = req.into_parts();
+    .unwrap_or_default();
 
     let req_headers: HashMap<String, String> = parts
         .headers
@@ -80,20 +74,33 @@ pub(crate) fn log_request(
             query_params,
         })
         .ok();
+        if !body_str.is_empty() {
+            ch.send(ProxyEvent::RequestChunk {
+                id: request_id.clone(),
+                chunk: body_str.to_string(),
+            })
+            .ok();
+        }
     }
 
-    let logged_body = log_body_chunks(
-        body,
-        "Request".into(),
-        ChunkKind::RequestChunk,
-        method.clone(),
-        uri.clone(),
-        request_id.clone(),
-        event_channel.clone(),
-    );
+    (method, uri, request_id)
+}
 
-    let req = Request::from_parts(parts, logged_body);
-    (req, method, uri, request_id)
+/// Handle direct (non-tunnel) requests to the proxy itself.
+/// Returns a 200 OK response with a success JSON body, and logs it as a response event.
+pub(crate) fn direct_response(
+    method: Method,
+    uri: Uri,
+    request_id: &str,
+    event_channel: &Option<Channel<ProxyEvent>>,
+) -> Response {
+    info!("Direct request to proxy: {}, returning directly", uri);
+    let resp = Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Body::from(r#"{"code":0,"msg":"success"}"#))
+        .expect("valid status code and body for direct response");
+    log_response(resp, method, uri, request_id, 0, event_channel)
 }
 
 /// Log response and emit via channel.
@@ -130,7 +137,6 @@ pub(crate) fn log_response(
     let logged_body = log_body_chunks(
         body,
         "Response".into(),
-        ChunkKind::ResponseChunk,
         method,
         uri,
         request_id.into(),
@@ -143,7 +149,6 @@ pub(crate) fn log_response(
 fn log_body_chunks(
     body: Body,
     label: String,
-    kind: ChunkKind,
     method: Method,
     uri: Uri,
     request_id: String,
@@ -154,15 +159,9 @@ fn log_body_chunks(
             let chunk_str = String::from_utf8_lossy(bytes);
             info!("{label} chunk [{} {}]: {chunk_str}", method, uri);
             if let Some(ref ch) = event_channel {
-                let event = match kind {
-                    ChunkKind::RequestChunk => ProxyEvent::RequestChunk {
-                        id: request_id.clone(),
-                        chunk: chunk_str.into_owned(),
-                    },
-                    ChunkKind::ResponseChunk => ProxyEvent::ResponseChunk {
-                        id: request_id.clone(),
-                        chunk: chunk_str.into_owned(),
-                    },
+                let event = ProxyEvent::ResponseChunk {
+                    id: request_id.clone(),
+                    chunk: chunk_str.into_owned(),
                 };
                 ch.send(event).ok();
             }
@@ -176,5 +175,5 @@ pub(crate) fn error_response() -> Response {
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(Body::empty())
-        .unwrap()
+        .expect("valid status code and empty body for error response")
 }

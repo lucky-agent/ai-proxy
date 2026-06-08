@@ -1,9 +1,7 @@
 {
   "app": {
     "running": "运行中",
-    "stopped": "已停止",
-    "start": "启动",
-    "stop": "停止"
+    "stopped": "已停止"
   },
   "theme": {
     "light": "浅色",
@@ -11,8 +9,6 @@
     "system": "跟随系统"
   },
   "traffic": {
-    "requests": "{{count}} 条请求",
-    "requestsTo": "{{domain}} 的 {{count}} 条请求",
     "clear": "清空"
   },
   "hosts": {
@@ -45,19 +41,19 @@
     "noRequestBody": "未捕获请求正文",
     "query": "Query",
     "noQuery": "无 Query 参数",
-    "form": "表单",
     "noFormData": "无表单数据",
     "formData": "Form-Data",
-    "formatJson": "格式化",
-    "compressJson": "压缩",
     "copyUri": "复制 URI",
-    "copyBody": "复制正文",
-    "copyRaw": "复制原始内容",
+    "copyCurl": "复制为 cURL",
     "copied": "已复制",
-    "enableWrap": "自动换行",
-    "disableWrap": "取消换行",
-    "expandAll": "全部展开",
-    "collapseAll": "全部折叠"
+    "stream": "Stream",
+    "streamChunks": "TCP 片段",
+    "streamEvents": "SSE 事件",
+    "noStreamData": "暂无流式数据",
+    "noSseEvents": "暂无 SSE 事件",
+    "streamMerged": "合并消息",
+    "mergeFormat": "格式",
+    "mergeFormatOpenai": "OpenAI"
   },
   "settings": {
     "title": "设置",
@@ -75,19 +71,10 @@
     "save": "保存",
     "saving": "保存中..."
   },
-  "tray": {
-    "show": "显示",
-    "settings": "设置",
-    "quit": "退出"
-  },
   "menu": {
     "settings": "设置",
     "about": "关于",
     "quit": "退出"
-  },
-  "about": {
-    "description": "用于拦截与查看 HTTP/HTTPS 流量的 MITM 反向代理。",
-    "version": "版本 {{version}}",
-    "close": "关闭"
   }
 }
+

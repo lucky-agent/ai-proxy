@@ -2,10 +2,12 @@ import { useTranslation } from 'react-i18next'
 import { useState, useCallback, useRef, useMemo, useEffect, memo, type ReactNode } from 'react'
 import type { TrafficEntry } from '@/types/proxy'
 import FormDataView from './FormDataView'
+import StreamingViewer from './StreamingViewer'
 import { useTheme } from '@/hooks/useTheme'
 import { useShiki } from '@/hooks/useShiki'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { statusCategory, formatDuration } from '@/lib/format'
+import { isStreamingContentType } from '@/lib/sse'
 import {
   CopyIcon,
   CheckIcon,
@@ -19,7 +21,7 @@ import {
 const MIN_REQUEST_RATIO = 0.15
 const MAX_REQUEST_RATIO = 0.85
 
-type PanelTab = 'header' | 'query' | 'body' | 'raw' | 'form'
+type PanelTab = 'header' | 'query' | 'body' | 'raw' | 'form' | 'stream'
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 
@@ -55,7 +57,33 @@ export default function DetailPanel({ entry, onClose }: Props) {
   const [requestTab, setRequestTab] = useState<PanelTab>('header')
   const [responseTab, setResponseTab] = useState<PanelTab>('header')
   const [requestRatio, setRequestRatio] = useState(0.5)
-  const [dragging, setDragging] = useState(false)
+    const [dragging, setDragging] = useState(false)
+
+  // 响应 Tab 栏：有条件地添加 Stream 标签（流式响应时显示）
+  const responseTabs = useMemo(() => {
+    const hasStream = entry && ((entry.responseChunks?.length ?? 0) > 1 || isStreamingContentType(entry.responseHeaders))
+    if (hasStream) {
+      return [
+        { id: 'header' as PanelTab, labelKey: 'detail.headers' },
+        { id: 'body' as PanelTab, labelKey: 'detail.body' },
+        { id: 'stream' as PanelTab, labelKey: 'detail.stream' },
+        { id: 'raw' as PanelTab, labelKey: 'detail.raw' },
+      ]
+    }
+    return [
+      { id: 'header' as PanelTab, labelKey: 'detail.headers' },
+      { id: 'body' as PanelTab, labelKey: 'detail.body' },
+      { id: 'raw' as PanelTab, labelKey: 'detail.raw' },
+    ]
+  }, [entry])
+
+  // 切换条目时如果 stream tab 不再可用，切回 header
+  useEffect(() => {
+    if (responseTab === 'stream') {
+      const hasStream = entry && ((entry.responseChunks?.length ?? 0) > 1 || isStreamingContentType(entry.responseHeaders))
+      if (!hasStream) setResponseTab('header')
+    }
+  }, [entry, responseTab])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const requestPanelRef = useRef<HTMLDivElement>(null)
@@ -161,9 +189,9 @@ export default function DetailPanel({ entry, onClose }: Props) {
             title={t('detail.response')}
             tab={responseTab}
             onTabChange={setResponseTab}
-            tabs={TABS}
+            tabs={responseTabs}
             onTitleClick={handleResponseTitleClick}>
-            <PanelContent tab={responseTab} side="response" entry={entry} />
+            <PanelContent tab={responseTab} side="response" entry={entry} onCloseStream={() => setResponseTab("header")} />
           </SidePanel>
         </div>
       </div>
@@ -229,10 +257,12 @@ function PanelContent({
   tab,
   side,
   entry,
+  onCloseStream,
 }: {
   tab: PanelTab
   side: 'request' | 'response'
   entry: TrafficEntry
+  onCloseStream?: () => void
 }) {
   const { t } = useTranslation()
 
@@ -264,6 +294,10 @@ function PanelContent({
     ) : (
       <EmptyContent label={side === 'request' ? t('detail.noRequestBody') : t('detail.noBody')} />
     )
+  }
+
+  if (tab === 'stream') {
+    return <StreamingViewer entry={entry} onClose={onCloseStream} />
   }
 
   const content = side === 'request' ? formatRequestRaw(entry) : formatResponseRaw(entry)
@@ -362,7 +396,8 @@ const MAX_KEY_RATIO = 0.7
 function KeyValueTable({ data, emptyLabel }: { data: Record<string, string>; emptyLabel: string }) {
   const entries = Object.entries(data)
   const [keyRatio, setKeyRatio] = useState(0.35)
-  const [dragging, setDragging] = useState(false)
+    const [dragging, setDragging] = useState(false)
+
   const containerRef = useRef<HTMLDivElement>(null)
   const handleRef = useRef<HTMLDivElement>(null)
   const liveKeyRatio = useRef(keyRatio)
@@ -864,5 +899,9 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
     </div>
   )
 })
+
+
+
+
 
 

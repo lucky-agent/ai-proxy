@@ -4,6 +4,7 @@
 /.claude
 /.cursor
 /.agents
+/.codex
 *.swp
 *.swo
 *~

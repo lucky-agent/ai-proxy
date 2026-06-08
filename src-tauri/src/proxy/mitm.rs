@@ -21,7 +21,8 @@ use super::state::State;
 use super::state::ViaConnectTunnel;
 
 pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infallible> {
-    let state = upgraded.extensions().get_ref::<State>().unwrap();
+    let state = upgraded.extensions().get_ref::<State>()
+        .expect("State should be set via AddInputExtensionLayer before request reaches handler");
     let executor = state.exec().clone();
     let http_mitm_service =
         AddInputExtensionLayer::new(ViaConnectTunnel).into_layer(new_http_mitm_proxy());

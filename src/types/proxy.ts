@@ -37,6 +37,10 @@ export type ProxyEvent =
   | { type: "response_chunk"; id: string; chunk: string }
   | { type: "error"; id: string; error: string }
 
+export interface ChunkRecord {
+  data: string
+}
+
 export interface TrafficEntry {
   id: string
   method: string
@@ -51,6 +55,8 @@ export interface TrafficEntry {
  durationMs: number | null
  responseHeaders: Record<string, string> | null
  responseBody: string | null
+ responseChunks: ChunkRecord[]
  error: string | null
  edited?: boolean
 }
+

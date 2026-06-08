@@ -7,6 +7,7 @@ pub mod utils;
 use proxy::state::AppState;
 use tauri::{Emitter, Manager, RunEvent};
 
+use crate::commands::resend_request;
 use crate::commands::{
     get_locale, get_settings, get_status, get_theme, save_settings, set_locale, set_theme,
     start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
@@ -93,6 +94,7 @@ pub fn run() {
             set_locale,
             subscribe_proxy_events,
             sync_tray_locale,
+            resend_request,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

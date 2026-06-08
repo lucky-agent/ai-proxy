@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import type { TrafficEntry } from '@/types/proxy'
 import { extractHost } from '@/lib/format'
 import DomainSidebar from './DomainSidebar'
@@ -13,6 +14,18 @@ const MAX_SPLIT_RATIO = 0.7
 
 interface Props {
   entries: TrafficEntry[]
+}
+
+/** 补全完整 URL：代理存储的 URI 可能只是路径（如 /v1/chat/completions） */
+function buildFullUrl(entry: TrafficEntry): string {
+  if (entry.uri.startsWith('http://') || entry.uri.startsWith('https://')) {
+    return entry.uri
+  }
+  const host = entry.requestHeaders?.['host'] ?? entry.requestHeaders?.['Host'] ?? ''
+  if (host) {
+    return 'https://' + host + entry.uri
+  }
+  return entry.uri
 }
 
 export default function TrafficLog({ entries }: Props) {
@@ -30,31 +43,29 @@ export default function TrafficLog({ entries }: Props) {
   const domainRef = useRef<HTMLDivElement>(null)
   const requestListRef = useRef<HTMLDivElement>(null)
 
-  // Live ratios for direct DOM manipulation during drag
   const liveDomainRatio = useRef(domainRatio)
   const liveSplitRatio = useRef(splitRatio)
   if (!draggingDomain) liveDomainRatio.current = domainRatio
   if (!draggingSplit) liveSplitRatio.current = splitRatio
 
- const domains = useMemo(() => {
-   const map = new Map<string, number>()
-   for (const e of entries) {
-     const host = extractHost(e.uri)
-      // 当 extractHost 无法从 URI 提取域名时（如纯路径 /api/users），回退到请求头的 Host 字段
+  const domains = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const e of entries) {
+      const host = extractHost(e.uri)
       if (host === '(unknown)') {
         const hostHeader = e.requestHeaders?.['host'] ?? e.requestHeaders?.['Host'] ?? ''
         if (hostHeader) {
-          const fallbackHost = hostHeader.split(':')[0] // strip port
+          const fallbackHost = hostHeader.split(':')[0]
           map.set(fallbackHost, (map.get(fallbackHost) ?? 0) + 1)
           continue
         }
       }
       map.set(host, (map.get(host) ?? 0) + 1)
-   }
-   return Array.from(map.entries()).sort((a, b) => b[1] - a[1])
- }, [entries])
+    }
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1])
+  }, [entries])
 
- const filtered = useMemo(() => {
+  const filtered = useMemo(() => {
     if (!selectedDomain) return entries
     return entries.filter(e => {
       const host = extractHost(e.uri)
@@ -70,9 +81,9 @@ export default function TrafficLog({ entries }: Props) {
       sortOrder === 'desc'
         ? b.requestTimestamp - a.requestTimestamp
         : a.requestTimestamp - b.requestTimestamp
-   )
+    )
     return copy
- }, [filtered, sortOrder])
+  }, [filtered, sortOrder])
 
   const selected = entries.find(e => e.id === selectedId)
 
@@ -94,6 +105,28 @@ export default function TrafficLog({ entries }: Props) {
     setSelectedId(null)
   }, [])
 
+  const handleResendRequest = useCallback(async (entry: TrafficEntry) => {
+    const headers: Record<string, string> = {}
+    for (const [k, v] of Object.entries(entry.requestHeaders)) {
+      const lk = k.toLowerCase()
+      if (lk === 'host' || lk === 'content-length' || lk === 'transfer-encoding') continue
+      headers[k] = v
+    }
+
+    try {
+      const entryId = await invoke<string>('resend_request', {
+        method: entry.method,
+        url: buildFullUrl(entry),
+        headers,
+        body: entry.requestBody,
+      })
+      setSelectedId(entryId)
+      setDetailOpen(true)
+    } catch (err) {
+      console.error('resend invoke failed:', err)
+    }
+  }, [])
+
   // --- drag handlers ---
   const onDomainPointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
@@ -105,10 +138,7 @@ export default function TrafficLog({ entries }: Props) {
     (e: React.PointerEvent) => {
       if (!draggingDomain || !containerRef.current) return
       const rect = containerRef.current.getBoundingClientRect()
-      const ratio = Math.max(
-        MIN_DOMAIN_RATIO,
-        Math.min(MAX_DOMAIN_RATIO, (e.clientX - rect.left) / rect.width)
-      )
+      const ratio = Math.max(MIN_DOMAIN_RATIO, Math.min(MAX_DOMAIN_RATIO, (e.clientX - rect.left) / rect.width))
       liveDomainRatio.current = ratio
       if (domainRef.current) domainRef.current.style.width = `${ratio * 100}%`
     },
@@ -130,10 +160,7 @@ export default function TrafficLog({ entries }: Props) {
     (e: React.PointerEvent) => {
       if (!draggingSplit || !mainAreaRef.current) return
       const rect = mainAreaRef.current.getBoundingClientRect()
-      const ratio = Math.max(
-        MIN_SPLIT_RATIO,
-        Math.min(MAX_SPLIT_RATIO, (e.clientY - rect.top) / rect.height)
-      )
+      const ratio = Math.max(MIN_SPLIT_RATIO, Math.min(MAX_SPLIT_RATIO, (e.clientY - rect.top) / rect.height))
       liveSplitRatio.current = ratio
       if (requestListRef.current) requestListRef.current.style.height = `${ratio * 100}%`
     },
@@ -164,7 +191,6 @@ export default function TrafficLog({ entries }: Props) {
         />
       </div>
 
-      {/* Domain Resize Handle */}
       <div
         onPointerDown={onDomainPointerDown}
         onPointerMove={onDomainPointerMove}
@@ -178,7 +204,6 @@ export default function TrafficLog({ entries }: Props) {
         </div>
       </div>
 
-      {/* Main Area: top-bottom split */}
       <div ref={mainAreaRef} className="flex min-h-0 flex-col flex-1 overflow-hidden">
         <div
           ref={requestListRef}
@@ -190,12 +215,12 @@ export default function TrafficLog({ entries }: Props) {
             onSelectEntry={handleSelectEntry}
             sortOrder={sortOrder}
             onSortOrderChange={setSortOrder}
+            onResendRequest={handleResendRequest}
           />
         </div>
 
         {detailOpen && (
           <>
-            {/* Split Resize Handle (horizontal) */}
             <div
               onPointerDown={onSplitPointerDown}
               onPointerMove={onSplitPointerMove}
@@ -208,15 +233,10 @@ export default function TrafficLog({ entries }: Props) {
                 <span className="block size-[3px] rounded-full bg-muted-foreground" />
               </div>
             </div>
-
             <DetailPanel entry={selected} onClose={handleCloseDetail} />
           </>
         )}
-
       </div>
     </div>
   )
 }
-
-
-
