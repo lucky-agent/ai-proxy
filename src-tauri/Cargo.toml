@@ -45,3 +45,4 @@ rustls = { version = "0.23", default-features = false, features = [
   "tls12",
 ] }
 rquickjs = { version = "0.12" }
+sqlite = "0.37.0"

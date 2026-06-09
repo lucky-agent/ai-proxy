@@ -9,6 +9,7 @@ use tauri::ipc::Channel;
 use tokio::sync::oneshot;
 
 use crate::config::{Settings, Store};
+use crate::config::db::Db;
 
 #[derive(Debug, Clone, Extension)]
 pub(crate) struct State {
@@ -67,10 +68,11 @@ pub(crate) struct AppState {
     shutdown_signal: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     proxy_event_channel: Arc<Mutex<Option<Channel<ProxyEvent>>>>,
     pending_open_settings: Arc<AtomicBool>,
+    db: Arc<Mutex<Db>>,
 }
 
 impl AppState {
-    pub(crate) fn new(store: Store, settings: Settings) -> Self {
+    pub(crate) fn new(store: Store, settings: Settings, db: Db) -> Self {
         Self {
             settings: Arc::new(Mutex::new(settings)),
             running: Arc::new(Mutex::new(false)),
@@ -78,6 +80,7 @@ impl AppState {
             shutdown_signal: Arc::new(Mutex::new(None)),
             proxy_event_channel: Arc::new(Mutex::new(None)),
             pending_open_settings: Arc::new(AtomicBool::new(false)),
+            db: Arc::new(Mutex::new(db)),
         }
     }
     pub(crate) fn event_channel(&self) -> Option<Channel<ProxyEvent>> {
@@ -134,6 +137,10 @@ impl AppState {
             .settings
             .lock()
             .expect("Failed to acquire settings lock") = settings;
+    }
+
+    pub(crate) fn db(&self) -> Arc<Mutex<Db>> {
+        self.db.clone()
     }
 
     pub(crate) fn settings(&self) -> Settings {

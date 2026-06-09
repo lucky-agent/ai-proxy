@@ -84,6 +84,7 @@ function App() {
       <TitleBar
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenAbout={() => setAboutOpen(true)}
+        onOpenTools={() => {}}
       />
       <header className="flex shrink-0 items-center justify-between border-b border-border px-2 py-1">
         <div className="flex items-center gap-2">

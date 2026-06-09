@@ -17,6 +17,7 @@ use super::parser;
 use super::state::State;
 use super::state::ViaConnectTunnel;
 use crate::AppState;
+use crate::config::db::Db;
 use crate::script;
 
 pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible> {
@@ -41,6 +42,26 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
 
     let (method, uri, request_id) = parser::log_request(&parts, &body_str, &event_channel);
 
+    // persist request to DB (async, errors won't affect normal flow)
+    {
+        let app_state = state.app_handle().state::<AppState>();
+        if let Ok(db) = app_state.db().lock() {
+            db.upsert_request_async(
+                &request_id,
+                &method.to_string(),
+                &uri.to_string(),
+                chrono::Utc::now().timestamp_millis(),
+                &Db::headers_to_json(&parts.headers),
+                &Db::query_to_json(&uri),
+                if body_str.is_empty() {
+                    None
+                } else {
+                    Some(&body_str)
+                },
+                false,
+            );
+        }
+    }
     let req = if has_scripts {
         let req_data = script::RequestData::from_rama_parts(&parts, &body_str);
 
@@ -80,48 +101,66 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
     let start_time = Instant::now();
 
     match client.serve(req).await {
+        Ok(resp) if has_scripts => {
+            let duration_ms = start_time.elapsed().as_millis() as u64;
+            let (parts, body) = resp.into_parts();
+            let body_str = script::collect_body_str(body).await;
+            let resp_data = script::ResponseData::from_rama_parts(&parts, &body_str);
+            let modified = script::run_response_hooks(state.scripts(), &resp_data);
+            let resp = modified.apply(parts);
+            let resp =
+                parser::log_response(resp, method, uri, &request_id, duration_ms, &event_channel);
+            {
+                let app_state = state.app_handle().state::<AppState>();
+                if let Ok(db) = app_state.db().lock() {
+                    db.update_response_async(
+                        &request_id,
+                        resp.status().as_u16(),
+                        chrono::Utc::now().timestamp_millis(),
+                        duration_ms,
+                        &Db::headers_to_json(resp.headers()),
+                    );
+                }
+            }
+            Ok(resp)
+        }
         Ok(resp) => {
             let duration_ms = start_time.elapsed().as_millis() as u64;
-
-            if has_scripts {
-                let (parts, body) = resp.into_parts();
-                let body_str = script::collect_body_str(body).await;
-                let resp_data = script::ResponseData::from_rama_parts(&parts, &body_str);
-                let modified = script::run_response_hooks(state.scripts(), &resp_data);
-                let resp = modified.apply(parts);
-                Ok(parser::log_response(
-                    resp,
-                    method,
-                    uri,
-                    &request_id,
-                    duration_ms,
-                    &event_channel,
-                ))
-            } else {
-                Ok(parser::log_response(
-                    resp,
-                    method,
-                    uri,
-                    &request_id,
-                    duration_ms,
-                    &event_channel,
-                ))
+            let resp =
+                parser::log_response(resp, method, uri, &request_id, duration_ms, &event_channel);
+            {
+                let app_state = state.app_handle().state::<AppState>();
+                if let Ok(db) = app_state.db().lock() {
+                    db.update_response_async(
+                        &request_id,
+                        resp.status().as_u16(),
+                        chrono::Utc::now().timestamp_millis(),
+                        duration_ms,
+                        &Db::headers_to_json(resp.headers()),
+                    );
+                }
             }
+            Ok(resp)
         }
         Err(err) => {
             log::error!("error proxying request [{} {}]: {err:?}", method, uri);
             if let Some(ref ch) = event_channel {
                 ch.send(ProxyEvent::Error {
-                    id: request_id,
+                    id: request_id.clone(),
                     error: format!("{err:?}"),
                 })
                 .ok();
+            }
+            {
+                let app_state = state.app_handle().state::<AppState>();
+                if let Ok(db) = app_state.db().lock() {
+                    db.set_error_async(&request_id, &format!("{err:?}"));
+                }
             }
             Ok(parser::error_response())
         }
     }
 }
-
 pub(crate) fn build_upstream_service(
     executor: rama::rt::Executor,
     upstream_proxy: bool,

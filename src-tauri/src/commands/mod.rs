@@ -9,3 +9,5 @@ pub use proxy::{get_status, start_proxy, stop_proxy, subscribe_proxy_events};
 pub use resend::resend_request;
 pub use settings::{get_settings, save_settings};
 pub use theme::{get_theme, set_theme};
+mod traffic;
+pub use traffic::load_traffic_history;

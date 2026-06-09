@@ -8,6 +8,7 @@ use proxy::state::AppState;
 use tauri::{Emitter, Manager, RunEvent};
 
 use crate::commands::resend_request;
+use crate::commands::load_traffic_history;
 use crate::commands::{
     get_locale, get_settings, get_status, get_theme, save_settings, set_locale, set_theme,
     start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
@@ -76,10 +77,15 @@ pub fn run() {
     let settings =
         Settings::load_from_path(&store.data_dir()).expect("Failed to load configuration");
     let ui = settings.ui.clone();
+    let db = if settings.persistence.unwrap_or(false) {
+        crate::config::db::Db::open(&store.db_path()).expect("Failed to open database")
+    } else {
+        crate::config::db::Db::noop()
+    };
 
     let app = tauri::Builder::default()
         .plugin(Store::build_log_plugin(&settings.log).build())
-        .manage(AppState::new(store, settings))
+        .manage(AppState::new(store, settings, db))
         .setup(move |app| app_setup(app, &ui))
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
@@ -94,6 +100,7 @@ pub fn run() {
             set_locale,
             subscribe_proxy_events,
             sync_tray_locale,
+            load_traffic_history,
             resend_request,
         ])
         .build(tauri::generate_context!())

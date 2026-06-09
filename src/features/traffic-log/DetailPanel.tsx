@@ -12,9 +12,10 @@ import {
   CopyIcon,
   CheckIcon,
   TextWrap,
-  ArrowLeftToLine,
-  ChevronRight,
-  ChevronDown,
+ ArrowLeftToLine,
+  ListRestart,
+ ChevronRight,
+ ChevronDown,
   XIcon,
 } from 'lucide-react'
 
@@ -217,7 +218,7 @@ function SummaryBar({ entry, onClose }: { entry: TrafficEntry; onClose?: () => v
         {entry.method}
       </span>
       <span
-        className="badge-status shrink-0"
+        className="badge-status shrink-0" data-dot={entry.status != null}
         style={{
           color: `var(--badge-${statusCategory(entry.status ?? 0)})`,
           background: `color-mix(in oklch, var(--badge-${statusCategory(entry.status ?? 0)}) 12%, transparent)`,
@@ -807,48 +808,93 @@ const SyntaxHighlightedBody = memo(function SyntaxHighlightedBody({
       className={`shiki-root ${wrapped ? 'whitespace-pre-wrap break-all overflow-y-auto' : 'whitespace-pre overflow-x-auto overflow-y-auto'}`}
       dangerouslySetInnerHTML={{ __html: html }}
     />
-  )
+ )
 })
+/** 简单的 XML 格式化 */
+function formatXml(input: string): string {
+  // 规范化换行，在标签边界添加换行
+  const lines = input
+    .replace(/\r\n/g, '\n')
+    .trim()
+    .replace(/>(\s*)(?=<[^!?/])/g, '>\n')
+    .replace(/>\s*$/gm, '>\n')
+    .replace(/^\s*</gm, '<')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0)
+  let indent = 0
+  let result = ""
+  for (const line of lines) {
+    // 减少缩进：结束标签、处理指令
+    if (line.match(/^<\//) || line.match(/^<\?/)) {
+      indent--
+    }
+    result += '  '.repeat(Math.max(0, indent)) + line + '\n'
+    // 增加缩进：开始标签（非自闭和、非处理指令、非结束标签、非注释、非CDATA）
+    if (
+      /^<[^!?/]/.test(line) &&
+      !line.match(/\/>\s*\$/) &&
+      !line.match(/^<\?/) &&
+      !line.match(/^<!--/) &&
+      !line.match(/^<!\[CDATA\[/)
+    ) indent++
+  }
+  return result.trim()
+}
 
 const BodyView = memo(function BodyView({ body }: { body: string }) {
   const [wrapped, setWrapped] = useState(true)
-  const [useTreeView] = useState(true)
+  const [format, setFormat] = useState<'auto' | 'json' | 'xml' | 'html' | 'plaintext'>('auto')
   const [allExpanded, setAllExpanded] = useState(true)
   const { copied, copy } = useCopyToClipboard()
 
-  // 格式化检测 — 用 useMemo 避免每次渲染重新计算
+  // 格式化检测
   const { cleaned, formatted, parsedJson, isJson } = useMemo(() => {
     const c = body.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
     const f = tryFormatJson(c)
     let parsed: JsonValue | null = null
     if (f !== null) {
-      try {
-        parsed = JSON.parse(c) as JsonValue
-      } catch {
-        /* ignore */
-      }
+      try { parsed = JSON.parse(c) as JsonValue } catch { /* ignore */ }
     }
-    return {
-      cleaned: c,
-      formatted: f,
-      parsedJson: parsed,
-      isJson: f !== null,
-    }
+    return { cleaned: c, formatted: f, parsedJson: parsed, isJson: f !== null }
   }, [body])
-
-  // 树形视图模式
-  const displayBody = useMemo(() => {
-    if (!formatted) return body
-    return formatted.formatted
-  }, [formatted, body])
-
-  const lang = isJson ? 'json' : cleaned.startsWith('<') ? 'html' : 'plaintext'
+  // 根据 format 决定显示内容和语言
+  const { displayBody, displayLang, useTreeView } = useMemo(() => {
+    if (format === 'auto') {
+      if (isJson) {
+        return { displayBody: formatted!.formatted, displayLang: 'json', useTreeView: true as const }
+      }
+      const l = cleaned.startsWith('<') ? 'html' : 'plaintext'
+      return { displayBody: cleaned, displayLang: l, useTreeView: false as const }
+    }
+    if (format === 'json') {
+      try { const parsed = JSON.parse(cleaned) as JsonValue; return { displayBody: JSON.stringify(parsed, null, 2), displayLang: 'json', useTreeView: true as const } }
+      catch { return { displayBody: cleaned, displayLang: 'plaintext', useTreeView: false as const } }
+    }
+    if (format === 'xml') {
+      try { return { displayBody: formatXml(cleaned), displayLang: 'xml', useTreeView: false as const } }
+      catch { return { displayBody: cleaned, displayLang: 'plaintext', useTreeView: false as const } }
+    }
+    if (format === 'html') { return { displayBody: cleaned, displayLang: 'html', useTreeView: false as const } }
+    return { displayBody: cleaned, displayLang: 'plaintext', useTreeView: false as const }
+  }, [format, cleaned, isJson, formatted])
 
   return (
     <div className="flex flex-col h-full">
       <div className="relative min-h-0 flex-1 group/mini">
         {/* 操作栏 — 悬浮在右上角，不占空间，不随滚动消失 */}
         <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 opacity-0 group-hover/mini:opacity-100 transition-all">
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value as typeof format)}
+            className="appearance-none rounded bg-muted/30 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer outline-none border border-border/30"
+            title="Format">
+            <option value="auto">Auto</option>
+            <option value="json">JSON</option>
+            <option value="xml">XML</option>
+            <option value="html">HTML</option>
+            <option value="plaintext">Text</option>
+          </select>
           <button
             onClick={() => setWrapped(w => !w)}
             className={`rounded p-1 transition-colors ${
@@ -859,7 +905,7 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
             title={wrapped ? 'Disable wrap' : 'Enable wrap'}>
             {wrapped ? <ArrowLeftToLine className="size-3" /> : <TextWrap className="size-3" />}
           </button>
-          {isJson && useTreeView && (
+          {useTreeView && (
             <button
               onClick={allExpanded ? () => setAllExpanded(false) : () => setAllExpanded(true)}
               className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
@@ -884,7 +930,7 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
         </div>
         {/* 可滚动的内容区 — 用 absolute 填满父级 */}
         <div className="absolute inset-0 overflow-auto">
-          {isJson && useTreeView && parsedJson ? (
+          {useTreeView && parsedJson ? (
             <JsonTreeView
               data={parsedJson}
               defaultExpanded={allExpanded}
@@ -892,13 +938,15 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
               wrapped={wrapped}
             />
           ) : (
-            <SyntaxHighlightedBody content={displayBody} lang={lang} wrapped={wrapped} />
+            <SyntaxHighlightedBody content={displayBody} lang={displayLang} wrapped={wrapped} />
           )}
         </div>
       </div>
     </div>
   )
 })
+
+
 
 
 

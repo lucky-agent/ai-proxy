@@ -4,8 +4,9 @@ import type { TrafficEntry } from '@/types/proxy'
 import { extractHost } from '@/lib/format'
 import DomainSidebar from './DomainSidebar'
 import RequestList from './RequestList'
-import type { SortOrder } from './RequestList'
+import type { SortOrder, SortColumn } from './RequestList'
 import DetailPanel from './DetailPanel'
+import EditRequestDialog from './EditRequestDialog'
 
 const MIN_DOMAIN_RATIO = 0.08
 const MAX_DOMAIN_RATIO = 0.4
@@ -35,8 +36,10 @@ export default function TrafficLog({ entries }: Props) {
   const [splitRatio, setSplitRatio] = useState(0.4)
   const [draggingDomain, setDraggingDomain] = useState(false)
   const [draggingSplit, setDraggingSplit] = useState(false)
+  const [sortColumn, setSortColumn] = useState<SortColumn>(null)
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [detailOpen, setDetailOpen] = useState(false)
+  const [editEntry, setEditEntry] = useState<TrafficEntry | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const mainAreaRef = useRef<HTMLDivElement>(null)
@@ -77,13 +80,38 @@ export default function TrafficLog({ entries }: Props) {
 
   const sorted = useMemo(() => {
     const copy = [...filtered]
-    copy.sort((a, b) =>
-      sortOrder === 'desc'
-        ? b.requestTimestamp - a.requestTimestamp
-        : a.requestTimestamp - b.requestTimestamp
-    )
+    if (!sortColumn) return copy
+    copy.sort((a, b) => {
+      let cmp: number
+      switch (sortColumn) {
+        case 'id':
+          cmp = a.requestNumber - b.requestNumber
+          break
+        case 'url':
+          cmp = a.uri.localeCompare(b.uri)
+          break
+        case 'method':
+          cmp = a.method.localeCompare(b.method)
+          break
+        case 'status':
+          cmp = (a.status ?? -1) - (b.status ?? -1)
+          break
+        case 'duration':
+          cmp = (a.durationMs ?? -1) - (b.durationMs ?? -1)
+          break
+        case 'time':
+          cmp = a.requestTimestamp - b.requestTimestamp
+          break
+        case 'edited':
+          cmp = (a.edited ? 1 : 0) - (b.edited ? 1 : 0)
+          break
+        default:
+          return 0
+      }
+      return sortOrder === 'desc' ? -cmp : cmp
+    })
     return copy
-  }, [filtered, sortOrder])
+  }, [filtered, sortColumn, sortOrder])
 
   const selected = entries.find(e => e.id === selectedId)
 
@@ -103,6 +131,31 @@ export default function TrafficLog({ entries }: Props) {
   const handleCloseDetail = useCallback(() => {
     setDetailOpen(false)
     setSelectedId(null)
+  }, [])
+
+  const handleEditRequest = useCallback((entry: TrafficEntry) => {
+    setEditEntry(entry)
+  }, [])
+
+  const handleResendEdited = useCallback(async (
+    method: string,
+    url: string,
+    headers: Record<string, string>,
+    body: string | null,
+  ) => {
+    try {
+      const entryId = await invoke<string>('resend_request', {
+        method,
+        url,
+        headers,
+        body,
+      })
+      setSelectedId(entryId)
+      setDetailOpen(true)
+      setEditEntry(null)
+    } catch (err) {
+      console.error('resend invoke failed:', err)
+    }
   }, [])
 
   const handleResendRequest = useCallback(async (entry: TrafficEntry) => {
@@ -125,6 +178,11 @@ export default function TrafficLog({ entries }: Props) {
     } catch (err) {
       console.error('resend invoke failed:', err)
     }
+  }, [])
+
+  const handleSortChange = useCallback((column: SortColumn, order: SortOrder) => {
+    setSortColumn(column)
+    setSortOrder(order)
   }, [])
 
   // --- drag handlers ---
@@ -174,7 +232,7 @@ export default function TrafficLog({ entries }: Props) {
 
   const isDragging = draggingDomain || draggingSplit
 
-  return (
+return (
     <div
       ref={containerRef}
       className={`flex min-h-0 flex-1 overflow-hidden ${isDragging ? 'select-none' : ''}`}
@@ -213,9 +271,11 @@ export default function TrafficLog({ entries }: Props) {
             entries={sorted}
             selectedId={selectedId}
             onSelectEntry={handleSelectEntry}
+            sortColumn={sortColumn}
             sortOrder={sortOrder}
-            onSortOrderChange={setSortOrder}
+            onSortChange={handleSortChange}
             onResendRequest={handleResendRequest}
+            onEditRequest={handleEditRequest}
           />
         </div>
 
@@ -234,6 +294,12 @@ export default function TrafficLog({ entries }: Props) {
               </div>
             </div>
             <DetailPanel entry={selected} onClose={handleCloseDetail} />
+            <EditRequestDialog
+              open={editEntry !== null}
+              onOpenChange={(open) => { if (!open) setEditEntry(null) }}
+              entry={editEntry}
+              onResend={handleResendEdited}
+            />
           </>
         )}
       </div>

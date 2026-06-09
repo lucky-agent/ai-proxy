@@ -41,6 +41,10 @@ impl Store {
         &self.scripts_dir
     }
 
+    pub fn db_path(&self) -> PathBuf {
+        self.data_dir().join("traffic.db")
+    }
+
     pub fn build_log_plugin(log: &LogConfig) -> tauri_plugin_log::Builder {
         let log_dir = PathBuf::from(log.dir.clone().unwrap_or_else(|| "logs".to_string()));
         let mut targets = vec![Target::new(TargetKind::Folder {

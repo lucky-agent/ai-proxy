@@ -23,6 +23,9 @@
     "duration": "耗时",
     "time": "时间",
     "edited": "已编辑",
+    "edit": "编辑",
+    "repeat": "重复请求",
+    "copyCurl": "复制 cURL",
     "emptyTitle": "暂无流量记录。",
     "emptyHint": "启动代理以拦截请求。",
     "pending": "..."
@@ -73,8 +76,9 @@
   },
   "menu": {
     "settings": "设置",
-    "about": "关于",
-    "quit": "退出"
+   "about": "关于",
+    "tools": "工具",
+   "quit": "退出"
   }
 }
 

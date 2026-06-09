@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
-  InfoIcon,
-  LogOutIcon,
-  MinusIcon,
-  SettingsIcon,
-  SquareIcon,
-  XIcon,
+ InfoIcon,
+ LogOutIcon,
+ MinusIcon,
+ SettingsIcon,
+ SquareIcon,
+  WrenchIcon,
+ XIcon,
 } from 'lucide-react'
 import appIcon from '@/assets/app-icon.png'
 import { useLocale } from '@/hooks/useLocale'
@@ -15,6 +16,7 @@ import { cn } from '@/lib/utils'
 type TitleBarProps = {
   onOpenSettings: () => void
   onOpenAbout: () => void
+  onOpenTools: () => void
 }
 
 function stopTitleBarDrag(event: { stopPropagation: () => void }) {
@@ -130,7 +132,7 @@ function WindowButton({
   )
 }
 
-export function TitleBar({ onOpenSettings, onOpenAbout }: TitleBarProps) {
+export function TitleBar({ onOpenSettings, onOpenAbout, onOpenTools }: TitleBarProps) {
   const { t } = useLocale()
   const appWindow = getCurrentWindow()
 
@@ -186,6 +188,16 @@ export function TitleBar({ onOpenSettings, onOpenAbout }: TitleBarProps) {
                 }}>
                 <LogOutIcon className="size-4" />
                 {t('menu.quit')}
+              </MenuItem>
+            </>
+          )}
+ </TitleBarMenu>
+        <TitleBarMenu label={t('menu.tools')}>
+          {close => (
+            <>
+              <MenuItem onClick={() => { close(); onOpenTools() }}>
+                <WrenchIcon className="size-4" />
+                {t('menu.tools')}
               </MenuItem>
             </>
           )}

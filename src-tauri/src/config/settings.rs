@@ -120,6 +120,8 @@ pub struct Settings {
     /// UI 配置
     #[serde(default)]
     pub ui: UiConfig,
+    #[serde(default)]
+    pub persistence: Option<bool>,
 }
 
 impl Default for Settings {
@@ -128,6 +130,7 @@ impl Default for Settings {
             proxy: ProxyConfig::default(),
             log: LogConfig::default(),
             ui: UiConfig::default(),
+            persistence: Some(false),
         }
     }
 }

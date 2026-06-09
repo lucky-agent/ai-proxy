@@ -82,18 +82,18 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --badge-get: oklch(0.55 0.15 220);
-  --badge-post: oklch(0.5 0.17 155);
-  --badge-put: oklch(0.55 0.16 85);
-  --badge-delete: oklch(0.45 0.22 25);
-  --badge-patch: oklch(0.5 0.17 300);
-  --badge-head: oklch(0.48 0.12 220);
-  --badge-options: oklch(0.45 0.1 250);
-  --badge-connect: oklch(0.5 0.15 260);
-  --badge-success: oklch(0.5 0.17 155);
-  --badge-redirect: oklch(0.55 0.16 85);
-  --badge-client-err: oklch(0.45 0.22 25);
-  --badge-server-err: oklch(0.45 0.2 30);
+--badge-get: oklch(0.55 0.15 220);
+  --badge-post: oklch(0.55 0.22 150);
+  --badge-put: oklch(0.58 0.18 85);
+  --badge-delete: oklch(0.5 0.25 20);
+  --badge-patch: oklch(0.55 0.18 290);
+  --badge-head: oklch(0.5 0.06 220);
+  --badge-options: oklch(0.5 0.12 250);
+  --badge-connect: oklch(0.55 0.16 260);
+  --badge-success: oklch(0.55 0.22 150);
+  --badge-redirect: oklch(0.6 0.2 85);
+  --badge-client-err: oklch(0.53 0.24 25);
+  --badge-server-err: oklch(0.5 0.25 25);
   --scrollbar-thumb: oklch(0.75 0 0);
   --scrollbar-thumb-hover: oklch(0.62 0 0);
   --scrollbar-track: transparent;
@@ -132,18 +132,18 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-  --badge-get: oklch(0.75 0.15 220);
-  --badge-post: oklch(0.72 0.17 155);
-  --badge-put: oklch(0.78 0.16 85);
-  --badge-delete: oklch(0.65 0.22 25);
-  --badge-patch: oklch(0.7 0.17 300);
-  --badge-head: oklch(0.68 0.12 220);
-  --badge-options: oklch(0.65 0.1 250);
-  --badge-connect: oklch(0.7 0.15 260);
-  --badge-success: oklch(0.72 0.17 155);
-  --badge-redirect: oklch(0.78 0.16 85);
-  --badge-client-err: oklch(0.65 0.22 25);
-  --badge-server-err: oklch(0.65 0.2 30);
+  --badge-get: oklch(0.72 0.2 215);
+  --badge-post: oklch(0.7 0.22 150);
+  --badge-put: oklch(0.75 0.18 85);
+  --badge-delete: oklch(0.62 0.25 20);
+  --badge-patch: oklch(0.7 0.18 290);
+  --badge-head: oklch(0.65 0.06 220);
+  --badge-options: oklch(0.63 0.12 250);
+  --badge-connect: oklch(0.7 0.16 260);
+  --badge-success: oklch(0.7 0.22 150);
+  --badge-redirect: oklch(0.75 0.2 85);
+  --badge-client-err: oklch(0.65 0.24 25);
+  --badge-server-err: oklch(0.62 0.25 25);
   --scrollbar-thumb: oklch(0.38 0 0);
   --scrollbar-thumb-hover: oklch(0.48 0 0);
   --scrollbar-track: oklch(0.21 0 0);
@@ -206,11 +206,25 @@
     font-weight: 700;
     text-transform: uppercase;
   }
-  .badge-status {
-    border-radius: 0.25rem;
-    padding: 0.125rem 0.25rem;
-    font-size: 0.625rem;
-    font-weight: 600;
+ .badge-status {
+   border-radius: 0.25rem;
+   padding: 0.125rem 0.25rem;
+   font-size: 0.625rem;
+   font-weight: 600;
+ }
+  .badge-status::before {
+    content: '';
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    margin-right: 3px;
+    background: currentColor;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+  .badge-status[data-dot='false']::before {
+    display: none;
   }
 }
 
@@ -242,3 +256,4 @@
 .shiki-root .shiki .line::after {
   content: none;
 }
+
