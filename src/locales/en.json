@@ -13,7 +13,8 @@
   },
   "hosts": {
     "title": "Hosts",
-    "all": "All"
+    "all": "All",
+    "pinned": "Pinned"
   },
   "requestList": {
     "id": "#",
@@ -22,8 +23,9 @@
     "status": "Status",
     "duration": "Duration",
     "time": "Time",
-    "edited": "Edited",
-    "edit": "Edit",
+   "edited": "Edited",
+    "ssl": "SSL",
+   "edit": "Edit",
     "repeat": "Repeat",
     "copyCurl": "Copy as cURL",
     "emptyTitle": "No traffic captured yet.",
@@ -76,9 +78,8 @@
   },
   "menu": {
     "settings": "Settings",
-   "about": "About",
+    "about": "About",
     "tools": "Tools",
-   "quit": "Quit"
+    "quit": "Quit"
   }
 }
-

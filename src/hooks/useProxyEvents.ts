@@ -16,20 +16,22 @@ const MAX_BODY_ACCUMULATE = 2 * 1024 * 1024
     const channel = new Channel<ProxyEvent>()
     channel.onmessage = (event: ProxyEvent) => {
       switch (event.type) {
-        case 'request': {
-         const { id, method, uri, timestamp, headers } = event
-         const query_params = 'query_params' in event ? (event as any).query_params : undefined
-          counterRef.current += 1
-          entriesRef.current.set(id, {
-            id,
-            method,
-            uri,
-            requestNumber: counterRef.current,
-            requestTimestamp: timestamp,
-            requestHeaders: headers,
-            requestBody: null,
-            requestQuery: query_params,
-            status: null,
+      case 'request': {
+       const { id, method, uri, timestamp, headers, decrypted } = event
+       console.log('[ProxyEvent] request', { id, method, uri, timestamp, decrypted })
+       const query_params = 'query_params' in event ? (event as any).query_params : undefined
+        counterRef.current += 1
+        entriesRef.current.set(id, {
+           id,
+           method,
+           uri,
+           requestNumber: counterRef.current,
+           requestTimestamp: timestamp,
+           requestHeaders: headers,
+           requestBody: null,
+           requestQuery: query_params,
+            decrypted,
+           status: null,
             responseTimestamp: null,
             durationMs: null,
             responseHeaders: null,

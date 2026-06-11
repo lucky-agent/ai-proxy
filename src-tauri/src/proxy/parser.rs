@@ -65,14 +65,15 @@ pub(crate) fn log_request(
         .collect();
 
     if let Some(ch) = event_channel {
-        ch.send(ProxyEvent::Request {
-            id: request_id.clone(),
-            method: method.to_string(),
-            uri: uri.to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis(),
-            headers: req_headers,
-            query_params,
-        })
+       ch.send(ProxyEvent::Request {
+           id: request_id.clone(),
+           method: method.to_string(),
+           uri: uri.to_string(),
+           timestamp: chrono::Utc::now().timestamp_millis(),
+           headers: req_headers,
+           query_params,
+            decrypted: true,
+       })
         .ok();
         if !body_str.is_empty() {
             ch.send(ProxyEvent::RequestChunk {

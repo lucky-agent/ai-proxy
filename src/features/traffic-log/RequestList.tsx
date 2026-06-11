@@ -2,31 +2,25 @@ import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { VList } from 'virtua'
 import { useTranslation } from 'react-i18next'
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CopyIcon,
-  CheckIcon,
-  RefreshCwIcon,
-  PencilIcon,
-} from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, CopyIcon, RefreshCwIcon, PencilIcon } from 'lucide-react'
 import type { TrafficEntry } from '@/types/proxy'
-import { statusCategory, formatDuration, formatTime, shortenUri, formatCurl } from '@/lib/format'
+import { statusCategory, formatDuration, formatTime, formatCurl } from '@/lib/format'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { cn } from '@/lib/utils'
 
 export type ListEntry = TrafficEntry
 export type SortOrder = 'desc' | 'asc'
 export type SortColumn = ColKey | null
-type ColKey = 'id' | 'url' | 'method' | 'status' | 'duration' | 'time' | 'edited'
-const COLS: ColKey[] = ['id', 'url', 'method', 'status', 'duration', 'time', 'edited']
+type ColKey = 'id' | 'url' | 'method' | 'status' | 'duration' | 'time' | 'ssl' | 'edited'
+const COLS: ColKey[] = ['id', 'url', 'method', 'status', 'duration', 'time', 'ssl', 'edited']
 const DEFAULT_WIDTHS: Record<ColKey, number> = {
   id: 9,
   url: 29,
   method: 9,
   status: 9,
   duration: 9,
-  time: 22,
+  time: 15,
+  ssl: 8,
   edited: 13,
 }
 const MIN_PCT = 5
@@ -178,15 +172,21 @@ function ContextMenu({
       ref={menuRef}
       className="fixed z-50 min-w-40 rounded-lg bg-popover py-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
       style={{ left: state.x, top: state.y }}>
-      <button onClick={handleEdit} className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors">
+      <button
+        onClick={handleEdit}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors">
         <PencilIcon className="size-3.5" />
         <span>{t('requestList.edit')}</span>
       </button>
-      <button onClick={handleResend} className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors">
+      <button
+        onClick={handleResend}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors">
         <RefreshCwIcon className="size-3.5" />
         <span>{t('requestList.repeat')}</span>
       </button>
-      <button onClick={handleCopyCurl} className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors">
+      <button
+        onClick={handleCopyCurl}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors">
         <CopyIcon className="size-3.5" />
         <span>{t('requestList.copyCurl')}</span>
       </button>
@@ -230,16 +230,31 @@ export default function RequestList({
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null)
   const [listKey, setListKey] = useState(0)
 
-  useEffect(() => { setListKey(k => k + 1) }, [sortColumn, sortOrder])
+  useEffect(() => {
+    setListKey(k => k + 1)
+  }, [sortColumn, sortOrder])
 
-  const handleSortClick = useCallback((col: ColKey) => {
-    if (sortColumn === col) return onSortChange(col, sortOrder === 'desc' ? 'asc' : 'desc')
-    onSortChange(col, 'desc')
-  }, [sortColumn, sortOrder, onSortChange])
+  const handleSortClick = useCallback(
+    (col: ColKey) => {
+      if (sortColumn === col) return onSortChange(col, sortOrder === 'desc' ? 'asc' : 'desc')
+      onSortChange(col, 'desc')
+    },
+    [sortColumn, sortOrder, onSortChange]
+  )
 
   const gridTemplate = useMemo(() => COLS.map(c => `${columnWidths[c]}%`).join(' '), [columnWidths])
-  const totalColPct = useMemo(() => Object.values(columnWidths).reduce((s, w) => s + w, 0), [columnWidths])
-  const rowStyle = useMemo(() => ({ gridTemplateColumns: 'var(--grid-cols)', minWidth: `${totalColPct}%` } as React.CSSProperties), [totalColPct])
+  const totalColPct = useMemo(
+    () => Object.values(columnWidths).reduce((s, w) => s + w, 0),
+    [columnWidths]
+  )
+  const rowStyle = useMemo(
+    () =>
+      ({
+        gridTemplateColumns: 'var(--grid-cols)',
+        minWidth: `${totalColPct}%`,
+      }) as React.CSSProperties,
+    [totalColPct]
+  )
 
   const handleContextMenu = useCallback((e: React.MouseEvent, entry: TrafficEntry) => {
     e.preventDefault()
@@ -249,7 +264,11 @@ export default function RequestList({
   const renderHeaderCell = (col: ColKey, labelKey: string, extraClasses: string = '') => (
     <div className={`group px-2 py-1.5 text-left relative min-w-0 ${extraClasses}`}>
       <Grip
-        className={draggingCol === col ? 'text-primary' : 'text-muted-foreground/25 hover:text-muted-foreground/70'}
+        className={
+          draggingCol === col
+            ? 'text-primary'
+            : 'text-muted-foreground/25 hover:text-muted-foreground/70'
+        }
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerDown={e => onPointerDown(col, e)}
@@ -260,7 +279,9 @@ export default function RequestList({
           type="button"
           className={cn(
             'inline-flex items-center p-0 leading-none cursor-pointer shrink-0 transition-opacity',
-            sortColumn === col ? 'opacity-100 text-foreground' : 'opacity-0 group-hover:opacity-100 text-muted-foreground'
+            sortColumn === col
+              ? 'opacity-100 text-foreground'
+              : 'opacity-0 group-hover:opacity-100 text-muted-foreground'
           )}
           onClick={() => handleSortClick(col)}>
           <SortIcon column={col} active={sortColumn === col} order={sortOrder} />
@@ -273,7 +294,12 @@ export default function RequestList({
     <div
       ref={gridRef}
       className={`h-full bg-background flex flex-col overflow-auto ${isDragging ? 'select-none' : ''}`}
-      style={{ cursor: isDragging ? 'col-resize' : '', '--grid-cols': gridTemplate } as React.CSSProperties}>
+      style={
+        {
+          cursor: isDragging ? 'col-resize' : '',
+          '--grid-cols': gridTemplate,
+        } as React.CSSProperties
+      }>
       <div
         className="group/grid grid shrink-0 z-10 bg-muted/30 text-[11px] font-bold text-muted-foreground uppercase tracking-wide border-b border-border overflow-hidden h-7"
         style={rowStyle}>
@@ -283,6 +309,7 @@ export default function RequestList({
         {renderHeaderCell('status', 'requestList.status')}
         {renderHeaderCell('duration', 'requestList.duration')}
         {renderHeaderCell('time', 'requestList.time')}
+        {renderHeaderCell('ssl', 'requestList.ssl')}
         {renderHeaderCell('edited', 'requestList.edited')}
       </div>
 
@@ -293,9 +320,9 @@ export default function RequestList({
         </div>
       ) : (
         <VList key={listKey} style={{ flex: 1, minHeight: 0 }}>
-          {entries.map(entry => (
+          {entries.map((entry, i) => (
             <div
-              key={entry.id}
+              key={entry.id || i}
               className={cn(
                 'grid text-xs border-b border-border/50 cursor-pointer transition-colors',
                 entry.id === selectedId && 'bg-accent'
@@ -306,16 +333,23 @@ export default function RequestList({
               <div className="px-1 py-2 min-w-0 tabular-nums text-[10px] text-muted-foreground text-left">
                 {entry.requestNumber}
               </div>
-              <div className="px-1 py-2 text-foreground/80 min-w-0 overflow-hidden" title={entry.uri}>
-                <span className="block truncate">{shortenUri(entry.uri)}</span>
+              <div
+                className="px-1 py-2 text-foreground/80 min-w-0 overflow-hidden"
+                title={entry.uri}>
+                <span className="block truncate">{entry.uri}</span>
               </div>
               <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
-                <span className="badge-method" style={badgeStyle(`--badge-${entry.method.toLowerCase()}`)}>
+                <span
+                  className="badge-method"
+                  style={badgeStyle(`--badge-${entry.method.toLowerCase()}`)}>
                   {entry.method}
                 </span>
               </div>
               <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
-                <span className="badge-status" style={badgeStyle(`--badge-${statusCategory(entry.status)}`)} data-dot={entry.status != null}>
+                <span
+                  className="badge-status"
+                  style={badgeStyle(`--badge-${statusCategory(entry.status)}`)}
+                  data-dot={entry.status != null}>
                   {entry.status ?? t('requestList.pending')}
                 </span>
               </div>
@@ -325,9 +359,39 @@ export default function RequestList({
               <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground/60 text-left">
                 {formatTime(entry.requestTimestamp)}
               </div>
+              <div className="px-1 py-2 min-w-0 overflow-hidden flex items-center justify-center">
+                {entry.decrypted === false ? (
+                  <svg
+                    className="size-3.5 text-muted-foreground/70 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    <circle cx="12" cy="16" r="1" />
+                  </svg>
+                ) : entry.decrypted === true ? (
+                  <svg
+                    className="size-3.5 text-muted-foreground/70 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                  </svg>
+                ) : null}
+              </div>
               <div className="px-1 py-2 min-w-0 overflow-hidden text-left">
                 {entry.edited ? (
-                  <span className="text-[10px] text-amber-400 font-medium">{t('requestList.edited')}</span>
+                  <span className="text-[10px] text-amber-400 font-medium">
+                    {t('requestList.edited')}
+                  </span>
                 ) : null}
               </div>
             </div>
@@ -336,13 +400,26 @@ export default function RequestList({
       )}
 
       {ctxMenu && (
-        <ContextMenu state={ctxMenu} onClose={() => setCtxMenu(null)} onEdit={onEditRequest} onResend={onResendRequest} />
+        <ContextMenu
+          state={ctxMenu}
+          onClose={() => setCtxMenu(null)}
+          onEdit={onEditRequest}
+          onResend={onResendRequest}
+        />
       )}
     </div>
   )
 }
 
-function SortIcon({ column: _c, active, order }: { column: ColKey; active: boolean; order: SortOrder }) {
+function SortIcon({
+  column: _c,
+  active,
+  order,
+}: {
+  column: ColKey
+  active: boolean
+  order: SortOrder
+}) {
   if (!active) return <ArrowDownIcon className="inline size-3 shrink-0" />
   return order === 'asc' ? (
     <ArrowUpIcon className="inline size-3 shrink-0" />

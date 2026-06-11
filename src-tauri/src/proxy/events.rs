@@ -13,6 +13,7 @@ pub(crate) enum ProxyEvent {
         timestamp: i64,
         headers: HashMap<String, String>,
         query_params: HashMap<String, String>,
+        decrypted: bool,
     },
     RequestChunk {
         id: String,

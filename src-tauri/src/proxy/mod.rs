@@ -61,6 +61,7 @@ impl ProxyServer {
 
         let app_handle = self.app_handle.clone();
         let shutdown_rx = self.shutdown_rx;
+        let data_dir = self.data_dir.clone();
 
         let graceful = Shutdown::new(async move {
             shutdown_rx.await.ok();
@@ -75,6 +76,9 @@ impl ProxyServer {
 
         log::info!("MITM Proxy server listening on http://{}", listen_addr);
 
+        let whitelist_path = data_dir.join("mitm-whitelist.json");
+        let mitm_whitelist = state::load_mitm_whitelist(&whitelist_path);
+
         graceful.spawn_task_fn({
             move |_guard| async move {
                 let state = State::new(
@@ -83,6 +87,8 @@ impl ProxyServer {
                     app_handle,
                     self.config.upstream_proxy,
                     scripts,
+                    mitm_whitelist,
+                    whitelist_path,
                 );
 
                 let http_service = HttpServer::auto(exec.clone()).service(std::sync::Arc::new(
@@ -119,4 +125,3 @@ impl ProxyServer {
         Ok(())
     }
 }
-

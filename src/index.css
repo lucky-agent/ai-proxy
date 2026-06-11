@@ -90,6 +90,7 @@
   --badge-head: oklch(0.5 0.06 220);
   --badge-options: oklch(0.5 0.12 250);
   --badge-connect: oklch(0.55 0.16 260);
+  --badge-bypass: oklch(0.5 0.08 180);
   --badge-success: oklch(0.55 0.22 150);
   --badge-redirect: oklch(0.6 0.2 85);
   --badge-client-err: oklch(0.53 0.24 25);
@@ -140,6 +141,7 @@
   --badge-head: oklch(0.65 0.06 220);
   --badge-options: oklch(0.63 0.12 250);
   --badge-connect: oklch(0.7 0.16 260);
+  --badge-bypass: oklch(0.65 0.08 180);
   --badge-success: oklch(0.7 0.22 150);
   --badge-redirect: oklch(0.75 0.2 85);
   --badge-client-err: oklch(0.65 0.24 25);

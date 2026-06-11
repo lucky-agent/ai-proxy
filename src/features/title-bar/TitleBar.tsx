@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
- InfoIcon,
- LogOutIcon,
- MinusIcon,
- SettingsIcon,
- SquareIcon,
+  InfoIcon,
+  LogOutIcon,
+  MinusIcon,
+  SettingsIcon,
+  SquareIcon,
   WrenchIcon,
- XIcon,
+  XIcon,
 } from 'lucide-react'
 import appIcon from '@/assets/app-icon.png'
 import { useLocale } from '@/hooks/useLocale'
@@ -62,7 +62,7 @@ function TitleBarMenu({
         onClick={() => setOpen(value => !value)}
         className={cn(
           'inline-flex h-8 items-center rounded-none border-0 px-2.5 text-xs text-foreground/80 shadow-none outline-none transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:outline-none',
-          open && 'bg-muted text-foreground',
+          open && 'bg-muted text-foreground'
         )}>
         {label}
       </button>
@@ -97,7 +97,8 @@ function MenuItem({
       onClick={onClick}
       className={cn(
         'flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground',
-        variant === 'destructive' && 'text-destructive hover:bg-destructive/10 hover:text-destructive',
+        variant === 'destructive' &&
+          'text-destructive hover:bg-destructive/10 hover:text-destructive'
       )}>
       {children}
     </button>
@@ -125,7 +126,7 @@ function WindowButton({
       onClick={onClick}
       className={cn(
         'inline-flex h-8 w-11 items-center justify-center text-foreground/70 outline-none transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:outline-none',
-        className,
+        className
       )}>
       {children}
     </button>
@@ -137,7 +138,7 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenTools }: TitleBarP
   const appWindow = getCurrentWindow()
 
   async function handleQuit() {
-    await appWindow.close()
+    await appWindow?.close()
   }
 
   function handleTitleBarMouseDown(event: MouseEvent<HTMLDivElement>) {
@@ -146,11 +147,11 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenTools }: TitleBarP
     if (event.button !== 0) return
 
     if (event.detail === 2) {
-      void appWindow.toggleMaximize()
+      void appWindow?.toggleMaximize()
       return
     }
 
-    void appWindow.startDragging()
+    void appWindow?.startDragging()
   }
 
   return (
@@ -191,11 +192,15 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenTools }: TitleBarP
               </MenuItem>
             </>
           )}
- </TitleBarMenu>
+        </TitleBarMenu>
         <TitleBarMenu label={t('menu.tools')}>
           {close => (
             <>
-              <MenuItem onClick={() => { close(); onOpenTools() }}>
+              <MenuItem
+                onClick={() => {
+                  close()
+                  onOpenTools()
+                }}>
                 <WrenchIcon className="size-4" />
                 {t('menu.tools')}
               </MenuItem>
@@ -207,15 +212,15 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenTools }: TitleBarP
       <div className="min-w-0 flex-1" />
 
       <div className="flex h-full items-center" data-tauri-drag-region={false}>
-        <WindowButton label="Minimize" onClick={() => void appWindow.minimize()}>
+        <WindowButton label="Minimize" onClick={() => void appWindow?.minimize()}>
           <MinusIcon className="size-3.5" />
         </WindowButton>
-        <WindowButton label="Maximize" onClick={() => void appWindow.toggleMaximize()}>
+        <WindowButton label="Maximize" onClick={() => void appWindow?.toggleMaximize()}>
           <SquareIcon className="size-3" />
         </WindowButton>
         <WindowButton
           label="Close"
-          onClick={() => void appWindow.close()}
+          onClick={() => void appWindow?.close()}
           className="hover:bg-destructive hover:text-destructive-foreground">
           <XIcon className="size-3.5" />
         </WindowButton>

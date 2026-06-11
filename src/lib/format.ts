@@ -24,10 +24,15 @@ export function shortenUri(uri: string): string {
 }
  export function extractHost(uri: string): string {
    try {
-     return new URL(uri).host
+     return new URL(uri).hostname
    } catch {
+     // 隧道 URI 格式: host:port，直接提取主机名无需 dot 检查
+     const colonAt = uri.lastIndexOf(':')
+     if (colonAt > 0 && !uri.includes('/')) {
+       return uri.substring(0, colonAt)
+     }
      try {
-        const host = new URL(`https://${uri}`).host
+        const host = new URL(`https://${uri}`).hostname
         // 真域名必然含 .（或为 localhost），否则是路径段伪装，交给 Host header 兜底
         if (!host.includes('.') && host !== 'localhost') return '(unknown)'
         return host
@@ -35,7 +40,7 @@ export function shortenUri(uri: string): string {
        return '(unknown)'
    }
  }
-}
+ }
 
 // ---------------------------------------------------------------------------
 // 生成 cURL 命令

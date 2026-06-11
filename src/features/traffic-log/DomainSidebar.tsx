@@ -1,12 +1,16 @@
 import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
-import { ChevronRightIcon } from 'lucide-react'
+import { ChevronRightIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PinIcon, PinOffIcon } from 'lucide-react'
 
 interface Props {
   domains: [string, number][]
   totalEntries: number
   selectedDomain: string | null
   onSelectDomain: (domain: string | null) => void
+  panelCollapsed: boolean
+  onTogglePanel: () => void
+  pinnedDomains: Set<string>
+  onTogglePin: (domain: string) => void
 }
 
 export default function DomainSidebar({
@@ -14,37 +18,119 @@ export default function DomainSidebar({
   totalEntries,
   selectedDomain,
   onSelectDomain,
+  panelCollapsed,
+  onTogglePanel,
+  pinnedDomains,
+  onTogglePin,
 }: Props) {
   const { t } = useTranslation()
-  const [collapsed, setCollapsed] = useState(false)
+  const [listCollapsed, setListCollapsed] = useState(false)
+  const [pinnedCollapsed, setPinnedCollapsed] = useState(false)
+
+  const pinned = domains.filter(([host]) => pinnedDomains.has(host))
+
+  if (panelCollapsed) {
+    return (
+      <div className="flex flex-col h-full border-r border-border overflow-hidden bg-background items-center pt-2">
+        <button
+          className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+          onClick={onTogglePanel}
+        >
+          <PanelLeftOpenIcon className="size-3.5" />
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full border-r border-border overflow-hidden bg-background">
-      <div className="px-3 py-2 border-b border-border text-[10px] font-semibold uppercase tracking-wide text-muted-foreground select-none">
-        {t('hosts.title')}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground select-none">
+          {t('hosts.title')}
+        </span>
+        <button
+          className="p-0.5 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+          onClick={onTogglePanel}
+        >
+          <PanelLeftCloseIcon className="size-3" />
+        </button>
       </div>
       <div className="flex-1 overflow-y-auto bg-background">
+        {/* 置顶折叠组 */}
+        <div className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors hover:bg-muted/50 text-foreground/80">
+          <button
+            className="shrink-0 p-0 rounded hover:bg-muted/50 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation()
+              setPinnedCollapsed(!pinnedCollapsed)
+            }}
+          >
+            <ChevronRightIcon
+              className={`size-3 transition-transform ${pinnedCollapsed ? '' : 'rotate-90'}`}
+            />
+          </button>
+          <span className="flex-1 truncate font-medium text-amber-500">
+            {t('hosts.pinned')}
+          </span>
+          <span className="text-muted-foreground tabular-nums text-[10px]">{pinned.length}</span>
+        </div>
+        {!pinnedCollapsed &&
+          pinned.map(([host, count]) => (
+          <div
+            key={host}
+            className={`flex items-center gap-1 pl-7 pr-2 py-1.5 text-xs cursor-pointer transition-colors border-b border-border/30 ${
+              selectedDomain === host
+                ? 'bg-accent text-accent-foreground'
+                : 'hover:bg-muted/50 text-foreground/80'
+            }`}
+            onClick={() => onSelectDomain(host)}>
+            <span className="flex-1 truncate" title={host}>
+              {host}
+            </span>
+            <span className="text-muted-foreground tabular-nums text-[10px]">{count}</span>
+            <button
+              className="shrink-0 p-0 rounded hover:bg-muted/50 text-amber-500 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                onTogglePin(host)
+              }}
+            >
+              <PinOffIcon className="size-3" />
+                </button>
+              </div>
+            ))}
+        {/* 全部 */}
         <div
           className={`flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors ${
             !selectedDomain
               ? 'bg-accent text-accent-foreground'
               : 'hover:bg-muted/50 text-foreground/80'
           }`}
-          onClick={() => {
-            onSelectDomain(null)
-            setCollapsed(!collapsed)
-          }}>
-          <ChevronRightIcon
-            className={`size-3 shrink-0 transition-transform ${collapsed ? '' : 'rotate-90'}`}
-          />
-          <span className="flex-1 truncate font-medium">{t('hosts.all')}</span>
+        >
+          <button
+            className="shrink-0 p-0 rounded hover:bg-muted/50 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation()
+              setListCollapsed(!listCollapsed)
+            }}
+          >
+            <ChevronRightIcon
+              className={`size-3 transition-transform ${listCollapsed ? '' : 'rotate-90'}`}
+            />
+          </button>
+          <span
+            className="flex-1 truncate font-medium"
+            onClick={() => onSelectDomain(null)}
+          >
+            {t('hosts.all')}
+          </span>
           <span className="text-muted-foreground tabular-nums text-[10px]">{totalEntries}</span>
         </div>
-        {!collapsed &&
+        {!listCollapsed &&
           domains.map(([host, count]) => (
             <div
               key={host}
-              className={`flex items-center gap-2 pl-6 pr-3 py-1.5 text-xs cursor-pointer transition-colors border-b border-border/30 ${
+              className={`flex items-center gap-1 pl-7 pr-2 py-1.5 text-xs cursor-pointer transition-colors border-b border-border/30 group ${
                 selectedDomain === host
                   ? 'bg-accent text-accent-foreground'
                   : 'hover:bg-muted/50 text-foreground/80'
@@ -54,6 +140,15 @@ export default function DomainSidebar({
                 {host}
               </span>
               <span className="text-muted-foreground tabular-nums text-[10px]">{count}</span>
+              <button
+                className="shrink-0 p-0 rounded hover:bg-muted/50 text-muted-foreground hover:text-amber-500 opacity-0 group-hover:opacity-100 transition-all"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTogglePin(host)
+                }}
+              >
+                <PinIcon className="size-3" />
+              </button>
             </div>
           ))}
       </div>

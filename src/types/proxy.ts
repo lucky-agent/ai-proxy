@@ -4,7 +4,8 @@ export interface RequestEvent {
   uri: string
   timestamp: number
   headers: Record<string, string>
-  query_params?: Record<string, string>
+   query_params?: Record<string, string>
+  decrypted: boolean
 }
 
 export interface ResponseEvent {
@@ -31,7 +32,7 @@ export interface RequestBodyChunkEvent {
 }
 
 export type ProxyEvent =
-  | { type: "request"; id: string; method: string; uri: string; timestamp: number; headers: Record<string, string> }
+  | { type: "request"; id: string; method: string; uri: string; timestamp: number; headers: Record<string, string>; decrypted: boolean }
   | { type: "request_chunk"; id: string; chunk: string }
   | { type: "response"; id: string; status: number; timestamp: number; duration_ms: number; headers: Record<string, string> }
   | { type: "response_chunk"; id: string; chunk: string }
@@ -48,7 +49,7 @@ export interface TrafficEntry {
   requestNumber: number
   requestTimestamp: number
   requestHeaders: Record<string, string>
- requestBody: string | null
+  requestBody: string | null
   requestQuery?: Record<string, string>
  status: number | null
  responseTimestamp: number | null
@@ -57,6 +58,6 @@ export interface TrafficEntry {
  responseBody: string | null
  responseChunks: ChunkRecord[]
  error: string | null
- edited?: boolean
+  edited?: boolean
+  decrypted?: boolean
 }
-

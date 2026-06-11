@@ -13,7 +13,8 @@
   },
   "hosts": {
     "title": "主机",
-    "all": "全部"
+    "all": "全部",
+    "pinned": "置顶"
   },
   "requestList": {
     "id": "序号",
@@ -22,8 +23,9 @@
     "status": "状态",
     "duration": "耗时",
     "time": "时间",
-    "edited": "已编辑",
-    "edit": "编辑",
+   "edited": "已编辑",
+    "ssl": "SSL",
+   "edit": "编辑",
     "repeat": "重复请求",
     "copyCurl": "复制 cURL",
     "emptyTitle": "暂无流量记录。",
@@ -76,9 +78,8 @@
   },
   "menu": {
     "settings": "设置",
-   "about": "关于",
+    "about": "关于",
     "tools": "工具",
-   "quit": "退出"
+    "quit": "退出"
   }
 }
-

@@ -40,6 +40,27 @@ export default function TrafficLog({ entries }: Props) {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [detailOpen, setDetailOpen] = useState(false)
   const [editEntry, setEditEntry] = useState<TrafficEntry | null>(null)
+  const [domainCollapsed, setDomainCollapsed] = useState(false)
+  const [pinnedDomains, setPinnedDomains] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('ai-proxy-pinned-domains')
+      if (stored) return new Set(JSON.parse(stored))
+    } catch {}
+    return new Set()
+  })
+
+  const handleTogglePin = useCallback((domain: string) => {
+    setPinnedDomains(prev => {
+      const next = new Set(prev)
+      if (next.has(domain)) {
+        next.delete(domain)
+      } else {
+        next.add(domain)
+      }
+      localStorage.setItem('ai-proxy-pinned-domains', JSON.stringify([...next]))
+      return next
+    })
+  }, [])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const mainAreaRef = useRef<HTMLDivElement>(null)
@@ -102,10 +123,13 @@ export default function TrafficLog({ entries }: Props) {
         case 'time':
           cmp = a.requestTimestamp - b.requestTimestamp
           break
-        case 'edited':
-          cmp = (a.edited ? 1 : 0) - (b.edited ? 1 : 0)
+       case 'edited':
+         cmp = (a.edited ? 1 : 0) - (b.edited ? 1 : 0)
+         break
+        case 'ssl':
+          cmp = (a.decrypted ? 1 : 0) - (b.decrypted ? 1 : 0)
           break
-        default:
+       default:
           return 0
       }
       return sortOrder === 'desc' ? -cmp : cmp
@@ -240,12 +264,16 @@ return (
       <div
         ref={domainRef}
         className="h-full min-h-0 shrink-0 overflow-hidden"
-        style={{ width: `${liveDomainRatio.current * 100}%` }}>
+        style={{ width: domainCollapsed ? '28px' : `${liveDomainRatio.current * 100}%` }}>
         <DomainSidebar
           domains={domains}
           totalEntries={entries.length}
           selectedDomain={selectedDomain}
           onSelectDomain={setSelectedDomain}
+          panelCollapsed={domainCollapsed}
+          onTogglePanel={() => setDomainCollapsed(!domainCollapsed)}
+          pinnedDomains={pinnedDomains}
+          onTogglePin={handleTogglePin}
         />
       </div>
 

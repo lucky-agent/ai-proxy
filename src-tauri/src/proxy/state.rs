@@ -2,6 +2,8 @@ use crate::proxy::events::ProxyEvent;
 use rama::extensions::Extension;
 use rama::rt::Executor;
 use rama::tls::rustls::server::TlsAcceptorData;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
@@ -11,6 +13,29 @@ use tokio::sync::oneshot;
 use crate::config::{Settings, Store};
 use crate::config::db::Db;
 
+/// MITM 解密白名单：仅列表中的域名会走 MITM 解密，其余一律隧道透传。
+#[derive(Debug, Clone, Default)]
+pub(crate) struct MitmWhitelist {
+    pub(crate) hosts: HashSet<String>,
+}
+
+impl MitmWhitelist {
+    /// 判断 host 是否命中白名单（命中则走 MITM 解密）。
+    pub(crate) fn contains_host(&self, host: &str) -> bool {
+        let host = host.to_lowercase();
+        self.hosts.iter().any(|p| {
+            let p = p.to_lowercase();
+            if p == "*" {
+                return true;
+            }
+            if let Some(suffix) = p.strip_prefix("*.") {
+                return host.ends_with(suffix) && host != suffix;
+            }
+            p == host
+        })
+    }
+}
+
 #[derive(Debug, Clone, Extension)]
 pub(crate) struct State {
     mitm_tls_service_data: TlsAcceptorData,
@@ -18,6 +43,8 @@ pub(crate) struct State {
     app_handle: AppHandle,
     upstream_proxy: bool,
     scripts: Vec<String>,
+    pub(crate) mitm_whitelist: Arc<tokio::sync::RwLock<MitmWhitelist>>,
+    pub(crate) whitelist_path: std::path::PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, Extension)]
@@ -30,6 +57,8 @@ impl State {
         app_handle: AppHandle,
         upstream_proxy: bool,
         scripts: Vec<String>,
+        mitm_whitelist: MitmWhitelist,
+        whitelist_path: std::path::PathBuf,
     ) -> Self {
         Self {
             mitm_tls_service_data,
@@ -37,6 +66,8 @@ impl State {
             app_handle,
             upstream_proxy,
             scripts,
+            mitm_whitelist: Arc::new(tokio::sync::RwLock::new(mitm_whitelist)),
+            whitelist_path,
         }
     }
 
@@ -131,7 +162,6 @@ impl AppState {
         self.pending_open_settings.swap(false, Ordering::SeqCst)
     }
 
-    /// 设置 settings（覆盖写入）
     pub(crate) fn set_settings(&self, settings: Settings) {
         *self
             .settings
@@ -148,5 +178,34 @@ impl AppState {
             .lock()
             .expect("Failed to acquire settings lock")
             .clone()
+    }
+}
+
+// ── MitmWhitelist 持久化 ──
+
+#[derive(Debug, Serialize, Deserialize)]
+struct MitmWhitelistFile {
+    hosts: Vec<String>,
+}
+
+pub(crate) fn load_mitm_whitelist(path: &std::path::Path) -> MitmWhitelist {
+    let Ok(file) = std::fs::File::open(path) else {
+        return MitmWhitelist::default();
+    };
+    let Ok(data) = serde_json::from_reader::<_, MitmWhitelistFile>(file) else {
+        return MitmWhitelist::default();
+    };
+    MitmWhitelist {
+        hosts: data.hosts.into_iter().collect(),
+    }
+}
+
+pub(crate) fn save_mitm_whitelist(whitelist: &MitmWhitelist, path: &std::path::Path) {
+    let data = MitmWhitelistFile {
+        hosts: whitelist.hosts.iter().cloned().collect(),
+    };
+    let json = serde_json::to_string_pretty(&data).unwrap_or_default();
+    if let Err(err) = std::fs::write(path, json) {
+        log::warn!("failed to save MITM whitelist: {:?}", err);
     }
 }
