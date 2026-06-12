@@ -7,6 +7,8 @@ import { PlayIcon, SquareIcon, Trash2Icon } from 'lucide-react'
 import { TrafficLog } from '@/features/traffic-log'
 import { SettingsDialog } from '@/features/settings'
 import { AboutDialog } from '@/features/about'
+import { SslConfigDialog, SslToolbar } from '@/features/ssl-config'
+import { ScriptConfigDialog, ScriptToolbar } from '@/features/script-config'
 import { TitleBar } from '@/features/title-bar'
 import { useProxyEvents } from '@/hooks/useProxyEvents'
 import { useTheme } from '@/hooks/useTheme'
@@ -18,6 +20,8 @@ function App() {
   const [error, setError] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [sslConfigOpen, setSslConfigOpen] = useState(false)
+  const [scriptConfigOpen, setScriptConfigOpen] = useState(false)
   const { entries, clear } = useProxyEvents()
   const { theme, setTheme } = useTheme()
   const { t } = useLocale()
@@ -84,10 +88,11 @@ function App() {
       <TitleBar
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenAbout={() => setAboutOpen(true)}
-        onOpenTools={() => {}}
+        onOpenSslConfig={() => setSslConfigOpen(true)}
+        onOpenScriptConfig={() => setScriptConfigOpen(true)}
       />
       <header className="flex shrink-0 items-center justify-between border-b border-border px-2 py-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <span
             className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
               running ? 'bg-emerald-500/10 text-emerald-400' : 'bg-muted text-muted-foreground'
@@ -99,6 +104,8 @@ function App() {
             />
             {running ? t('app.running') : t('app.stopped')}
           </span>
+          <SslToolbar onOpenFullConfig={() => setSslConfigOpen(true)} />
+          <ScriptToolbar onOpenFullConfig={() => setScriptConfigOpen(true)} />
         </div>
         <div className="flex items-center gap-0.5" data-tauri-drag-region={false}>
           <Button
@@ -126,6 +133,8 @@ function App() {
 
       <TrafficLog entries={entries} />
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
+      <SslConfigDialog open={sslConfigOpen} onOpenChange={setSslConfigOpen} />
+      <ScriptConfigDialog open={scriptConfigOpen} onOpenChange={setScriptConfigOpen} />
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}

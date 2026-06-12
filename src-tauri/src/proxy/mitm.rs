@@ -3,7 +3,6 @@ use std::convert::Infallible;
 use std::sync::Arc;
 
 use rama::Layer;
-use rama::extensions::Extension;
 use rama::Service;
 use rama::extensions::ExtensionsRef;
 use rama::http::layer::upgrade::Upgraded;
@@ -58,7 +57,10 @@ pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infalli
 
     if should_mitm {
         let host = sni.as_deref().unwrap_or("?");
-        log::info!("CONNECT TLS, SNI={}, in MITM whitelist, routing to MITM", host);
+        log::info!(
+            "CONNECT TLS, SNI={}, in MITM whitelist, routing to MITM",
+            host
+        );
 
         let executor = state.exec().clone();
         let http_mitm_service =
@@ -112,15 +114,15 @@ where
 
     // Emit Request event for tunnel connection
     if let Some(ref ch) = event_channel {
-       ch.send(ProxyEvent::Request {
-           id: request_id.clone(),
-           method: "CONNECT".into(),
-           uri: uri.clone(),
-           timestamp: chrono::Utc::now().timestamp_millis(),
-           headers,
-           query_params: HashMap::new(),
+        ch.send(ProxyEvent::Request {
+            id: request_id.clone(),
+            method: "CONNECT".into(),
+            uri: uri.clone(),
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            headers,
+            query_params: HashMap::new(),
             decrypted: false,
-       })
+        })
         .ok();
     }
 

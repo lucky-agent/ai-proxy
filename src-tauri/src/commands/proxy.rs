@@ -35,7 +35,14 @@ pub async fn start_proxy(
         settings.proxy.listen_host, settings.proxy.listen_port
     );
     log::info!("Proxy started on {}", listen_addr);
-    let server = ProxyServer::new(settings.proxy, app_handle, shutdown_rx, data_dir, scripts);
+    let server = ProxyServer::new(
+        settings.proxy,
+        app_handle,
+        shutdown_rx,
+        data_dir,
+        scripts,
+        settings.ssl,
+    );
 
     tauri::async_runtime::spawn(async move {
         if let Err(err) = server.run().await {

@@ -12,6 +12,8 @@ use crate::commands::load_traffic_history;
 use crate::commands::{
     get_locale, get_settings, get_status, get_theme, save_settings, set_locale, set_theme,
     start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
+    get_ssl_config, save_ssl_config,
+    get_script_config, save_script_config,
 };
 use crate::config::{Settings, Store, UiConfig};
 
@@ -92,6 +94,10 @@ pub fn run() {
             start_proxy,
             stop_proxy,
             get_status,
+            get_ssl_config,
+            save_ssl_config,
+            get_script_config,
+            save_script_config,
             get_theme,
             set_theme,
             get_settings,

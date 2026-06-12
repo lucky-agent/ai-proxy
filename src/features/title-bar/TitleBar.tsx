@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
+  CodeIcon,
   InfoIcon,
   LogOutIcon,
   MinusIcon,
   SettingsIcon,
+  ShieldCheckIcon,
   SquareIcon,
-  WrenchIcon,
   XIcon,
 } from 'lucide-react'
 import appIcon from '@/assets/app-icon.png'
@@ -16,7 +17,8 @@ import { cn } from '@/lib/utils'
 type TitleBarProps = {
   onOpenSettings: () => void
   onOpenAbout: () => void
-  onOpenTools: () => void
+  onOpenSslConfig: () => void
+  onOpenScriptConfig: () => void
 }
 
 function stopTitleBarDrag(event: { stopPropagation: () => void }) {
@@ -132,8 +134,7 @@ function WindowButton({
     </button>
   )
 }
-
-export function TitleBar({ onOpenSettings, onOpenAbout, onOpenTools }: TitleBarProps) {
+export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig }: TitleBarProps) {
   const { t } = useLocale()
   const appWindow = getCurrentWindow()
 
@@ -199,10 +200,18 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenTools }: TitleBarP
               <MenuItem
                 onClick={() => {
                   close()
-                  onOpenTools()
+                  onOpenSslConfig()
                 }}>
-                <WrenchIcon className="size-4" />
-                {t('menu.tools')}
+                <ShieldCheckIcon className="size-4" />
+                {t('menu.sslConfig')}
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  close()
+                  onOpenScriptConfig()
+                }}>
+                <CodeIcon className="size-4" />
+                {t('menu.scriptConfig')}
               </MenuItem>
             </>
           )}

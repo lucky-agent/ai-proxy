@@ -2,7 +2,6 @@ use crate::proxy::events::ProxyEvent;
 use rama::extensions::Extension;
 use rama::rt::Executor;
 use rama::tls::rustls::server::TlsAcceptorData;
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -44,7 +43,6 @@ pub(crate) struct State {
     upstream_proxy: bool,
     scripts: Vec<String>,
     pub(crate) mitm_whitelist: Arc<tokio::sync::RwLock<MitmWhitelist>>,
-    pub(crate) whitelist_path: std::path::PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, Extension)]
@@ -58,7 +56,6 @@ impl State {
         upstream_proxy: bool,
         scripts: Vec<String>,
         mitm_whitelist: MitmWhitelist,
-        whitelist_path: std::path::PathBuf,
     ) -> Self {
         Self {
             mitm_tls_service_data,
@@ -67,7 +64,6 @@ impl State {
             upstream_proxy,
             scripts,
             mitm_whitelist: Arc::new(tokio::sync::RwLock::new(mitm_whitelist)),
-            whitelist_path,
         }
     }
 
@@ -178,34 +174,5 @@ impl AppState {
             .lock()
             .expect("Failed to acquire settings lock")
             .clone()
-    }
-}
-
-// ── MitmWhitelist 持久化 ──
-
-#[derive(Debug, Serialize, Deserialize)]
-struct MitmWhitelistFile {
-    hosts: Vec<String>,
-}
-
-pub(crate) fn load_mitm_whitelist(path: &std::path::Path) -> MitmWhitelist {
-    let Ok(file) = std::fs::File::open(path) else {
-        return MitmWhitelist::default();
-    };
-    let Ok(data) = serde_json::from_reader::<_, MitmWhitelistFile>(file) else {
-        return MitmWhitelist::default();
-    };
-    MitmWhitelist {
-        hosts: data.hosts.into_iter().collect(),
-    }
-}
-
-pub(crate) fn save_mitm_whitelist(whitelist: &MitmWhitelist, path: &std::path::Path) {
-    let data = MitmWhitelistFile {
-        hosts: whitelist.hosts.iter().cloned().collect(),
-    };
-    let json = serde_json::to_string_pretty(&data).unwrap_or_default();
-    if let Err(err) = std::fs::write(path, json) {
-        log::warn!("failed to save MITM whitelist: {:?}", err);
     }
 }

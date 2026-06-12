@@ -80,6 +80,43 @@
     "settings": "设置",
     "about": "关于",
     "tools": "工具",
+    "sslConfig": "SSL 解密配置",
+    "scriptConfig": "脚本配置",
     "quit": "退出"
+  },
+  "sslConfig": {
+    "title": "SSL 解密配置",
+    "description": "配置 SSL 解密的全局开关与域名白名单。",
+    "globalToggle": "启用 SSL 解密",
+    "whitelistHeader": "域名白名单",
+    "domain": "域名",
+    "addDomain": "添加域名",
+    "placeholderDomain": "输入域名（如 api.example.com）",
+    "delete": "删除",
+    "cancel": "取消",
+    "save": "保存",
+    "saving": "保存中...",
+    "duplicateDomain": "域名已存在",
+    "emptyWhitelist": "暂无域名，添加域名后将出现在这里。",
+    "toolbarToggle": "SSL 解密",
+    "toolbarAddPlaceholder": "添加域名..."
+  },
+  "scriptConfig": {
+    "title": "脚本配置",
+    "description": "配置脚本的全局开关与单个脚本独立控制。",
+    "globalToggle": "启用脚本",
+    "scriptListHeader": "脚本列表",
+    "addScript": "添加脚本",
+    "placeholderName": "输入脚本名称",
+    "placeholderDomain": "域名规则（如 *.example.com）",
+    "delete": "删除",
+    "cancel": "取消",
+    "save": "保存",
+    "saving": "保存中...",
+    "duplicateName": "脚本名称已存在",
+    "emptyList": "暂无脚本，添加后将出现在这里。",
+    "toolbarToggle": "脚本",
+    "toolbarAddPlaceholder": "添加脚本...",
+    "toolbarAddDomain": "域名..."
   }
 }

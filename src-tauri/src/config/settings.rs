@@ -6,6 +6,66 @@ use std::path::PathBuf;
 
 const CONFIG_FILE_NAME: &str = "setting.json";
 
+/// SSL 解密白名单项
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SslWhitelistItem {
+    pub domain: String,
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+/// SSL 解密配置
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SslConfig {
+    /// 全局 SSL 解密开关
+    #[serde(default)]
+    pub enabled: bool,
+    /// 域名白名单，每项可单独开关
+    #[serde(default)]
+    pub whitelist: Vec<SslWhitelistItem>,
+}
+
+impl Default for SslConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            whitelist: Vec::new(),
+        }
+    }
+}
+
+/// 脚本配置项
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ScriptItem {
+    #[serde(default)]
+    pub name: String,
+    /// 域名匹配规则（支持 * 通配符，如 *.example.com）
+    #[serde(default)]
+    pub domain: String,
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+/// 脚本配置
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ScriptConfig {
+    /// 全局脚本开关
+    #[serde(default)]
+    pub enabled: bool,
+    /// 脚本列表，每项可单独开关
+    #[serde(default)]
+    pub scripts: Vec<ScriptItem>,
+}
+
+impl Default for ScriptConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            scripts: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProxyConfig {
     /// 监听地址（如 "127.0.0.1"）
@@ -114,6 +174,12 @@ pub struct Settings {
     /// 代理配置
     #[serde(default)]
     pub proxy: ProxyConfig,
+    /// SSL 解密配置
+    #[serde(default)]
+    pub ssl: SslConfig,
+    /// 脚本配置
+    #[serde(default)]
+    pub script: ScriptConfig,
     /// 日志配置
     #[serde(default)]
     pub log: LogConfig,
@@ -128,6 +194,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             proxy: ProxyConfig::default(),
+            ssl: SslConfig::default(),
+            script: ScriptConfig::default(),
             log: LogConfig::default(),
             ui: UiConfig::default(),
             persistence: Some(false),

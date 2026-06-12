@@ -15,6 +15,7 @@ use tauri::AppHandle;
 use tokio::sync::oneshot;
 
 use crate::config::ProxyConfig;
+use crate::config::SslConfig;
 
 use mitm::{http_connect_proxy, new_http_mitm_proxy};
 use state::State;
@@ -32,6 +33,7 @@ pub struct ProxyServer {
     shutdown_rx: oneshot::Receiver<()>,
     data_dir: std::path::PathBuf,
     scripts: Vec<String>,
+    ssl_config: SslConfig,
 }
 
 impl ProxyServer {
@@ -41,6 +43,7 @@ impl ProxyServer {
         shutdown_rx: oneshot::Receiver<()>,
         data_dir: std::path::PathBuf,
         scripts: Vec<String>,
+        ssl_config: SslConfig,
     ) -> Self {
         Self {
             config,
@@ -48,6 +51,7 @@ impl ProxyServer {
             shutdown_rx,
             data_dir,
             scripts,
+            ssl_config,
         }
     }
 
@@ -61,7 +65,6 @@ impl ProxyServer {
 
         let app_handle = self.app_handle.clone();
         let shutdown_rx = self.shutdown_rx;
-        let data_dir = self.data_dir.clone();
 
         let graceful = Shutdown::new(async move {
             shutdown_rx.await.ok();
@@ -76,8 +79,17 @@ impl ProxyServer {
 
         log::info!("MITM Proxy server listening on http://{}", listen_addr);
 
-        let whitelist_path = data_dir.join("mitm-whitelist.json");
-        let mitm_whitelist = state::load_mitm_whitelist(&whitelist_path);
+        let mitm_whitelist = {
+            let mut whitelist = state::MitmWhitelist::default();
+            if self.ssl_config.enabled {
+                for item in &self.ssl_config.whitelist {
+                    if item.enabled {
+                        whitelist.hosts.insert(item.domain.clone());
+                    }
+                }
+            }
+            whitelist
+        };
 
         graceful.spawn_task_fn({
             move |_guard| async move {
@@ -88,7 +100,6 @@ impl ProxyServer {
                     self.config.upstream_proxy,
                     scripts,
                     mitm_whitelist,
-                    whitelist_path,
                 );
 
                 let http_service = HttpServer::auto(exec.clone()).service(std::sync::Arc::new(

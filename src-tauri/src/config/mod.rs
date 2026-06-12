@@ -3,4 +3,6 @@ mod settings;
 mod store;
 
 pub use settings::{LogConfig, ProxyConfig, Settings, UiConfig};
+pub use settings::SslConfig;
+pub use settings::ScriptConfig;
 pub use store::Store;
