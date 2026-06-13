@@ -2,6 +2,8 @@ mod resend;
 mod locale;
 mod proxy;
 mod settings;
+mod collection;
+pub use collection::{get_collections, save_collections};
 mod theme;
 
 pub use locale::{get_locale, set_locale, sync_tray_locale};

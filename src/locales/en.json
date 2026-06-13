@@ -110,6 +110,19 @@
     "addHeader": "Add header",
     "send": "Send"
   },
+  "collection": {
+    "title": "Collections",
+    "defaultCollection": "Default",
+    "newFolder": "New folder",
+    "newRequest": "New request",
+    "rename": "Rename",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "deleteConfirm": "Confirm delete?",
+    "renameFolder": "Rename folder",
+    "renameRequest": "Rename request",
+    "emptyTree": "No requests yet. Click the buttons above to add."
+  },
   "layout": {
     "hostSidebar": "Host sidebar",
     "detailBottom": "Detail below",

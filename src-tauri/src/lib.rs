@@ -10,7 +10,7 @@ use tauri::{Emitter, Manager, RunEvent};
 use crate::commands::resend_request;
 use crate::commands::load_traffic_history;
 use crate::commands::{
-    get_locale, get_settings, get_status, get_theme, save_settings, set_locale, set_theme,
+    get_collections, get_locale, get_settings, get_status, get_theme, save_collections, save_settings, set_locale, set_theme,
     start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
     get_ssl_config, save_ssl_config,
     get_script_config, save_script_config,
@@ -108,6 +108,8 @@ pub fn run() {
             sync_tray_locale,
             load_traffic_history,
             resend_request,
+            get_collections,
+            save_collections,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
