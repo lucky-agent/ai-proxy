@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CopyIcon, CheckIcon, ChevronRight, ChevronDown, ListChecks } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import type { TrafficEntry } from '@/types/proxy'
 import { parseSse, isStreamingContentType, mergeSseMessages, estimateTokens, extractTokenUsage, type SseEvent, type MergeFormat, type MergeResult, type TokenUsage } from '@/lib/sse'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
@@ -47,32 +49,35 @@ export default function StreamingViewer({ entry }: Props) {
 
   const hasMerged = mergedResult !== null && mergedResult.content.length > 0
 
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+  const tabValue = view
 
-      {/* Sub-tab bar */}
-      <div className="flex shrink-0 items-center gap-0 border-b border-surface-elevated bg-surface-elevated/20">
-        <TabButton
-          active={view === 'chunks'}
-          label={t('detail.streamChunks')}
-          onClick={() => setView('chunks')}
+  return (
+    <Tabs value={tabValue} onValueChange={(v) => setView(v as ViewMode)} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <TabsList variant="line" className="shrink-0 justify-start border-b border-surface-elevated bg-surface-elevated/20 px-0 rounded-none">
+        <TabsTrigger
+          value="chunks"
+          className="text-[11px]"
           title={`${chunkStats.count} ${t('detail.streamChunks')} · ${chunkStats.totalBytes} B`}
-        />
+        >
+          {t('detail.streamChunks')}
+        </TabsTrigger>
         {isSse && (
-          <TabButton
-            active={view === 'events'}
-            label={t('detail.streamEvents')}
-            onClick={() => setView('events')}
+          <TabsTrigger
+            value="events"
+            className="text-[11px]"
             title={`${sseEvents.length} ${t('detail.streamEvents')}`}
-          />
+          >
+            {t('detail.streamEvents')}
+          </TabsTrigger>
         )}
         {isSse && hasMerged && (
-          <TabButton
-            active={view === 'merged'}
-            label={t('detail.streamMerged')}
-            onClick={() => setView('merged')}
+          <TabsTrigger
+            value="merged"
+            className="text-[11px]"
             title={`${mergedResult!.eventCount} ${t('detail.streamEvents')} → ${t('detail.streamMerged')}`}
-          />
+          >
+            {t('detail.streamMerged')}
+          </TabsTrigger>
         )}
         {/* 合并选项：选中合并 Tab 时显示在同一行 */}
         {view === 'merged' && hasMerged && (
@@ -96,60 +101,40 @@ export default function StreamingViewer({ entry }: Props) {
             </span>
           </div>
         )}
-      </div>
+      </TabsList>
 
-      {/* Content */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {view === 'chunks' ? (
-          chunks.length === 0 ? (
-            <EmptyState label={t('detail.noStreamData')} />
-          ) : (
-            chunks.map((chunk, idx) => (
-              <ChunkItem key={idx} index={idx} data={chunk.data} totalChunks={chunks.length} />
-            ))
-          )
-        ) : view === 'events' ? (
-          sseEvents.length === 0 ? (
-            <EmptyState label={t('detail.noSseEvents')} />
-          ) : (
-            sseEvents.map((evt, idx) => <SseEventItem key={idx} index={idx} event={evt} />)
-          )
-        ) : mergedResult ? (
+      <TabsContent value="chunks" className="min-h-0 flex-1 overflow-hidden mt-0">
+        <ScrollArea className="h-full">
+        {chunks.length === 0 ? (
+          <EmptyState label={t('detail.noStreamData')} />
+        ) : (
+          chunks.map((chunk, idx) => (
+            <ChunkItem key={idx} index={idx} data={chunk.data} totalChunks={chunks.length} />
+          ))
+        )}
+        </ScrollArea>
+      </TabsContent>
+
+      <TabsContent value="events" className="min-h-0 flex-1 overflow-hidden mt-0">
+        <ScrollArea className="h-full">
+        {sseEvents.length === 0 ? (
+          <EmptyState label={t('detail.noSseEvents')} />
+        ) : (
+          sseEvents.map((evt, idx) => <SseEventItem key={idx} index={idx} event={evt} />)
+        )}
+        </ScrollArea>
+      </TabsContent>
+
+      <TabsContent value="merged" className="min-h-0 flex-1 overflow-hidden mt-0">
+        <ScrollArea className="h-full">
+        {mergedResult ? (
           <MergedView result={mergedResult} tokenUsage={tokenUsage} />
         ) : (
           <EmptyState label={t('detail.noSseEvents')} />
         )}
-      </div>
-    </div>
-  )
-}
-
-// -------------------------------------------------------------------
-// TabButton
-// -------------------------------------------------------------------
-function TabButton({
-  active,
-  title,
-  label,
-  onClick,
-}: {
-  active: boolean
-  title: string
-  label: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      className={`relative px-3 py-1.5 text-[11px] transition-colors ${
-        active ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
-      }`}
-      onClick={onClick}
-      title={title}>
-      {label}
-      {active && (
-        <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full" />
-      )}
-    </button>
+        </ScrollArea>
+      </TabsContent>
+    </Tabs>
   )
 }
 

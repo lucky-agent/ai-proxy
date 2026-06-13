@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react'
 import type { ApiCollection, ApiRequestNode } from '@/types/collection'
 import { useLocale } from '@/hooks/useLocale'
 import { ApiTreeItem } from './ApiTreeItem'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface ApiTreeViewProps {
   collections: ApiCollection[]
@@ -43,7 +44,7 @@ export function ApiTreeView({
   }, [])
 
   return (
-    <div className="flex-1 overflow-y-auto min-h-0 py-1">
+    <ScrollArea className="flex-1 min-h-0 py-1">
       {collections.map(col => (
         <div key={col.id}>
           {/* Collection 根节点作为 folder 类型渲染 */}
@@ -81,6 +82,6 @@ export function ApiTreeView({
           {t('collection.emptyTree')}
         </div>
       )}
-    </div>
+    </ScrollArea>
   )
 }

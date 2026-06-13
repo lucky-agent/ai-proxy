@@ -1,9 +1,14 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import { VList } from 'virtua'
 import { useTranslation } from 'react-i18next'
-import { ArrowDownIcon, ArrowUpIcon, CopyIcon, RefreshCwIcon, PencilIcon } from 'lucide-react'
-import { GripDots, LockClosed, LockOpen } from '@/components/icons'
+import { ArrowDownIcon, ArrowUpIcon, CopyIcon, RefreshCwIcon, PencilIcon, LockKeyholeIcon, LockOpenIcon } from 'lucide-react'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
+import { GripDots } from '@/components/icons'
 import type { TrafficEntry } from '@/types/proxy'
 import { statusCategory, formatDuration, formatTime, formatCurl } from '@/lib/format'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
@@ -108,90 +113,6 @@ function badgeStyle(varName: string, options?: { pill?: boolean }) {
   return base
 }
 
-interface ContextMenuState {
-  x: number
-  y: number
-  entry: TrafficEntry
-}
-
-function ContextMenu({
-  state,
-  onClose,
-  onEdit,
-  onResend,
-}: {
-  state: ContextMenuState
-  onClose: () => void
-  onEdit: (entry: TrafficEntry) => void
-  onResend: (entry: TrafficEntry) => void
-}) {
-  const { t } = useTranslation()
-  const { copied, copy } = useCopyToClipboard()
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClick)
-      document.addEventListener('keydown', handleKey)
-    }, 0)
-    return () => {
-      clearTimeout(timer)
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('keydown', handleKey)
-    }
-  }, [onClose])
-
-  const handleCopyCurl = useCallback(() => {
-    copy(formatCurl(state.entry))
-    onClose()
-  }, [state.entry, copy, onClose])
-
-  const handleEdit = useCallback(() => {
-    onEdit(state.entry)
-    onClose()
-  }, [state.entry, onEdit, onClose])
-
-  const handleResend = useCallback(() => {
-    onResend(state.entry)
-    onClose()
-  }, [state.entry, onResend, onClose])
-
-  return createPortal(
-    <div
-      ref={menuRef}
-      className="fixed z-50 min-w-40 rounded-lg bg-popover py-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
-      style={{ left: state.x, top: state.y }}>
-      <button
-        onClick={handleEdit}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors">
-        <PencilIcon className="size-3.5" />
-        <span>{t('requestList.edit')}</span>
-      </button>
-      <button
-        onClick={handleResend}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors">
-        <RefreshCwIcon className="size-3.5" />
-        <span>{t('requestList.repeat')}</span>
-      </button>
-      <button
-        onClick={handleCopyCurl}
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground transition-colors">
-        <CopyIcon className="size-3.5" />
-        <span>{t('requestList.copyCurl')}</span>
-      </button>
-    </div>,
-    document.body
-  )
-}
-
 interface Props {
   entries: ListEntry[]
   selectedId: string | null
@@ -214,6 +135,7 @@ export default function RequestList({
   onEditRequest,
 }: Props) {
   const { t } = useTranslation()
+  const { copy } = useCopyToClipboard()
   const {
     gridRef,
     columnWidths,
@@ -224,7 +146,6 @@ export default function RequestList({
     onPointerUp,
   } = useColumnResize()
 
-  const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null)
   const [listKey, setListKey] = useState(0)
 
   useEffect(() => {
@@ -252,11 +173,6 @@ export default function RequestList({
       }) as React.CSSProperties,
     [totalColPct]
   )
-
-  const handleContextMenu = useCallback((e: React.MouseEvent, entry: TrafficEntry) => {
-    e.preventDefault()
-    setCtxMenu({ x: e.clientX, y: e.clientY, entry })
-  }, [])
 
   const renderHeaderCell = (col: ColKey, labelKey: string, extraClasses: string = '') => (
     <div className={`group px-2 py-1.5 text-left relative min-w-0 ${extraClasses}`}>
@@ -318,71 +234,81 @@ export default function RequestList({
       ) : (
         <VList key={listKey} style={{ flex: 1, minHeight: 0 }}>
           {entries.map((entry, i) => (
-            <div
-              key={entry.id || i}
-              className={cn(
-                'grid text-xs border-b border-surface-elevated/50 cursor-pointer transition-colors hover:bg-surface-elevated/50',
-                entry.id === selectedId && 'bg-primary/10 border-l-2 border-primary'
-              )}
-              style={rowStyle}
-              onClick={() => onSelectEntry(entry.id)}
-              onContextMenu={e => handleContextMenu(e, entry)}>
-              <div className="px-1 py-2 min-w-0 tabular-nums text-[10px] text-muted-foreground text-left">
-                {entry.requestNumber}
-              </div>
-              <div
-                className="px-1 py-2 text-foreground/80 font-mono min-w-0 overflow-hidden"
-                title={entry.uri}>
-                <span className="block truncate">{entry.uri}</span>
-              </div>
-              <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
-                <span
-                  className="badge-method"
-                  style={badgeStyle(`--badge-${entry.method.toLowerCase()}`, { pill: true })}>
-                  {entry.method}
-                </span>
-              </div>
-              <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
-                <span
-                  className="badge-status"
-                  style={badgeStyle(`--badge-${statusCategory(entry.status)}`)}
-                  data-dot={entry.status != null}>
-                  {entry.status ?? t('requestList.pending')}
-                </span>
-              </div>
-              <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground">
-                {formatDuration(entry.durationMs)}
-              </div>
-              <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground/60 text-left">
-                {formatTime(entry.requestTimestamp)}
-              </div>
-              <div className="px-1 py-2 min-w-0 overflow-hidden flex items-center justify-center">
-                {entry.decrypted === false ? (
-                  <LockClosed className="size-3.5 text-muted-foreground/70 shrink-0" />
-                ) : entry.decrypted === true ? (
-                  <LockOpen className="size-3.5 text-muted-foreground/70 shrink-0" />
-                ) : null}
-              </div>
-              <div className="px-1 py-2 min-w-0 overflow-hidden text-left">
-                {entry.edited ? (
-                  <span className="text-[10px] text-amber-400 font-medium">
-                    {t('requestList.edited')}
-                  </span>
-                ) : null}
-              </div>
-            </div>
+            <ContextMenu key={entry.id || i}>
+              <ContextMenuTrigger asChild>
+                <div
+                  className={cn(
+                    'grid text-xs border-b border-surface-elevated/50 cursor-pointer transition-colors hover:bg-surface-elevated/50 border-l-2',
+                    entry.id === selectedId
+                      ? 'bg-primary/10 border-primary'
+                      : 'border-transparent'
+                  )}
+                  style={rowStyle}
+                  onClick={() => onSelectEntry(entry.id)}>
+                  <div className="px-1 py-2 min-w-0 tabular-nums text-[10px] text-muted-foreground text-left">
+                    {entry.requestNumber}
+                  </div>
+                  <div
+                    className="px-1 py-2 text-foreground/80 font-mono min-w-0 overflow-hidden"
+                    title={entry.uri}>
+                    <span className="block truncate">{entry.uri}</span>
+                  </div>
+                  <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
+                    <span
+                      className="badge-method"
+                      style={badgeStyle(`--badge-${entry.method.toLowerCase()}`, { pill: true })}>
+                      {entry.method}
+                    </span>
+                  </div>
+                  <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
+                    <span
+                      className="badge-status"
+                      style={badgeStyle(`--badge-${statusCategory(entry.status)}`)}
+                      data-dot={entry.status != null}>
+                      {entry.status ?? t('requestList.pending')}
+                    </span>
+                  </div>
+                  <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground">
+                    {formatDuration(entry.durationMs)}
+                  </div>
+                  <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground/60 text-left">
+                    {formatTime(entry.requestTimestamp)}
+                  </div>
+                  <div className="px-1 py-2 min-w-0 overflow-hidden flex items-center justify-center">
+                    {entry.decrypted === false ? (
+                      <LockKeyholeIcon className="size-3.5 text-muted-foreground/70 shrink-0" />
+                    ) : entry.decrypted === true ? (
+                      <LockOpenIcon className="size-3.5 text-muted-foreground/70 shrink-0" />
+                    ) : null}
+                  </div>
+                  <div className="px-1 py-2 min-w-0 overflow-hidden text-left">
+                    {entry.edited ? (
+                      <span className="text-[10px] text-amber-400 font-medium">
+                        {t('requestList.edited')}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent className="text-xs min-w-36">
+                <ContextMenuItem onClick={() => onEditRequest(entry)}>
+                  <PencilIcon className="size-3.5" />
+                  <span>{t('requestList.edit')}</span>
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => onResendRequest(entry)}>
+                  <RefreshCwIcon className="size-3.5" />
+                  <span>{t('requestList.repeat')}</span>
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => { copy(formatCurl(entry)) }}>
+                  <CopyIcon className="size-3.5" />
+                  <span>{t('requestList.copyCurl')}</span>
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           ))}
         </VList>
       )}
 
-      {ctxMenu && (
-        <ContextMenu
-          state={ctxMenu}
-          onClose={() => setCtxMenu(null)}
-          onEdit={onEditRequest}
-          onResend={onResendRequest}
-        />
-      )}
     </div>
   )
 }

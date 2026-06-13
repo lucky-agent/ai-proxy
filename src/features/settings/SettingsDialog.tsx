@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -23,10 +26,10 @@ interface Props {
 }
 
 const inputClass =
-  'h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'h-auto w-full'
 
 const selectClass =
-  'h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'h-auto w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 export default function SettingsDialog({ open, onOpenChange, theme, onThemeChange }: Props) {
   const { t, setLocale } = useLocale()
@@ -126,7 +129,7 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
               <span className="text-xs font-medium text-muted-foreground">
                 {t('settings.listenHost')}
               </span>
-              <input
+              <Input
                 className={inputClass}
                 value={proxy.listen_host}
                 onChange={(e) => setProxy((p) => ({ ...p, listen_host: e.target.value }))}
@@ -136,7 +139,7 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
               <span className="text-xs font-medium text-muted-foreground">
                 {t('settings.listenPort')}
               </span>
-              <input
+              <Input
                 className={inputClass}
                 type="number"
                 min={1}
@@ -148,13 +151,12 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
               />
             </label>
             <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
+                id="upstream-proxy"
                 checked={proxy.upstream_proxy}
-                onChange={(e) => setProxy((p) => ({ ...p, upstream_proxy: e.target.checked }))}
-                className="size-3.5 rounded border-border"
+                onCheckedChange={(checked) => setProxy((p) => ({ ...p, upstream_proxy: !!checked }))}
               />
-              <span>{t('settings.upstreamProxy')}</span>
+              <Label htmlFor="upstream-proxy">{t('settings.upstreamProxy')}</Label>
             </label>
           </div>
         )}

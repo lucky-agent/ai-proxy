@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { PlusIcon, Trash2Icon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -19,7 +22,7 @@ interface Props {
 }
 
 const inputClass =
-  'h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'h-auto w-full'
 
 export default function SslConfigDialog({ open, onOpenChange }: Props) {
   const { t } = useLocale()
@@ -104,15 +107,14 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
           <p className="text-sm text-muted-foreground">{t('settings.loading')}</p>
         ) : (
           <div className="grid gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="ssl-global-toggle"
                 checked={sslConfig.enabled}
-                onChange={toggleGlobal}
-                className="size-3.5 rounded border-border"
+                onCheckedChange={toggleGlobal}
               />
-              <span className="font-medium">{t('sslConfig.globalToggle')}</span>
-            </label>
+              <Label htmlFor="ssl-global-toggle" className="font-medium">{t('sslConfig.globalToggle')}</Label>
+            </div>
 
             <div className="grid gap-2">
               <span className="text-xs font-medium text-muted-foreground">
@@ -120,7 +122,7 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
               </span>
 
               <div className="flex gap-2">
-                <input
+                <Input
                   className={inputClass}
                   placeholder={t('sslConfig.placeholderDomain')}
                   value={newDomain}
@@ -150,11 +152,9 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
                       key={item.domain}
                       className="flex items-center gap-2 border-b border-border px-2.5 py-1.5 last:border-b-0"
                     >
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={item.enabled}
-                        onChange={() => toggleItem(index)}
-                        className="size-3.5 shrink-0 rounded border-border"
+                        onCheckedChange={() => toggleItem(index)}
                       />
                       <span className="min-w-0 flex-1 truncate text-sm">
                         {item.domain}

@@ -31,6 +31,7 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-i18next": "^17.0.8",
+    "react-resizable-panels": "^4.11.2",
     "shadcn": "^4.8.1",
     "shiki": "^4.1.0",
     "tailwind-merge": "^3.6.0",

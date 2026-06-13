@@ -4,6 +4,7 @@ import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { useTheme } from '@/hooks/useTheme'
 import { useShiki } from '@/hooks/useShiki'
 import { CopyIcon, CheckIcon, ChevronDown, ChevronRight } from 'lucide-react'
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 
 interface FormField {
   name: string
@@ -111,27 +112,27 @@ export default function FormDataView({ body, contentType }: { body: string; cont
 function UrlEncodedView({ parts }: { parts: FormField[] }) {
   const { t } = useTranslation()
   return (
-    <table className='w-full table-fixed text-xs'>
+    <Table className='table-fixed text-xs'>
       <colgroup><col style={{ width: '30%' }} /><col style={{ width: '70%' }} /></colgroup>
-      <thead>
-        <tr className='border-b border-surface-elevated bg-surface-elevated/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>
-          <th className='py-1.5 pl-3 pr-2 text-left font-semibold'>Key</th>
-          <th className='py-1.5 pr-3 text-left font-semibold'>Value</th>
-        </tr>
-      </thead>
-      <tbody>
+      <TableHeader>
+        <TableRow className='border-b border-surface-elevated bg-surface-elevated/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>
+          <TableHead className='py-1.5 pl-3 pr-2 h-auto text-left font-semibold text-[10px]'>Key</TableHead>
+          <TableHead className='py-1.5 pr-3 h-auto text-left font-semibold text-[10px]'>Value</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {parts.length === 0 ? (
-          <tr><td colSpan={2} className='py-4 text-center text-muted-foreground'>{t('detail.noFormData')}</td></tr>
+          <TableRow><TableCell colSpan={2} className='py-4 text-center text-muted-foreground'>{t('detail.noFormData')}</TableCell></TableRow>
         ) : (
           parts.map((part) => (
-            <tr key={part.name} className='border-b border-surface-elevated/30 hover:bg-surface-elevated/20 transition-colors'>
-              <td className='py-1.5 pl-3 pr-2 align-top font-medium text-foreground/90 whitespace-nowrap overflow-hidden text-ellipsis'>{part.name}</td>
-              <td className='py-1.5 pr-3 align-top text-foreground/70 break-all'>{part.value}</td>
-            </tr>
+            <TableRow key={part.name} className='border-b border-surface-elevated/30 hover:bg-surface-elevated/20 transition-colors'>
+              <TableCell className='py-1.5 pl-3 pr-2 align-top font-medium text-foreground/90 whitespace-nowrap overflow-hidden text-ellipsis'>{part.name}</TableCell>
+              <TableCell className='py-1.5 pr-3 align-top text-foreground/70 break-all'>{part.value}</TableCell>
+            </TableRow>
           ))
         )}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   )
 }
 

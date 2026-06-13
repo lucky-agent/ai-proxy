@@ -1,10 +1,31 @@
 // src/hooks/useCollections.ts
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import type { ApiCollection, ApiTreeNode, ApiFolderNode, ApiRequestNode, HttpMethod } from '@/types/collection'
+import type { ApiCollection, ApiTreeNode, ApiFolderNode, ApiRequestNode, HttpMethod, BodyType, KeyValuePair } from '@/types/collection'
 
 function generateId(): string {
   return crypto.randomUUID()
+}
+
+/** Normalize a request node with defaults for backward compatibility */
+function normalizeRequest(node: ApiRequestNode): ApiRequestNode {
+  return {
+    ...node,
+    params: node.params ?? [],
+    cookies: node.cookies ?? [],
+    bodyType: node.bodyType ?? 'json',
+    headers: node.headers ?? [],
+    body: node.body ?? '',
+  }
+}
+
+/** Recursively normalize all nodes in a tree */
+function normalizeTree(nodes: ApiTreeNode[]): ApiTreeNode[] {
+  return nodes.map(node => {
+    if (node.type === 'request') return normalizeRequest(node as ApiRequestNode)
+    if (node.type === 'folder') return { ...node, children: normalizeTree(node.children) }
+    return node
+  })
 }
 
 function createDefaultCollection(): ApiCollection {
@@ -73,14 +94,20 @@ export function useCollections() {
 
   // 加载
   useEffect(() => {
-    invoke<ApiCollection[]>('get_collections')
+    invoke<(ApiCollection & { children: ApiTreeNode[] })[]>('get_collections')
       .then(data => {
         if (data.length === 0) {
           const default_ = createDefaultCollection()
           setCollections([default_])
           invoke('save_collections', { collections: [default_] }).catch(console.error)
         } else {
-          setCollections(data)
+          // Normalize all nodes for backward compatibility
+          const normalized: ApiCollection[] = data.map(c => ({
+            ...c,
+            children: normalizeTree(c.children),
+            updatedAt: c.updatedAt ?? c.createdAt,
+          }))
+          setCollections(normalized)
         }
       })
       .catch(console.error)
@@ -135,7 +162,10 @@ export function useCollections() {
       name: '新建请求',
       method: 'GET',
       url: '',
+      params: [],
       headers: [],
+      cookies: [],
+      bodyType: 'json',
       body: '',
     }
     updateCollections(prev =>
@@ -178,7 +208,15 @@ export function useCollections() {
 
   /** 更新请求节点配置 */
   const updateRequest = useCallback(
-    (nodeId: string, data: { method?: HttpMethod; url?: string; headers?: { key: string; value: string }[]; body?: string }) => {
+    (nodeId: string, data: {
+      method?: HttpMethod
+      url?: string
+      params?: KeyValuePair[]
+      headers?: KeyValuePair[]
+      cookies?: KeyValuePair[]
+      bodyType?: BodyType
+      body?: string
+    }) => {
       updateCollections(prev =>
         prev.map(col => ({
           ...col,

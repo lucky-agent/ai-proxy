@@ -168,5 +168,28 @@
     "newRequest": "New Request",
     "ai": "AI",
     "aiComingSoon": "AI features coming soon"
+  },
+  "requestEditor": {
+    "params": "Params",
+    "body": "Body",
+    "headers": "Headers",
+    "cookies": "Cookies",
+    "auth": "Auth",
+    "addParam": "Add param",
+    "addCookie": "Add cookie",
+    "addHeader": "Add header",
+    "authType": "Auth type",
+    "authNone": "None",
+    "authBasic": "Basic Auth",
+    "authBearer": "Bearer Token",
+    "username": "Username",
+    "password": "Password",
+    "token": "Token",
+    "bodyFormat": "Format",
+    "bodyFormatJson": "JSON",
+    "bodyFormatXml": "XML",
+    "bodyFormatText": "Text",
+    "bodyFormatUrlencoded": "Form URL-Encoded",
+    "bodyFormatMultipart": "Multipart"
   }
 }

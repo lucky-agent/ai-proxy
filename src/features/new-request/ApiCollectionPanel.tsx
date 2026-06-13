@@ -4,6 +4,8 @@ import { FolderPlusIcon, PlusIcon } from 'lucide-react'
 import { useLocale } from '@/hooks/useLocale'
 import type { ApiCollection, ApiRequestNode } from '@/types/collection'
 import { ApiTreeView } from './ApiTreeView'
+import { Separator } from '@/components/ui/separator'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface ApiCollectionPanelProps {
   collections: ApiCollection[]
@@ -36,13 +38,15 @@ export function ApiCollectionPanel({
   const handleAddRequest = useCallback(() => addRequest(defaultCollectionId), [addRequest, defaultCollectionId])
 
   return (
-    <div className="flex h-full flex-col border-r border-border bg-surface-base/30">
+    <div className="flex h-full flex-col bg-surface-base/30">
       {/* 标题栏 */}
-      <div className="flex items-center px-3 py-2 border-b border-border">
+      <div className="flex items-center px-3 py-2">
         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
           {t('collection.title')}
         </span>
       </div>
+
+      <Separator />
 
       {/* 树形菜单 */}
       <ApiTreeView
@@ -57,8 +61,10 @@ export function ApiCollectionPanel({
         onRenameCollection={renameCollection}
       />
 
+      <Separator />
+
       {/* 操作按钮 */}
-      <div className="flex items-center gap-1 px-3 py-2 border-t border-border">
+      <div className="flex items-center gap-1 px-3 py-2">
         <button
           onClick={handleAddFolder}
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"

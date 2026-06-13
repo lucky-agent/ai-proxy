@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { ChevronRightIcon, PinIcon, PinOffIcon } from 'lucide-react'
+import { Separator } from '@/components/ui/separator'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface Props {
   domains: [string, number][]
@@ -27,12 +29,13 @@ export default function DomainSidebar({
 
   return (
     <div className="flex flex-col h-full border-r border-surface-elevated overflow-hidden bg-surface-base">
-      <div className="flex items-center px-3 py-2 border-b border-surface-elevated">
+      <div className="flex items-center px-3 py-2">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground select-none">
           {t('hosts.title')}
         </span>
       </div>
-      <div className="flex-1 overflow-y-auto bg-surface-base">
+      <Separator />
+      <ScrollArea className="flex-1 min-h-0 bg-surface-base">
         {/* 置顶折叠组 */}
         <div className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors hover:bg-surface-elevated/50 text-foreground/80">
           <button
@@ -128,7 +131,7 @@ export default function DomainSidebar({
               </button>
             </div>
           ))}
-      </div>
+      </ScrollArea>
     </div>
   )
 }

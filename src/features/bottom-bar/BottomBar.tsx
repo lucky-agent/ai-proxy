@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { ShieldMinusIcon } from 'lucide-react'
 import {
   LayoutSidebarOn,
   LayoutSidebarOff,
@@ -7,10 +8,10 @@ import {
   LayoutRightOn,
   LayoutRightOff,
   ScriptIcon,
-  ShieldIcon,
 } from '@/components/icons'
 import { useLocale } from '@/hooks/useLocale'
 import { cn } from '@/lib/utils'
+import { Separator } from '@/components/ui/separator'
 
 export type DetailPosition = 'bottom' | 'right' | 'hidden'
 
@@ -60,7 +61,8 @@ export function BottomBar({
   }
 
   return (
-    <div className="flex h-7 shrink-0 items-center border-t border-surface-elevated bg-surface-deep select-none px-2">
+    <div className="flex h-7 shrink-0 items-center bg-surface-deep select-none px-2 relative">
+      <Separator orientation="horizontal" className="absolute top-0 left-0 right-0" />
       {/* Left: host sidebar toggle */}
       <button
         type="button"
@@ -116,7 +118,7 @@ export function BottomBar({
         {sslEnabled && (
           <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />
         )}
-        <ShieldIcon className="size-4" />
+        <ShieldMinusIcon className="size-4" />
       </button>
 
       {/* Right: detail position toggle */}

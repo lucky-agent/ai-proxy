@@ -1,21 +1,17 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { TrafficEntry } from '@/types/proxy'
 import { extractHost, classifyEntry, type TypeFilter } from '@/lib/format'
+import { buildFullUrl } from '@/lib/http-constants'
 import DomainSidebar from './DomainSidebar'
 import RequestList from './RequestList'
 import type { SortOrder, SortColumn } from './RequestList'
-import DetailPanel from './DetailPanel'
+import DetailPanel from '@/features/detail-panel/DetailPanel'
 import EditRequestDialog from './EditRequestDialog'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 
 import type { DetailPosition } from '@/features/bottom-bar'
-
-const MIN_DOMAIN_RATIO = 0.08
-const MAX_DOMAIN_RATIO = 0.4
-const MIN_SPLIT_RATIO = 0.15
-const MAX_SPLIT_RATIO = 0.7
-const MIN_RIGHT_RATIO = 0.2
-const MAX_RIGHT_RATIO = 0.6
+import type { PanelImperativeHandle } from 'react-resizable-panels'
 
 interface Props {
   entries: TrafficEntry[]
@@ -25,27 +21,9 @@ interface Props {
   typeFilter: TypeFilter
 }
 
-/** 补全完整 URL：代理存储的 URI 可能只是路径（如 /v1/chat/completions） */
-function buildFullUrl(entry: TrafficEntry): string {
-  if (entry.uri.startsWith('http://') || entry.uri.startsWith('https://')) {
-    return entry.uri
-  }
-  const host = entry.requestHeaders?.['host'] ?? entry.requestHeaders?.['Host'] ?? ''
-  if (host) {
-    return 'https://' + host + entry.uri
-  }
-  return entry.uri
-}
-
 export default function TrafficLog({ entries, showDomainSidebar, detailPosition, onAutoOpenDetail, typeFilter }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
-  const [domainRatio, setDomainRatio] = useState(0.15)
-  const [splitRatio, setSplitRatio] = useState(0.4)
-  const [rightRatio, setRightRatio] = useState(0.45)
-  const [draggingDomain, setDraggingDomain] = useState(false)
-  const [draggingSplit, setDraggingSplit] = useState(false)
-  const [draggingRight, setDraggingRight] = useState(false)
   const [sortColumn, setSortColumn] = useState<SortColumn>(null)
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [editEntry, setEditEntry] = useState<TrafficEntry | null>(null)
@@ -56,6 +34,19 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
     } catch {}
     return new Set()
   })
+
+  const domainPanelRef = useRef<PanelImperativeHandle>(null)
+
+  // Sync domain sidebar collapse/expand with showDomainSidebar prop
+  useEffect(() => {
+    const panel = domainPanelRef.current
+    if (!panel) return
+    if (showDomainSidebar) {
+      panel.resize(18)
+    } else {
+      panel.collapse()
+    }
+  }, [showDomainSidebar])
 
   const handleTogglePin = useCallback((domain: string) => {
     setPinnedDomains(prev => {
@@ -69,16 +60,6 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
       return next
     })
   }, [])
-
-  const containerRef = useRef<HTMLDivElement>(null)
-  const mainAreaRef = useRef<HTMLDivElement>(null)
-  const domainRef = useRef<HTMLDivElement>(null)
-  const requestListRef = useRef<HTMLDivElement>(null)
-
-  const liveDomainRatio = useRef(domainRatio)
-  const liveSplitRatio = useRef(splitRatio)
-  if (!draggingDomain) liveDomainRatio.current = domainRatio
-  if (!draggingSplit) liveSplitRatio.current = splitRatio
 
   const domains = useMemo(() => {
     const map = new Map<string, number>()
@@ -99,7 +80,6 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
 
   const filtered = useMemo(() => {
     let result = entries
-    // 按域名筛选
     if (selectedDomain) {
       result = result.filter(e => {
         const host = extractHost(e.uri)
@@ -108,7 +88,6 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
         return hostHeader.startsWith(selectedDomain)
       })
     }
-    // 按请求类型筛选
     if (typeFilter !== 'all') {
       result = result.filter(e => classifyEntry(e) === typeFilter)
     }
@@ -175,7 +154,6 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
 
   const handleSendSuccess = useCallback((entryId: string) => {
     setSelectedId(entryId)
-    setDetailOpen(true)
     setEditEntry(null)
   }, [])
 
@@ -195,7 +173,6 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
         body: entry.requestBody,
       })
       setSelectedId(entryId)
-      setDetailOpen(true)
     } catch (err) {
       console.error('resend invoke failed:', err)
     }
@@ -206,92 +183,77 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
     setSortOrder(order)
   }, [])
 
-  // --- drag handlers ---
-  const onDomainPointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault()
-    setDraggingDomain(true)
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }, [])
-
-  const onDomainPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!draggingDomain || !containerRef.current) return
-      const rect = containerRef.current.getBoundingClientRect()
-      const ratio = Math.max(MIN_DOMAIN_RATIO, Math.min(MAX_DOMAIN_RATIO, (e.clientX - rect.left) / rect.width))
-      liveDomainRatio.current = ratio
-      if (domainRef.current) domainRef.current.style.width = `${ratio * 100}%`
-    },
-    [draggingDomain]
+  const requestList = (
+    <RequestList
+      entries={sorted}
+      selectedId={selectedId}
+      onSelectEntry={handleSelectEntry}
+      sortColumn={sortColumn}
+      sortOrder={sortOrder}
+      onSortChange={handleSortChange}
+      onResendRequest={handleResendRequest}
+      onEditRequest={handleEditRequest}
+    />
   )
 
-  const onDomainPointerUp = useCallback(() => {
-    setDomainRatio(liveDomainRatio.current)
-    setDraggingDomain(false)
-  }, [])
+  const detailPanel = <DetailPanel entry={selected} onClose={handleCloseDetail} />
 
-  const onSplitPointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault()
-    setDraggingSplit(true)
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }, [])
-
-  const onSplitPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!draggingSplit || !mainAreaRef.current) return
-      const rect = mainAreaRef.current.getBoundingClientRect()
-      const ratio = Math.max(MIN_SPLIT_RATIO, Math.min(MAX_SPLIT_RATIO, (e.clientY - rect.top) / rect.height))
-      liveSplitRatio.current = ratio
-      if (requestListRef.current) requestListRef.current.style.height = `${ratio * 100}%`
-    },
-    [draggingSplit]
-  )
-
-  const onSplitPointerUp = useCallback(() => {
-    setSplitRatio(liveSplitRatio.current)
-    setDraggingSplit(false)
-  }, [])
-
-  // --- right layout drag handlers ---
-  const rightRef = useRef<HTMLDivElement>(null)
-  const liveRightRatio = useRef(rightRatio)
-  if (!draggingRight) liveRightRatio.current = rightRatio
-
-  const onRightPointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault()
-    setDraggingRight(true)
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }, [])
-
-  const onRightPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!draggingRight || !mainAreaRef.current) return
-      const rect = mainAreaRef.current.getBoundingClientRect()
-      const ratio = Math.max(MIN_RIGHT_RATIO, Math.min(MAX_RIGHT_RATIO, 1 - (e.clientX - rect.left) / rect.width))
-      liveRightRatio.current = ratio
-      if (requestListRef.current) requestListRef.current.style.width = `${(1 - ratio) * 100}%`
-      if (rightRef.current) rightRef.current.style.width = `${ratio * 100}%`
-    },
-    [draggingRight]
-  )
-
-  const onRightPointerUp = useCallback(() => {
-    setRightRatio(liveRightRatio.current)
-    setDraggingRight(false)
-  }, [])
-
-  const isDragging = draggingDomain || draggingSplit || draggingRight
+  // Inner content: varies by detailPosition.
+  const mainContent = (() => {
+    if (detailPosition === 'hidden' || !selected) {
+      return (
+        <div className="h-full min-h-0 min-w-0">
+          {requestList}
+        </div>
+      )
+    }
+    if (detailPosition === 'bottom') {
+      return (
+        <ResizablePanelGroup key="bottom" orientation="vertical" id="main-bottom" className="h-full">
+          <ResizablePanel id="list" defaultSize={40} minSize={25} maxSize={75}>
+            <div className="h-full min-h-0">
+              {requestList}
+            </div>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel id="detail" defaultSize={60} minSize={25} maxSize={75}>
+            <div className="h-full min-h-0">
+              {detailPanel}
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )
+    }
+    // right
+    return (
+      <ResizablePanelGroup key="right" orientation="horizontal" id="main-right" className="h-full">
+        <ResizablePanel id="list" defaultSize={55} minSize={30} maxSize={75}>
+          <div className="h-full min-h-0 min-w-0">
+            {requestList}
+          </div>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel id="detail" defaultSize={45} minSize={25} maxSize={70}>
+          <div className="h-full min-h-0 min-w-0">
+            {detailPanel}
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    )
+  })()
 
   return (
-    <div
-      ref={containerRef}
-      className={`flex min-h-0 flex-1 overflow-hidden ${isDragging ? 'select-none' : ''}`}
-      style={{ cursor: draggingDomain ? 'col-resize' : draggingSplit ? 'row-resize' : draggingRight ? 'col-resize' : '' }}>
-      {showDomainSidebar && (
-        <>
-          <div
-            ref={domainRef}
-            className="h-full min-h-0 shrink-0 overflow-hidden"
-            style={{ width: `${liveDomainRatio.current * 100}%` }}>
+    <div className="flex min-h-0 flex-1 overflow-hidden">
+      <ResizablePanelGroup orientation="horizontal" id="trafficlog-outer" className="h-full">
+        <ResizablePanel
+          id="domain-sidebar"
+          defaultSize={showDomainSidebar ? 18 : 0}
+          minSize={8}
+          maxSize={35}
+          collapsible
+          collapsedSize={0}
+          panelRef={domainPanelRef}>
+          <div className="h-full min-h-0 overflow-hidden">
             <DomainSidebar
               domains={domains}
               totalEntries={entries.length}
@@ -301,107 +263,12 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
               onTogglePin={handleTogglePin}
             />
           </div>
-
-          <div
-            onPointerDown={onDomainPointerDown}
-            onPointerMove={onDomainPointerMove}
-            onPointerUp={onDomainPointerUp}
-            className="group relative w-[1px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/50 active:bg-primary/70">
-            <div className="absolute inset-y-0 -left-2 -right-2" />
-            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-[3px] opacity-0 group-hover:opacity-100 transition-opacity">
-              <span className="block size-[3px] rounded-full bg-muted-foreground" />
-              <span className="block size-[3px] rounded-full bg-muted-foreground" />
-              <span className="block size-[3px] rounded-full bg-muted-foreground" />
-            </div>
-          </div>
-        </>
-      )}
-
-      <div ref={mainAreaRef} className={`flex min-h-0 flex-1 overflow-hidden ${detailPosition === 'right' ? 'flex-row' : 'flex-col'}`}>
-        {detailPosition === 'bottom' ? (
-          <>
-            <div
-              ref={requestListRef}
-              className="min-h-0"
-              style={{ height: `${liveSplitRatio.current * 100}%` }}>
-              <RequestList
-                entries={sorted}
-                selectedId={selectedId}
-                onSelectEntry={handleSelectEntry}
-                sortColumn={sortColumn}
-                sortOrder={sortOrder}
-                onSortChange={handleSortChange}
-                onResendRequest={handleResendRequest}
-                onEditRequest={handleEditRequest}
-              />
-            </div>
-            <div
-              onPointerDown={onSplitPointerDown}
-              onPointerMove={onSplitPointerMove}
-              onPointerUp={onSplitPointerUp}
-              className="group relative h-[1px] shrink-0 cursor-row-resize bg-border transition-colors hover:bg-primary/50 active:bg-primary/70">
-              <div className="absolute inset-x-0 -top-2 -bottom-2" />
-              <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 flex items-center gap-[3px] opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="block size-[3px] rounded-full bg-muted-foreground" />
-                <span className="block size-[3px] rounded-full bg-muted-foreground" />
-                <span className="block size-[3px] rounded-full bg-muted-foreground" />
-              </div>
-            </div>
-            <DetailPanel entry={selected} onClose={handleCloseDetail} />
-          </>
-        ) : detailPosition === 'right' ? (
-          <>
-            <div
-              ref={requestListRef}
-              className="min-h-0 min-w-0"
-              style={{ width: `${(1 - liveRightRatio.current) * 100}%` }}>
-              <RequestList
-                entries={sorted}
-                selectedId={selectedId}
-                onSelectEntry={handleSelectEntry}
-                sortColumn={sortColumn}
-                sortOrder={sortOrder}
-                onSortChange={handleSortChange}
-                onResendRequest={handleResendRequest}
-                onEditRequest={handleEditRequest}
-              />
-            </div>
-            <div
-              onPointerDown={onRightPointerDown}
-              onPointerMove={onRightPointerMove}
-              onPointerUp={onRightPointerUp}
-              className="group relative w-[1px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/50 active:bg-primary/70">
-              <div className="absolute inset-y-0 -left-2 -right-2" />
-              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-[3px] opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="block size-[3px] rounded-full bg-muted-foreground" />
-                <span className="block size-[3px] rounded-full bg-muted-foreground" />
-                <span className="block size-[3px] rounded-full bg-muted-foreground" />
-              </div>
-            </div>
-            <div
-              ref={rightRef}
-              className="min-h-0 min-w-0 shrink-0"
-              style={{ width: `${liveRightRatio.current * 100}%` }}>
-              <DetailPanel entry={selected} onClose={handleCloseDetail} />
-            </div>
-          </>
-        ) : (
-          <div
-            ref={requestListRef}
-            className="min-h-0 min-w-0 flex-1">
-            <RequestList
-              entries={sorted}
-              selectedId={selectedId}
-              onSelectEntry={handleSelectEntry}
-              sortColumn={sortColumn}
-              sortOrder={sortOrder}
-              onSortChange={handleSortChange}
-              onResendRequest={handleResendRequest}
-              onEditRequest={handleEditRequest}
-            />
-          </div>
-        )}
-      </div>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel id="main" defaultSize={82} minSize={50}>
+          {mainContent}
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       <EditRequestDialog
         open={editEntry !== null}

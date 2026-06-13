@@ -17,6 +17,7 @@ import { useProxyEvents } from '@/hooks/useProxyEvents'
 import { useTheme } from '@/hooks/useTheme'
 import { useLocale } from '@/hooks/useLocale'
 import { classifyEntry, TYPE_FILTERS, type TypeFilter } from '@/lib/format'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 const TYPE_FILTER_LABELS: Record<TypeFilter, string> = {
@@ -132,8 +133,8 @@ function App() {
     setActiveView(view)
   }, [])
 
-  const handleNewRequestSuccess = useCallback((entryId: string) => {
-    setActiveView('proxy')
+  const handleNewRequestSuccess = useCallback((_entryId: string) => {
+    // 不跳转，保持在 new-request 视图查看响应
   }, [])
   const { entries, clear } = useProxyEvents()
   const { theme, setTheme } = useTheme()
@@ -232,7 +233,8 @@ function App() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-surface-deep text-foreground">
+    <TooltipProvider>
+      <div className="flex h-full flex-col overflow-hidden bg-surface-deep text-foreground">
       <TitleBar
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenAbout={() => setAboutOpen(true)}
@@ -264,7 +266,7 @@ function App() {
               <TrafficLog entries={entries} showDomainSidebar={showDomainSidebar} detailPosition={detailPosition} onAutoOpenDetail={() => setDetailPosition('bottom')} typeFilter={typeFilter} />
             </>
           )}
-          {mountedViews.has('new-request') && activeView === 'new-request' && <NewRequestView onSendSuccess={handleNewRequestSuccess} />}
+          {mountedViews.has('new-request') && activeView === 'new-request' && <NewRequestView onSendSuccess={handleNewRequestSuccess} entries={entries} />}
           {mountedViews.has('ai') && activeView === 'ai' && <AiView />}
         </div>
       </div>
@@ -295,6 +297,7 @@ function App() {
         onThemeChange={setTheme}
       />
     </div>
+    </TooltipProvider>
   )
 }
 

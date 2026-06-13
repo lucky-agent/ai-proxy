@@ -2,6 +2,13 @@
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 
+export type BodyType = 'json' | 'xml' | 'text' | 'urlencoded' | 'multipart'
+
+export interface KeyValuePair {
+  key: string
+  value: string
+}
+
 export interface ApiCollection {
   id: string
   name: string
@@ -23,7 +30,10 @@ export interface ApiRequestNode {
   name: string
   method: HttpMethod
   url: string
-  headers: { key: string; value: string }[]
+  params: KeyValuePair[]
+  headers: KeyValuePair[]
+  cookies: KeyValuePair[]
+  bodyType: BodyType
   body: string
 }
 

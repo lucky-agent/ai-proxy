@@ -168,5 +168,28 @@
     "newRequest": "新请求",
     "ai": "AI",
     "aiComingSoon": "AI 功能即将推出"
+  },
+  "requestEditor": {
+    "params": "Params",
+    "body": "Body",
+    "headers": "Headers",
+    "cookies": "Cookies",
+    "auth": "Auth",
+    "addParam": "添加参数",
+    "addCookie": "添加 Cookie",
+    "addHeader": "添加请求头",
+    "authType": "认证类型",
+    "authNone": "无",
+    "authBasic": "Basic Auth",
+    "authBearer": "Bearer Token",
+    "username": "用户名",
+    "password": "密码",
+    "token": "Token",
+    "bodyFormat": "格式",
+    "bodyFormatJson": "JSON",
+    "bodyFormatXml": "XML",
+    "bodyFormatText": "Text",
+    "bodyFormatUrlencoded": "Form URL-Encoded",
+    "bodyFormatMultipart": "Multipart"
   }
 }

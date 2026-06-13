@@ -10,9 +10,15 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useLocale } from '@/hooks/useLocale'
 import { cn } from '@/lib/utils'
+import { buildFullUrl, METHOD_COLORS } from '@/lib/http-constants'
 import type { TrafficEntry } from '@/types/proxy'
+import type { HttpMethod } from '@/types/collection'
 
 interface HeaderPair {
   key: string
@@ -27,34 +33,13 @@ interface Props {
   onSendSuccess?: (entryId: string) => void
 }
 
-const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'badge-get',
-  POST: 'badge-post',
-  PUT: 'badge-put',
-  DELETE: 'badge-delete',
-  PATCH: 'badge-patch',
-  HEAD: 'badge-head',
-  OPTIONS: 'badge-options',
-}
-
-function buildFullUrl(entry: TrafficEntry): string {
-  if (entry.uri.startsWith('http://') || entry.uri.startsWith('https://')) {
-    return entry.uri
-  }
-  const host = entry.requestHeaders?.['host'] ?? entry.requestHeaders?.['Host'] ?? ''
-  if (host) {
-    return 'https://' + host + entry.uri
-  }
-  return entry.uri
-}
+const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 
 export default function RequestEditorDialog({ open, onOpenChange, entry, onSendSuccess }: Props) {
   const { t } = useLocale()
   const isNew = entry === null
 
-  const [method, setMethod] = useState('GET')
+  const [method, setMethod] = useState<HttpMethod>('GET')
   const [url, setUrl] = useState('')
   const [headers, setHeaders] = useState<HeaderPair[]>([])
   const [body, setBody] = useState('')
@@ -68,7 +53,7 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
     setSending(false)
 
     if (entry) {
-      setMethod(entry.method)
+      setMethod(entry.method as HttpMethod)
       setUrl(buildFullUrl(entry))
       setHeaders(
         Object.entries(entry.requestHeaders)
@@ -137,26 +122,24 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
           )}
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-3 min-h-0">
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="space-y-3 p-0.5">
           {/* Method + URL */}
           <div className="flex gap-2">
-            <select
-              value={method}
-              onChange={e => setMethod(e.target.value)}
-              className={cn(
-                'shrink-0 rounded-md border border-input bg-background px-2 py-1.5 text-xs font-semibold outline-none focus:ring-1 focus:ring-primary',
-                METHOD_COLORS[method] && `text-${METHOD_COLORS[method]}`
-              )}
-            >
-              {METHODS.map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-            <input
-              type="text"
+            <Select value={method} onValueChange={(v) => setMethod(v as HttpMethod)}>
+              <SelectTrigger size="sm" className={cn('shrink-0 text-xs font-semibold', METHOD_COLORS[method] ? `text-${METHOD_COLORS[method]}` : '')}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {METHODS.map(m => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
               value={url}
               onChange={e => setUrl(e.target.value)}
-              className="flex-1 rounded-md border border-input bg-background px-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary font-mono"
+              className="flex-1 h-auto py-1 text-xs font-mono"
               placeholder="https://api.example.com/v1/endpoint"
             />
           </div>
@@ -176,18 +159,16 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
             <div className="space-y-1">
               {headers.map((pair, i) => (
                 <div key={i} className="flex gap-1 items-center">
-                  <input
-                    type="text"
+                  <Input
                     value={pair.key}
                     onChange={e => handleHeaderChange(i, 'key', e.target.value)}
-                    className="flex-1 rounded border border-input bg-background px-2 py-1 text-[11px] text-foreground font-mono outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-1 h-auto py-1 text-[11px] font-mono"
                     placeholder="Key"
                   />
-                  <input
-                    type="text"
+                  <Input
                     value={pair.value}
                     onChange={e => handleHeaderChange(i, 'value', e.target.value)}
-                    className="flex-[2] rounded border border-input bg-background px-2 py-1 text-[11px] text-foreground font-mono outline-none focus:ring-1 focus:ring-primary"
+                    className="flex-[2] h-auto py-1 text-[11px] font-mono"
                     placeholder="Value"
                   />
                   <button
@@ -204,10 +185,10 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
           {/* Body */}
           <div>
             <span className="text-xs font-medium text-foreground/80 block mb-1">{t('detail.body')}</span>
-            <textarea
+            <Textarea
               value={body}
               onChange={e => setBody(e.target.value)}
-              className="w-full min-h-[120px] rounded-md border border-input bg-background px-2 py-1.5 text-xs text-foreground font-mono resize-y outline-none focus:ring-1 focus:ring-primary"
+              className="w-full min-h-[120px] h-auto py-1.5 text-xs font-mono resize-y"
               placeholder="{ &quot;key&quot;: &quot;value&quot; }"
             />
           </div>
@@ -219,6 +200,7 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
             </div>
           )}
         </div>
+        </ScrollArea>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
