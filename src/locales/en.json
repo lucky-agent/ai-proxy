@@ -1,7 +1,9 @@
 {
   "app": {
     "running": "Running",
-    "stopped": "Stopped"
+    "stopped": "Stopped",
+    "start": "Start proxy",
+    "stop": "Stop proxy"
   },
   "theme": {
     "light": "Light",
@@ -15,6 +17,20 @@
     "title": "Hosts",
     "all": "All",
     "pinned": "Pinned"
+  },
+  "typeFilter": {
+    "all": "All",
+    "http": "HTTP",
+    "https": "HTTPS",
+    "websocket": "WS",
+    "js": "JS",
+    "css": "CSS",
+    "html": "HTML",
+    "json": "JSON",
+    "img": "Img",
+    "font": "Font",
+    "media": "Media",
+    "other": "Other"
   },
   "requestList": {
     "id": "#",
@@ -84,6 +100,21 @@
     "scriptConfig": "Script Config",
     "quit": "Quit"
   },
+  "toolbar": {
+    "expand": "Expand toolbar",
+    "collapse": "Collapse toolbar"
+  },
+  "sendRequest": {
+    "title": "New Request",
+    "description": "Compose and send a new HTTP request.",
+    "addHeader": "Add header",
+    "send": "Send"
+  },
+  "layout": {
+    "hostSidebar": "Host sidebar",
+    "detailBottom": "Detail below",
+    "detailRight": "Detail right"
+  },
   "sslConfig": {
     "title": "SSL Decryption Config",
     "description": "Configure SSL decryption global switch and domain whitelist.",
@@ -118,5 +149,11 @@
     "toolbarToggle": "Scripts",
     "toolbarAddPlaceholder": "Add script...",
     "toolbarAddDomain": "Domain..."
+  },
+  "view": {
+    "proxy": "Proxy",
+    "newRequest": "New Request",
+    "ai": "AI",
+    "aiComingSoon": "AI features coming soon"
   }
 }

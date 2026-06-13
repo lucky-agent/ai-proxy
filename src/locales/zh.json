@@ -1,7 +1,9 @@
 {
   "app": {
     "running": "运行中",
-    "stopped": "已停止"
+    "stopped": "已停止",
+    "start": "启动代理",
+    "stop": "停止代理"
   },
   "theme": {
     "light": "浅色",
@@ -15,6 +17,20 @@
     "title": "主机",
     "all": "全部",
     "pinned": "置顶"
+  },
+  "typeFilter": {
+    "all": "全部",
+    "http": "HTTP",
+    "https": "HTTPS",
+    "websocket": "WS",
+    "js": "JS",
+    "css": "CSS",
+    "html": "HTML",
+    "json": "JSON",
+    "img": "图片",
+    "font": "字体",
+    "media": "媒体",
+    "other": "其他"
   },
   "requestList": {
     "id": "序号",
@@ -84,6 +100,21 @@
     "scriptConfig": "脚本配置",
     "quit": "退出"
   },
+  "toolbar": {
+    "expand": "展开工具栏",
+    "collapse": "收起工具栏"
+  },
+  "sendRequest": {
+    "title": "新建请求",
+    "description": "编写并发送一个新的 HTTP 请求。",
+    "addHeader": "添加请求头",
+    "send": "发送"
+  },
+  "layout": {
+    "hostSidebar": "主机侧栏",
+    "detailBottom": "下方详情",
+    "detailRight": "右侧详情"
+  },
   "sslConfig": {
     "title": "SSL 解密配置",
     "description": "配置 SSL 解密的全局开关与域名白名单。",
@@ -118,5 +149,11 @@
     "toolbarToggle": "脚本",
     "toolbarAddPlaceholder": "添加脚本...",
     "toolbarAddDomain": "域名..."
+  },
+  "view": {
+    "proxy": "代理",
+    "newRequest": "新请求",
+    "ai": "AI",
+    "aiComingSoon": "AI 功能即将推出"
   }
 }
