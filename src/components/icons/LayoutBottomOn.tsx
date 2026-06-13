@@ -1,0 +1,13 @@
+interface Props {
+  className?: string
+}
+
+export function LayoutBottomOn({ className }: Props) {
+  return (
+    <svg viewBox="0 0 20 16" className={className} fill="currentColor" stroke="currentColor">
+      <rect x="0" y="0" width="20" height="10" rx="2" fillOpacity={0} strokeOpacity={0.45} strokeWidth="1" />
+      <line x1="0" y1="10.5" x2="20" y2="10.5" strokeOpacity={0.25} strokeWidth="1" />
+      <rect x="0" y="11" width="20" height="5" rx="2" fillOpacity={0.7} strokeOpacity={0} />
+    </svg>
+  )
+}

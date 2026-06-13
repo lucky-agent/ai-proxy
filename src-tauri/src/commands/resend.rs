@@ -67,7 +67,7 @@ pub async fn resend_request(
     match svc.serve(req).await {
         Ok(resp) => {
             let duration_ms = start.elapsed().as_millis() as u64;
-            let resp = parser::log_response(resp, method, uri, &request_id, duration_ms, &event_channel);
+            let resp = parser::log_response(resp, method, uri, &request_id, duration_ms, &event_channel, None);
             // persist response metadata
             if let Ok(db) = state.db().lock() {
                 let h: HashMap<String, String> = resp.headers().iter()

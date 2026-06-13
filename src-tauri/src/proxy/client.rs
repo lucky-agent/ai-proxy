@@ -108,8 +108,12 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
             let resp_data = script::ResponseData::from_rama_parts(&parts, &body_str);
             let modified = script::run_response_hooks(state.scripts(), &resp_data);
             let resp = modified.apply(parts);
+            let db_path_for_body = {
+                let app_state = state.app_handle().state::<AppState>();
+                app_state.db().lock().ok().and_then(|db| db.async_path())
+            };
             let resp =
-                parser::log_response(resp, method, uri, &request_id, duration_ms, &event_channel);
+                parser::log_response(resp, method, uri, &request_id, duration_ms, &event_channel, db_path_for_body);
             {
                 let app_state = state.app_handle().state::<AppState>();
                 if let Ok(db) = app_state.db().lock() {
@@ -126,8 +130,12 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
         }
         Ok(resp) => {
             let duration_ms = start_time.elapsed().as_millis() as u64;
+            let db_path_for_body = {
+                let app_state = state.app_handle().state::<AppState>();
+                app_state.db().lock().ok().and_then(|db| db.async_path())
+            };
             let resp =
-                parser::log_response(resp, method, uri, &request_id, duration_ms, &event_channel);
+                parser::log_response(resp, method, uri, &request_id, duration_ms, &event_channel, db_path_for_body);
             {
                 let app_state = state.app_handle().state::<AppState>();
                 if let Ok(db) = app_state.db().lock() {

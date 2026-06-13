@@ -1,20 +1,28 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { TrafficEntry } from '@/types/proxy'
-import { extractHost } from '@/lib/format'
+import { extractHost, classifyEntry, type TypeFilter } from '@/lib/format'
 import DomainSidebar from './DomainSidebar'
 import RequestList from './RequestList'
 import type { SortOrder, SortColumn } from './RequestList'
 import DetailPanel from './DetailPanel'
 import EditRequestDialog from './EditRequestDialog'
 
+import type { DetailPosition } from '@/features/bottom-bar'
+
 const MIN_DOMAIN_RATIO = 0.08
 const MAX_DOMAIN_RATIO = 0.4
 const MIN_SPLIT_RATIO = 0.15
 const MAX_SPLIT_RATIO = 0.7
+const MIN_RIGHT_RATIO = 0.2
+const MAX_RIGHT_RATIO = 0.6
 
 interface Props {
   entries: TrafficEntry[]
+  showDomainSidebar: boolean
+  detailPosition: DetailPosition
+  onAutoOpenDetail: () => void
+  typeFilter: TypeFilter
 }
 
 /** 补全完整 URL：代理存储的 URI 可能只是路径（如 /v1/chat/completions） */
@@ -29,18 +37,18 @@ function buildFullUrl(entry: TrafficEntry): string {
   return entry.uri
 }
 
-export default function TrafficLog({ entries }: Props) {
+export default function TrafficLog({ entries, showDomainSidebar, detailPosition, onAutoOpenDetail, typeFilter }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
   const [domainRatio, setDomainRatio] = useState(0.15)
   const [splitRatio, setSplitRatio] = useState(0.4)
+  const [rightRatio, setRightRatio] = useState(0.45)
   const [draggingDomain, setDraggingDomain] = useState(false)
   const [draggingSplit, setDraggingSplit] = useState(false)
+  const [draggingRight, setDraggingRight] = useState(false)
   const [sortColumn, setSortColumn] = useState<SortColumn>(null)
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
-  const [detailOpen, setDetailOpen] = useState(false)
   const [editEntry, setEditEntry] = useState<TrafficEntry | null>(null)
-  const [domainCollapsed, setDomainCollapsed] = useState(false)
   const [pinnedDomains, setPinnedDomains] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem('ai-proxy-pinned-domains')
@@ -90,14 +98,22 @@ export default function TrafficLog({ entries }: Props) {
   }, [entries])
 
   const filtered = useMemo(() => {
-    if (!selectedDomain) return entries
-    return entries.filter(e => {
-      const host = extractHost(e.uri)
-      if (host !== '(unknown)') return host === selectedDomain
-      const hostHeader = e.requestHeaders?.['host'] ?? e.requestHeaders?.['Host'] ?? ''
-      return hostHeader.startsWith(selectedDomain)
-    })
-  }, [entries, selectedDomain])
+    let result = entries
+    // 按域名筛选
+    if (selectedDomain) {
+      result = result.filter(e => {
+        const host = extractHost(e.uri)
+        if (host !== '(unknown)') return host === selectedDomain
+        const hostHeader = e.requestHeaders?.['host'] ?? e.requestHeaders?.['Host'] ?? ''
+        return hostHeader.startsWith(selectedDomain)
+      })
+    }
+    // 按请求类型筛选
+    if (typeFilter !== 'all') {
+      result = result.filter(e => classifyEntry(e) === typeFilter)
+    }
+    return result
+  }, [entries, selectedDomain, typeFilter])
 
   const sorted = useMemo(() => {
     const copy = [...filtered]
@@ -141,19 +157,15 @@ export default function TrafficLog({ entries }: Props) {
 
   const handleSelectEntry = useCallback(
     (id: string) => {
-      if (detailOpen && selectedId === id) {
-        setDetailOpen(false)
-        setSelectedId(null)
-      } else {
-        setSelectedId(id)
-        setDetailOpen(true)
+      setSelectedId(id)
+      if (detailPosition === 'hidden') {
+        onAutoOpenDetail()
       }
     },
-    [detailOpen, selectedId]
+    [detailPosition, onAutoOpenDetail]
   )
 
   const handleCloseDetail = useCallback(() => {
-    setDetailOpen(false)
     setSelectedId(null)
   }, [])
 
@@ -161,25 +173,10 @@ export default function TrafficLog({ entries }: Props) {
     setEditEntry(entry)
   }, [])
 
-  const handleResendEdited = useCallback(async (
-    method: string,
-    url: string,
-    headers: Record<string, string>,
-    body: string | null,
-  ) => {
-    try {
-      const entryId = await invoke<string>('resend_request', {
-        method,
-        url,
-        headers,
-        body,
-      })
-      setSelectedId(entryId)
-      setDetailOpen(true)
-      setEditEntry(null)
-    } catch (err) {
-      console.error('resend invoke failed:', err)
-    }
+  const handleSendSuccess = useCallback((entryId: string) => {
+    setSelectedId(entryId)
+    setDetailOpen(true)
+    setEditEntry(null)
   }, [])
 
   const handleResendRequest = useCallback(async (entry: TrafficEntry) => {
@@ -254,61 +251,90 @@ export default function TrafficLog({ entries }: Props) {
     setDraggingSplit(false)
   }, [])
 
-  const isDragging = draggingDomain || draggingSplit
+  // --- right layout drag handlers ---
+  const rightRef = useRef<HTMLDivElement>(null)
+  const liveRightRatio = useRef(rightRatio)
+  if (!draggingRight) liveRightRatio.current = rightRatio
 
-return (
+  const onRightPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    setDraggingRight(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }, [])
+
+  const onRightPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!draggingRight || !mainAreaRef.current) return
+      const rect = mainAreaRef.current.getBoundingClientRect()
+      const ratio = Math.max(MIN_RIGHT_RATIO, Math.min(MAX_RIGHT_RATIO, 1 - (e.clientX - rect.left) / rect.width))
+      liveRightRatio.current = ratio
+      if (requestListRef.current) requestListRef.current.style.width = `${(1 - ratio) * 100}%`
+      if (rightRef.current) rightRef.current.style.width = `${ratio * 100}%`
+    },
+    [draggingRight]
+  )
+
+  const onRightPointerUp = useCallback(() => {
+    setRightRatio(liveRightRatio.current)
+    setDraggingRight(false)
+  }, [])
+
+  const isDragging = draggingDomain || draggingSplit || draggingRight
+
+  return (
     <div
       ref={containerRef}
       className={`flex min-h-0 flex-1 overflow-hidden ${isDragging ? 'select-none' : ''}`}
-      style={{ cursor: draggingDomain ? 'col-resize' : draggingSplit ? 'row-resize' : '' }}>
-      <div
-        ref={domainRef}
-        className="h-full min-h-0 shrink-0 overflow-hidden"
-        style={{ width: domainCollapsed ? '28px' : `${liveDomainRatio.current * 100}%` }}>
-        <DomainSidebar
-          domains={domains}
-          totalEntries={entries.length}
-          selectedDomain={selectedDomain}
-          onSelectDomain={setSelectedDomain}
-          panelCollapsed={domainCollapsed}
-          onTogglePanel={() => setDomainCollapsed(!domainCollapsed)}
-          pinnedDomains={pinnedDomains}
-          onTogglePin={handleTogglePin}
-        />
-      </div>
+      style={{ cursor: draggingDomain ? 'col-resize' : draggingSplit ? 'row-resize' : draggingRight ? 'col-resize' : '' }}>
+      {showDomainSidebar && (
+        <>
+          <div
+            ref={domainRef}
+            className="h-full min-h-0 shrink-0 overflow-hidden"
+            style={{ width: `${liveDomainRatio.current * 100}%` }}>
+            <DomainSidebar
+              domains={domains}
+              totalEntries={entries.length}
+              selectedDomain={selectedDomain}
+              onSelectDomain={setSelectedDomain}
+              pinnedDomains={pinnedDomains}
+              onTogglePin={handleTogglePin}
+            />
+          </div>
 
-      <div
-        onPointerDown={onDomainPointerDown}
-        onPointerMove={onDomainPointerMove}
-        onPointerUp={onDomainPointerUp}
-        className="group relative w-[1px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/50 active:bg-primary/70">
-        <div className="absolute inset-y-0 -left-2 -right-2" />
-        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-[3px] opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="block size-[3px] rounded-full bg-muted-foreground" />
-          <span className="block size-[3px] rounded-full bg-muted-foreground" />
-          <span className="block size-[3px] rounded-full bg-muted-foreground" />
-        </div>
-      </div>
+          <div
+            onPointerDown={onDomainPointerDown}
+            onPointerMove={onDomainPointerMove}
+            onPointerUp={onDomainPointerUp}
+            className="group relative w-[1px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/50 active:bg-primary/70">
+            <div className="absolute inset-y-0 -left-2 -right-2" />
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-[3px] opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="block size-[3px] rounded-full bg-muted-foreground" />
+              <span className="block size-[3px] rounded-full bg-muted-foreground" />
+              <span className="block size-[3px] rounded-full bg-muted-foreground" />
+            </div>
+          </div>
+        </>
+      )}
 
-      <div ref={mainAreaRef} className="flex min-h-0 flex-col flex-1 overflow-hidden">
-        <div
-          ref={requestListRef}
-          className="min-h-0"
-          style={detailOpen ? { height: `${liveSplitRatio.current * 100}%` } : { flex: 1 }}>
-          <RequestList
-            entries={sorted}
-            selectedId={selectedId}
-            onSelectEntry={handleSelectEntry}
-            sortColumn={sortColumn}
-            sortOrder={sortOrder}
-            onSortChange={handleSortChange}
-            onResendRequest={handleResendRequest}
-            onEditRequest={handleEditRequest}
-          />
-        </div>
-
-        {detailOpen && (
+      <div ref={mainAreaRef} className={`flex min-h-0 flex-1 overflow-hidden ${detailPosition === 'right' ? 'flex-row' : 'flex-col'}`}>
+        {detailPosition === 'bottom' ? (
           <>
+            <div
+              ref={requestListRef}
+              className="min-h-0"
+              style={{ height: `${liveSplitRatio.current * 100}%` }}>
+              <RequestList
+                entries={sorted}
+                selectedId={selectedId}
+                onSelectEntry={handleSelectEntry}
+                sortColumn={sortColumn}
+                sortOrder={sortOrder}
+                onSortChange={handleSortChange}
+                onResendRequest={handleResendRequest}
+                onEditRequest={handleEditRequest}
+              />
+            </div>
             <div
               onPointerDown={onSplitPointerDown}
               onPointerMove={onSplitPointerMove}
@@ -322,15 +348,67 @@ return (
               </div>
             </div>
             <DetailPanel entry={selected} onClose={handleCloseDetail} />
-            <EditRequestDialog
-              open={editEntry !== null}
-              onOpenChange={(open) => { if (!open) setEditEntry(null) }}
-              entry={editEntry}
-              onResend={handleResendEdited}
-            />
           </>
+        ) : detailPosition === 'right' ? (
+          <>
+            <div
+              ref={requestListRef}
+              className="min-h-0 min-w-0"
+              style={{ width: `${(1 - liveRightRatio.current) * 100}%` }}>
+              <RequestList
+                entries={sorted}
+                selectedId={selectedId}
+                onSelectEntry={handleSelectEntry}
+                sortColumn={sortColumn}
+                sortOrder={sortOrder}
+                onSortChange={handleSortChange}
+                onResendRequest={handleResendRequest}
+                onEditRequest={handleEditRequest}
+              />
+            </div>
+            <div
+              onPointerDown={onRightPointerDown}
+              onPointerMove={onRightPointerMove}
+              onPointerUp={onRightPointerUp}
+              className="group relative w-[1px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/50 active:bg-primary/70">
+              <div className="absolute inset-y-0 -left-2 -right-2" />
+              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-[3px] opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="block size-[3px] rounded-full bg-muted-foreground" />
+                <span className="block size-[3px] rounded-full bg-muted-foreground" />
+                <span className="block size-[3px] rounded-full bg-muted-foreground" />
+              </div>
+            </div>
+            <div
+              ref={rightRef}
+              className="min-h-0 min-w-0 shrink-0"
+              style={{ width: `${liveRightRatio.current * 100}%` }}>
+              <DetailPanel entry={selected} onClose={handleCloseDetail} />
+            </div>
+          </>
+        ) : (
+          <div
+            ref={requestListRef}
+            className="min-h-0 min-w-0 flex-1">
+            <RequestList
+              entries={sorted}
+              selectedId={selectedId}
+              onSelectEntry={handleSelectEntry}
+              sortColumn={sortColumn}
+              sortOrder={sortOrder}
+              onSortChange={handleSortChange}
+              onResendRequest={handleResendRequest}
+              onEditRequest={handleEditRequest}
+            />
+          </div>
         )}
       </div>
+
+      <EditRequestDialog
+        open={editEntry !== null}
+        onOpenChange={(open) => { if (!open) setEditEntry(null) }}
+        entry={editEntry}
+        onSendSuccess={handleSendSuccess}
+      />
     </div>
   )
 }

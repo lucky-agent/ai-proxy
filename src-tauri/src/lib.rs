@@ -80,7 +80,7 @@ pub fn run() {
         Settings::load_from_path(&store.data_dir()).expect("Failed to load configuration");
     let ui = settings.ui.clone();
     let db = if settings.persistence.unwrap_or(false) {
-        crate::config::db::Db::open(&store.db_path()).expect("Failed to open database")
+        crate::config::db::Db::open(&store.db_path(), settings.retention_days).expect("Failed to open database")
     } else {
         crate::config::db::Db::noop()
     };

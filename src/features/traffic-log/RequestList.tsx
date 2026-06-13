@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { VList } from 'virtua'
 import { useTranslation } from 'react-i18next'
 import { ArrowDownIcon, ArrowUpIcon, CopyIcon, RefreshCwIcon, PencilIcon } from 'lucide-react'
+import { GripDots, LockClosed, LockOpen } from '@/components/icons'
 import type { TrafficEntry } from '@/types/proxy'
 import { statusCategory, formatDuration, formatTime, formatCurl } from '@/lib/format'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
@@ -91,24 +92,20 @@ const Grip = ({
     onPointerDown={onPointerDown}
     onPointerMove={onPointerMove}
     onPointerUp={onPointerUp}>
-    <svg
-      viewBox="0 0 4 12"
-      width={4}
-      height={12}
-      className="text-current pointer-events-none"
-      aria-hidden>
-      <circle cx="2" cy="2" r="1.15" fill="currentColor" />
-      <circle cx="2" cy="6" r="1.15" fill="currentColor" />
-      <circle cx="2" cy="10" r="1.15" fill="currentColor" />
-    </svg>
+    <GripDots className="text-current pointer-events-none" />
   </span>
 )
 
-function badgeStyle(varName: string) {
-  return {
-    color: `var(${varName})`,
-    background: `color-mix(in oklch, var(${varName}) 12%, transparent)`,
+function badgeStyle(varName: string, options?: { pill?: boolean }) {
+  const base = { color: `var(${varName})` }
+  if (options?.pill) {
+    return {
+      ...base,
+      background: `color-mix(in oklch, var(${varName}) 10%, transparent)`,
+      borderColor: `color-mix(in oklch, var(${varName}) 20%, transparent)`,
+    }
   }
+  return base
 }
 
 interface ContextMenuState {
@@ -293,7 +290,7 @@ export default function RequestList({
   return (
     <div
       ref={gridRef}
-      className={`h-full bg-background flex flex-col overflow-auto ${isDragging ? 'select-none' : ''}`}
+      className={`h-full bg-surface-deep flex flex-col overflow-auto ${isDragging ? 'select-none' : ''}`}
       style={
         {
           cursor: isDragging ? 'col-resize' : '',
@@ -301,7 +298,7 @@ export default function RequestList({
         } as React.CSSProperties
       }>
       <div
-        className="group/grid grid shrink-0 z-10 bg-muted/30 text-[11px] font-bold text-muted-foreground uppercase tracking-wide border-b border-border overflow-hidden h-7"
+        className="group/grid grid shrink-0 z-10 bg-surface-base/50 text-[11px] font-bold text-muted-foreground uppercase tracking-wide border-b border-surface-elevated overflow-hidden h-7"
         style={rowStyle}>
         {renderHeaderCell('id', 'requestList.id', 'font-normal normal-case')}
         {renderHeaderCell('url', 'requestList.url')}
@@ -324,8 +321,8 @@ export default function RequestList({
             <div
               key={entry.id || i}
               className={cn(
-                'grid text-xs border-b border-border/50 cursor-pointer transition-colors',
-                entry.id === selectedId && 'bg-accent'
+                'grid text-xs border-b border-surface-elevated/50 cursor-pointer transition-colors hover:bg-surface-elevated/50',
+                entry.id === selectedId && 'bg-primary/10 border-l-2 border-primary'
               )}
               style={rowStyle}
               onClick={() => onSelectEntry(entry.id)}
@@ -334,14 +331,14 @@ export default function RequestList({
                 {entry.requestNumber}
               </div>
               <div
-                className="px-1 py-2 text-foreground/80 min-w-0 overflow-hidden"
+                className="px-1 py-2 text-foreground/80 font-mono min-w-0 overflow-hidden"
                 title={entry.uri}>
                 <span className="block truncate">{entry.uri}</span>
               </div>
               <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
                 <span
                   className="badge-method"
-                  style={badgeStyle(`--badge-${entry.method.toLowerCase()}`)}>
+                  style={badgeStyle(`--badge-${entry.method.toLowerCase()}`, { pill: true })}>
                   {entry.method}
                 </span>
               </div>
@@ -361,30 +358,9 @@ export default function RequestList({
               </div>
               <div className="px-1 py-2 min-w-0 overflow-hidden flex items-center justify-center">
                 {entry.decrypted === false ? (
-                  <svg
-                    className="size-3.5 text-muted-foreground/70 shrink-0"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    <circle cx="12" cy="16" r="1" />
-                  </svg>
+                  <LockClosed className="size-3.5 text-muted-foreground/70 shrink-0" />
                 ) : entry.decrypted === true ? (
-                  <svg
-                    className="size-3.5 text-muted-foreground/70 shrink-0"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                  </svg>
+                  <LockOpen className="size-3.5 text-muted-foreground/70 shrink-0" />
                 ) : null}
               </div>
               <div className="px-1 py-2 min-w-0 overflow-hidden text-left">

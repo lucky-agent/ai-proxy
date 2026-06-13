@@ -114,7 +114,7 @@ function UrlEncodedView({ parts }: { parts: FormField[] }) {
     <table className='w-full table-fixed text-xs'>
       <colgroup><col style={{ width: '30%' }} /><col style={{ width: '70%' }} /></colgroup>
       <thead>
-        <tr className='border-b border-border bg-muted/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>
+        <tr className='border-b border-surface-elevated bg-surface-elevated/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>
           <th className='py-1.5 pl-3 pr-2 text-left font-semibold'>Key</th>
           <th className='py-1.5 pr-3 text-left font-semibold'>Value</th>
         </tr>
@@ -124,7 +124,7 @@ function UrlEncodedView({ parts }: { parts: FormField[] }) {
           <tr><td colSpan={2} className='py-4 text-center text-muted-foreground'>{t('detail.noFormData')}</td></tr>
         ) : (
           parts.map((part) => (
-            <tr key={part.name} className='border-b border-border/30 hover:bg-muted/20 transition-colors'>
+            <tr key={part.name} className='border-b border-surface-elevated/30 hover:bg-surface-elevated/20 transition-colors'>
               <td className='py-1.5 pl-3 pr-2 align-top font-medium text-foreground/90 whitespace-nowrap overflow-hidden text-ellipsis'>{part.name}</td>
               <td className='py-1.5 pr-3 align-top text-foreground/70 break-all'>{part.value}</td>
             </tr>
@@ -153,8 +153,8 @@ function MultipartPartCard({ part }: { part: FormField }) {
   const headerCount = Object.keys(part.headers).length
   const fileInfo = part.filename ? part.filename + (part.contentType ? ' (' + part.contentType + ')' : '') : null
   return (
-    <div className='rounded border border-border overflow-hidden'>
-      <div className='flex items-center gap-2 px-2.5 py-1.5 bg-muted/20 border-b border-border cursor-pointer hover:bg-muted/30 transition-colors select-none' onClick={() => setExpanded(e => !e)}>
+    <div className='rounded border border-surface-elevated overflow-hidden'>
+      <div className='flex items-center gap-2 px-2.5 py-1.5 bg-surface-elevated/20 border-b border-surface-elevated hover:bg-surface-elevated/30 transition-colors select-none' onClick={() => setExpanded(e => !e)}>
         {expanded ? <ChevronDown className='size-3 shrink-0 text-muted-foreground/60' /> : <ChevronRight className='size-3 shrink-0 text-muted-foreground/60' />}
         <span className='text-xs font-medium text-foreground/90 truncate min-w-0'>{part.name}</span>
         {fileInfo ? <span className='text-[10px] text-muted-foreground/70 truncate min-w-0 shrink-0'>{fileInfo}</span> : <span className='text-[10px] text-muted-foreground/50 shrink-0'>{part.value.length}B</span>}
@@ -162,7 +162,7 @@ function MultipartPartCard({ part }: { part: FormField }) {
       {expanded && (
         <div className='text-xs'>
           {headerCount > 0 && (
-            <div className='border-b border-border/30 bg-muted/10 px-2.5 py-1'>
+            <div className='border-b border-surface-elevated/30 bg-surface-elevated/10 px-2.5 py-1'>
               {Object.entries(part.headers).map(([key, value]) => (
                 <div key={key} className='flex gap-2 text-[10px] text-muted-foreground'>
                   <span className='font-medium shrink-0'>{key}:</span><span className='break-all'>{value}</span>
@@ -172,7 +172,7 @@ function MultipartPartCard({ part }: { part: FormField }) {
           )}
           <div className='relative group/mini'>
             <div className='absolute top-1 right-1 z-10 opacity-0 group-hover/mini:opacity-100 transition-all'>
-              <button onClick={() => copy(part.value)} className='rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors' title={copied ? 'Copied' : 'Copy'}>{copied ? <CheckIcon className='size-3 text-primary' /> : <CopyIcon className='size-3' />}</button>
+              <button onClick={() => copy(part.value)} className='rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors' title={copied ? 'Copied' : 'Copy'}>{copied ? <CheckIcon className='size-3 text-primary' /> : <CopyIcon className='size-3' />}</button>
             </div>
             {highlightedBody ? <div className='shiki-root whitespace-pre-wrap break-all overflow-x-auto px-2.5 py-1.5' dangerouslySetInnerHTML={{ __html: highlightedBody }} /> : <pre className='whitespace-pre-wrap break-all px-2.5 py-1.5 text-foreground/80 font-mono'>{part.value}</pre>}
           </div>

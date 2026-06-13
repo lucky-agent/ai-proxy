@@ -14,14 +14,6 @@ import {
   XIcon,
   CodeIcon,
 } from 'lucide-react'
-import {
-  LayoutSidebarOn,
-  LayoutSidebarOff,
-  LayoutBottomOn,
-  LayoutBottomOff,
-  LayoutRightOn,
-  LayoutRightOff,
-} from '@/components/icons'
 import appIcon from '@/assets/app-icon.png'
 import { useLocale } from '@/hooks/useLocale'
 import { cn } from '@/lib/utils'
@@ -34,17 +26,12 @@ type TitleBarProps = {
   onOpenSslConfig: () => void
   onOpenScriptConfig: () => void
   onOpenSendRequest: () => void
-  showDomainSidebar: boolean
-  onToggleDomainSidebar: () => void
-  showDetailBottom: boolean
-  onToggleDetailBottom: () => void
-  showDetailRight: boolean
-  onToggleDetailRight: () => void
   running: boolean
   onStartProxy: () => void
   onStopProxy: () => void
   onClearTraffic: () => void
   activeView: ViewId
+  mountedViews: Set<ViewId>
   onViewChange: (view: ViewId) => void
   onCloseTab: (view: ViewId) => void
 }
@@ -182,7 +169,7 @@ function WindowButton({
     </button>
   )
 }
-export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig, onOpenSendRequest, showDomainSidebar, onToggleDomainSidebar, showDetailBottom, onToggleDetailBottom, showDetailRight, onToggleDetailRight, running, onStartProxy, onStopProxy, onClearTraffic, activeView, onViewChange, onCloseTab }: TitleBarProps) {
+export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig, onOpenSendRequest, running, onStartProxy, onStopProxy, onClearTraffic, activeView, mountedViews, onViewChange, onCloseTab }: TitleBarProps) {
   const { t } = useLocale()
   const appWindow = getCurrentWindow()
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
@@ -310,78 +297,9 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
       </div>
 
       {/* View tabs */}
-      <TabBar activeView={activeView} onViewChange={onViewChange} onCloseTab={onCloseTab} />
+      <TabBar activeView={activeView} mountedViews={mountedViews} onViewChange={onViewChange} onCloseTab={onCloseTab} />
 
-      {/* Spacer: fills space behind centered group */}
-      <div className="min-w-0 flex-1" data-tauri-drag-region />
-
-      {/* Centered group: layout toggle buttons — absolute center regardless of left/right content */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5" data-tauri-drag-region={false}>
-        {/* Layout: host sidebar */}
-        <button
-          type="button"
-          data-tauri-drag-region={false}
-          onMouseDown={stopTitleBarDrag}
-          onPointerDown={stopTitleBarDrag}
-          onClick={onToggleDomainSidebar}
-          className={cn(
-            'inline-flex h-6 w-8 items-center justify-center rounded transition-colors text-foreground',
-            showDomainSidebar
-              ? 'bg-primary/15'
-              : 'hover:bg-surface-elevated/50'
-          )}
-          title={t('layout.hostSidebar')}>
-          {showDomainSidebar ? (
-            <LayoutSidebarOn className="size-[18px]" />
-          ) : (
-            <LayoutSidebarOff className="size-[18px]" />
-          )}
-        </button>
-
-        {/* Layout: detail bottom */}
-        <button
-          type="button"
-          data-tauri-drag-region={false}
-          onMouseDown={stopTitleBarDrag}
-          onPointerDown={stopTitleBarDrag}
-          onClick={onToggleDetailBottom}
-          className={cn(
-            'inline-flex h-6 w-8 items-center justify-center rounded transition-colors text-foreground',
-            showDetailBottom
-              ? 'bg-primary/15'
-              : 'hover:bg-surface-elevated/50'
-          )}
-          title={t('layout.detailBottom')}>
-          {showDetailBottom ? (
-            <LayoutBottomOn className="size-[18px]" />
-          ) : (
-            <LayoutBottomOff className="size-[18px]" />
-          )}
-        </button>
-
-        {/* Layout: detail right */}
-        <button
-          type="button"
-          data-tauri-drag-region={false}
-          onMouseDown={stopTitleBarDrag}
-          onPointerDown={stopTitleBarDrag}
-          onClick={onToggleDetailRight}
-          className={cn(
-            'inline-flex h-6 w-8 items-center justify-center rounded transition-colors text-foreground',
-            showDetailRight
-              ? 'bg-primary/15'
-              : 'hover:bg-surface-elevated/50'
-          )}
-          title={t('layout.detailRight')}>
-          {showDetailRight ? (
-            <LayoutRightOn className="size-[18px]" />
-          ) : (
-            <LayoutRightOff className="size-[18px]" />
-          )}
-        </button>
-      </div>
-
-      {/* Spacer: fills space behind centered group */}
+      {/* Spacer: pushes right-side buttons to the far right */}
       <div className="min-w-0 flex-1" data-tauri-drag-region />
 
       {/* Far-right group: Delete, Edit, Start/Stop — order from left to right */}

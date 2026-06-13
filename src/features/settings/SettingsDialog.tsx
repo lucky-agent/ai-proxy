@@ -99,7 +99,7 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
               <span className="text-xs font-medium text-muted-foreground">
                 {t('settings.theme')}
               </span>
-              <div className="flex w-fit items-center gap-0.5 rounded-md border border-border bg-muted/50 p-0.5">
+              <div className="flex w-fit items-center gap-0.5 rounded-md border border-border bg-surface-elevated/50 p-0.5">
                 {(
                   [
                     { value: 'light' as Theme, icon: SunIcon },

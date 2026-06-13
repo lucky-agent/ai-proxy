@@ -51,7 +51,7 @@ export default function StreamingViewer({ entry }: Props) {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 
       {/* Sub-tab bar */}
-      <div className="flex shrink-0 items-center gap-0 border-b border-border bg-muted/20">
+      <div className="flex shrink-0 items-center gap-0 border-b border-surface-elevated bg-surface-elevated/20">
         <TabButton
           active={view === 'chunks'}
           label={t('detail.streamChunks')}
@@ -83,7 +83,7 @@ export default function StreamingViewer({ entry }: Props) {
             <select
               value={mergeFormat}
               onChange={(e) => setMergeFormat(e.target.value as MergeFormat)}
-              className="rounded border border-border/50 bg-transparent px-1.5 py-0.5 text-[10px] text-foreground outline-none focus:border-primary"
+              className="rounded border-b border-surface-elevated/50 bg-transparent px-1.5 py-0.5 text-[10px] text-foreground outline-none focus:border-primary"
             >
               {MERGE_FORMATS.map((fmt) => (
                 <option key={fmt.value} value={fmt.value}>
@@ -177,7 +177,7 @@ function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: T
       <div className="relative min-h-0 flex-1 group">
         <button
           onClick={() => copy(result.formatted)}
-          className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-muted/50 transition-all group-hover:opacity-100"
+          className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-surface-elevated/50 transition-all group-hover:opacity-100"
           title={copied ? t('detail.copied') : t('detail.copyUri')}>
           {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
         </button>
@@ -222,7 +222,7 @@ function ChunkItem({
 
   return (
     <div
-      className={`border-b border-border/30 transition-colors hover:bg-muted/10 ${
+      className={`border-b border-surface-elevated/30 transition-colors hover:bg-surface-elevated/10 ${
         isDone ? 'opacity-60' : ''
       }`}>
       {/* Summary line */}
@@ -267,10 +267,10 @@ function ChunkContent({ data }: { data: string }) {
     <div className="group relative">
       <button
         onClick={() => copy(data)}
-        className="absolute right-1 top-1 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-muted/50 transition-all group-hover:opacity-100">
+        className="absolute right-1 top-1 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-surface-elevated/50 transition-all group-hover:opacity-100">
         {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
       </button>
-      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted/20 px-3 py-2 font-mono text-[11px] leading-5 text-foreground/80">
+      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-surface-elevated/20 px-3 py-2 font-mono text-[11px] leading-5 text-foreground/80">
         {data}
       </pre>
     </div>
@@ -298,7 +298,7 @@ function SseEventItem({ index, event }: { index: number; event: SseEvent }) {
 
   return (
     <div
-      className={`border-b border-border/30 transition-colors hover:bg-muted/5 ${
+      className={`border-b border-surface-elevated/30 transition-colors hover:bg-surface-elevated/5 ${
         isDone ? 'opacity-50' : ''
       }`}>
       {/* Summary line */}
@@ -334,14 +334,14 @@ function SseEventItem({ index, event }: { index: number; event: SseEvent }) {
         <div className="group relative px-3 pb-2 pl-9">
           <button
             onClick={() => copy(event.data)}
-            className="absolute right-1 top-1 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-muted/50 transition-all group-hover:opacity-100">
+            className="absolute right-1 top-1 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-surface-elevated/50 transition-all group-hover:opacity-100">
             {copied ? (
               <CheckIcon className="size-3 text-primary" />
             ) : (
               <CopyIcon className="size-3" />
             )}
           </button>
-          <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted/20 px-3 py-1 font-mono text-[11px] leading-5 text-foreground/80">
+          <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-surface-elevated/20 px-3 py-1 font-mono text-[11px] leading-5 text-foreground/80">
             {formattedData}
           </pre>
         </div>

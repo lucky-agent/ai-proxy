@@ -188,6 +188,13 @@ pub struct Settings {
     pub ui: UiConfig,
     #[serde(default)]
     pub persistence: Option<bool>,
+    /// 数据保留天数（0 = 永久保留），默认 30 天
+    #[serde(default = "default_retention_days")]
+    pub retention_days: u32,
+}
+
+fn default_retention_days() -> u32 {
+    30
 }
 
 impl Default for Settings {
@@ -199,6 +206,7 @@ impl Default for Settings {
             log: LogConfig::default(),
             ui: UiConfig::default(),
             persistence: Some(false),
+            retention_days: default_retention_days(),
         }
     }
 }

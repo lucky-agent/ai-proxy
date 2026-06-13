@@ -60,9 +60,17 @@ export default function DetailPanel({ entry, onClose }: Props) {
   const [requestRatio, setRequestRatio] = useState(0.5)
     const [dragging, setDragging] = useState(false)
 
-  // 响应 Tab 栏：有条件地添加 Stream 标签（流式响应时显示）
-  const responseTabs = useMemo(() => {
-    const hasStream = entry && ((entry.responseChunks?.length ?? 0) > 1 || isStreamingContentType(entry.responseHeaders))
+  const hasQuery = entry ? !!entry.requestQuery && Object.keys(entry.requestQuery).length > 0 : false
+  const reqTabs = requestTabs(hasQuery)
+  const respTabs = useMemo(() => {
+    if (!entry) {
+      return [
+        { id: 'header' as PanelTab, labelKey: 'detail.headers' },
+        { id: 'body' as PanelTab, labelKey: 'detail.body' },
+        { id: 'raw' as PanelTab, labelKey: 'detail.raw' },
+      ]
+    }
+    const hasStream = (entry.responseChunks?.length ?? 0) > 1 || isStreamingContentType(entry.responseHeaders)
     if (hasStream) {
       return [
         { id: 'header' as PanelTab, labelKey: 'detail.headers' },
@@ -136,19 +144,9 @@ export default function DetailPanel({ entry, onClose }: Props) {
     applyRatio(liveRequestRatio.current < 0.1 ? 0.5 : 0.0)
   }, [applyRatio])
 
-  if (!entry) {
-    return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-          {t('detail.selectHint')}
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      <SummaryBar entry={entry} onClose={onClose} />
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-base">
+      {entry && <SummaryBar entry={entry} onClose={onClose} />}
 
       <div
         ref={containerRef}
@@ -162,7 +160,7 @@ export default function DetailPanel({ entry, onClose }: Props) {
             title={t('detail.request')}
             tab={requestTab}
             onTabChange={setRequestTab}
-            tabs={requestTabs(!!entry.requestQuery && Object.keys(entry.requestQuery).length > 0)}
+            tabs={reqTabs}
             onTitleClick={handleRequestTitleClick}>
             <PanelContent tab={requestTab} side="request" entry={entry} />
           </SidePanel>
@@ -173,7 +171,7 @@ export default function DetailPanel({ entry, onClose }: Props) {
           onPointerDown={onDragPointerDown}
           onPointerMove={onDragPointerMove}
           onPointerUp={onDragPointerUp}
-          className="group relative w-[1px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/50 active:bg-primary/70">
+          className="group relative w-[1px] shrink-0 cursor-col-resize bg-surface-elevated transition-colors hover:bg-primary/50 active:bg-primary/70">
           <div className="absolute inset-y-0 -left-2 -right-2" />
           <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-[3px] opacity-0 group-hover:opacity-100 transition-opacity">
             <span className="block size-[3px] rounded-full bg-muted-foreground" />
@@ -190,7 +188,7 @@ export default function DetailPanel({ entry, onClose }: Props) {
             title={t('detail.response')}
             tab={responseTab}
             onTabChange={setResponseTab}
-            tabs={responseTabs}
+            tabs={respTabs}
             onTitleClick={handleResponseTitleClick}>
             <PanelContent tab={responseTab} side="response" entry={entry} onCloseStream={() => setResponseTab("header")} />
           </SidePanel>
@@ -208,12 +206,13 @@ function SummaryBar({ entry, onClose }: { entry: TrafficEntry; onClose?: () => v
   const { copied, copy } = useCopyToClipboard()
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5 text-xs">
+    <div className="flex shrink-0 items-center gap-2 border-b border-surface-elevated px-3 py-1.5 text-xs">
       <span
         className="badge-method shrink-0"
         style={{
           color: `var(--badge-${entry.method.toLowerCase()})`,
-          background: `color-mix(in oklch, var(--badge-${entry.method.toLowerCase()}) 12%, transparent)`,
+          background: `color-mix(in oklch, var(--badge-${entry.method.toLowerCase()}) 10%, transparent)`,
+          borderColor: `color-mix(in oklch, var(--badge-${entry.method.toLowerCase()}) 20%, transparent)`,
         }}>
         {entry.method}
       </span>
@@ -221,7 +220,6 @@ function SummaryBar({ entry, onClose }: { entry: TrafficEntry; onClose?: () => v
         className="badge-status shrink-0" data-dot={entry.status != null}
         style={{
           color: `var(--badge-${statusCategory(entry.status ?? 0)})`,
-          background: `color-mix(in oklch, var(--badge-${statusCategory(entry.status ?? 0)}) 12%, transparent)`,
         }}>
         {entry.status ?? t('detail.pending')}
       </span>
@@ -231,14 +229,14 @@ function SummaryBar({ entry, onClose }: { entry: TrafficEntry; onClose?: () => v
       {onClose && (
         <button
           onClick={onClose}
-          className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors"
           title="关闭详情">
           <XIcon className="size-3" />
         </button>
       )}
       <button
         onClick={() => copy(entry.uri)}
-        className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors"
         title={copied ? t('detail.copied') : t('detail.copyUri')}>
         {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
       </button>
@@ -262,10 +260,18 @@ function PanelContent({
 }: {
   tab: PanelTab
   side: 'request' | 'response'
-  entry: TrafficEntry
+  entry: TrafficEntry | undefined
   onCloseStream?: () => void
 }) {
   const { t } = useTranslation()
+
+  // 空状态：未选中任何条目时，各 tab 均显示空白
+  if (!entry) {
+    if (tab === 'header' || tab === 'query') {
+      return <KeyValueTable data={{}} emptyLabel="" />
+    }
+    return <EmptyContent label="" />
+  }
 
   if (tab === 'header') {
     if (side === 'request') {
@@ -347,10 +353,10 @@ function SidePanel({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-0 border-b border-border">
+      <div className="flex shrink-0 items-center gap-0 border-b border-surface-elevated">
         <span
           onClick={onTitleClick}
-          className={`px-3 py-1.5 text-xs font-medium text-foreground ${onTitleClick ? 'cursor-pointer hover:bg-muted/50 rounded transition-colors' : ''}`}
+          className={`px-3 py-1.5 text-xs font-medium text-foreground ${onTitleClick ? 'cursor-pointer hover:bg-surface-elevated/50 rounded transition-colors' : ''}`}
           title={onTitleClick ? 'Click to toggle full width' : undefined}>
           {title}
         </span>
@@ -442,7 +448,7 @@ function KeyValueTable({ data, emptyLabel }: { data: Record<string, string>; emp
           <col style={{ width: valPct }} />
         </colgroup>
         <thead>
-          <tr className="border-b border-border bg-muted/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <tr className="border-b border-surface-elevated bg-surface-elevated/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             <th className="py-1.5 pl-3 pr-2 text-left font-semibold overflow-hidden">Key</th>
             <th className="py-1.5 pr-3 text-left font-semibold">Value</th>
           </tr>
@@ -469,7 +475,7 @@ function KeyValueTable({ data, emptyLabel }: { data: Record<string, string>; emp
         className="group/handle absolute top-0 bottom-0 z-10 cursor-col-resize"
         style={{ left: keyPct, width: 5, transform: 'translateX(-2.5px)' }}
       >
-        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-border group-hover/handle:bg-primary/50 transition-colors" />
+        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-surface-elevated group-hover/handle:bg-primary/50 transition-colors" />
       </div>
     </div>
   )
@@ -496,11 +502,11 @@ function KeyValueRow({ entryKey, value }: { entryKey: string; value: string }) {
   }, [entryKey, value, copyValue, copyRow])
 
   return (
-    <tr className="border-b border-border/30 group hover:bg-muted/20 transition-colors">
-      <td className="py-1.5 pl-3 pr-2 align-top font-medium text-foreground/90 whitespace-nowrap overflow-hidden">
+    <tr className="border-b border-surface-elevated/30 group hover:bg-surface-elevated/20 transition-colors">
+      <td className="py-1.5 pl-3 pr-2 align-top font-mono text-xs text-muted-foreground whitespace-nowrap overflow-hidden">
         {entryKey}
       </td>
-      <td className="py-1.5 pr-2 align-top text-foreground/70 break-all relative">
+      <td className="py-1.5 pr-2 align-top text-foreground/80 text-sm break-all relative">
         <span
           onClick={handleClick}
           className="cursor-pointer"
@@ -515,7 +521,7 @@ function KeyValueRow({ entryKey, value }: { entryKey: string; value: string }) {
         </span>
         <button
           onClick={handleClick}
-          className="absolute right-0 top-0 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-all opacity-0 group-hover:opacity-100"
+          className="absolute right-0 top-0 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all opacity-0 group-hover:opacity-100"
           title={
             valueCopied
               ? 'Copied value'
@@ -559,15 +565,17 @@ function RawView({ content }: { content: string }) {
         <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 opacity-0 group-hover/mini:opacity-100 transition-all">
           <button
             onClick={() => copy(content)}
-            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30 transition-colors"
             title={copied ? 'Copied' : 'Copy'}>
             {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
           </button>
         </div>
         <div className="absolute inset-0 overflow-auto">
-          <pre className="whitespace-pre-wrap break-all px-3 py-2 text-xs text-foreground/80 font-mono">
-            {content}
-          </pre>
+          {content ? (
+            <pre className="whitespace-pre-wrap break-all px-3 py-2 text-xs text-foreground/80 font-mono">
+              {content}
+            </pre>
+          ) : null}
         </div>
       </div>
     </div>
@@ -664,7 +672,7 @@ function TreeNode({
     const hasLabel = label !== undefined
     return (
       <div
-        className="py-px hover:bg-muted/20 transition-colors"
+        className="py-px hover:bg-surface-elevated/20 transition-colors"
         style={{ paddingLeft: indent + 12 }}>
         {hasLabel && (
           <span className="text-foreground/80">
@@ -690,7 +698,7 @@ function TreeNode({
       {/* 折叠状态显示在一行 */}
       <button
         onClick={() => setExpanded(e => !e)}
-        className="flex items-center gap-0 w-full text-left py-px hover:bg-muted/20 transition-colors"
+        className="flex items-center gap-0 w-full text-left py-px hover:bg-surface-elevated/20 transition-colors"
         style={{ paddingLeft: Math.max(indent, 0) }}>
         {expanded ? (
           <ChevronDown className="size-3 shrink-0 text-muted-foreground/60" />
@@ -887,7 +895,7 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
           <select
             value={format}
             onChange={(e) => setFormat(e.target.value as typeof format)}
-            className="appearance-none rounded bg-muted/30 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer outline-none border border-border/30"
+            className="appearance-none rounded bg-surface-elevated/30 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors cursor-pointer outline-none border border-surface-elevated/30"
             title="Format">
             <option value="auto">Auto</option>
             <option value="json">JSON</option>
@@ -899,8 +907,8 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
             onClick={() => setWrapped(w => !w)}
             className={`rounded p-1 transition-colors ${
               wrapped
-                ? 'text-foreground bg-muted/50'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+                ? 'text-foreground bg-surface-elevated/50'
+                : 'text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30'
             }`}
             title={wrapped ? 'Disable wrap' : 'Enable wrap'}>
             {wrapped ? <ArrowLeftToLine className="size-3" /> : <TextWrap className="size-3" />}
@@ -908,7 +916,7 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
           {useTreeView && (
             <button
               onClick={allExpanded ? () => setAllExpanded(false) : () => setAllExpanded(true)}
-              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30 transition-colors"
               title={allExpanded ? 'Collapse all' : 'Expand all'}>
               {allExpanded ? (
                 <ChevronDown className="size-3" />
@@ -919,7 +927,7 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
           )}
           <button
             onClick={() => copy(displayBody)}
-            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30 transition-colors"
             title={copied ? 'Copied' : 'Copy body'}>
             {copied ? (
               <CheckIcon className="size-3 text-primary" />

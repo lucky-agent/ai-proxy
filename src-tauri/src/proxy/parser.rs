@@ -7,6 +7,7 @@ use tauri::ipc::Channel;
 use uuid::Uuid;
 
 use super::events::ProxyEvent;
+use crate::config::db::{spawn_insert_chunk, spawn_update_response_body};
 
 /// 简易 URL 百分号解码
 fn url_decode(input: &str) -> String {
@@ -101,7 +102,7 @@ pub(crate) fn direct_response(
         .header("Content-Type", "application/json")
         .body(Body::from(r#"{"code":0,"msg":"success"}"#))
         .expect("valid status code and body for direct response");
-    log_response(resp, method, uri, request_id, 0, event_channel)
+    log_response(resp, method, uri, request_id, 0, event_channel, None)
 }
 
 /// Log response and emit via channel.
@@ -112,6 +113,7 @@ pub(crate) fn log_response(
     request_id: &str,
     duration_ms: u64,
     event_channel: &Option<Channel<ProxyEvent>>,
+    db_path: Option<String>,
 ) -> Response {
     let status = resp.status();
     info!("Response [{} {}] {}", method, uri, status);
@@ -142,9 +144,27 @@ pub(crate) fn log_response(
         uri,
         request_id.into(),
         event_channel.clone(),
+        db_path,
     );
 
     Response::from_parts(parts, logged_body)
+}
+
+/// Accumulates response body chunks and writes the full body to DB on drop.
+struct ChunkAccumulator {
+    db_path: Option<String>,
+    request_id: String,
+    body: String,
+}
+
+impl Drop for ChunkAccumulator {
+    fn drop(&mut self) {
+        if let Some(ref path) = self.db_path {
+            if !self.body.is_empty() {
+                spawn_update_response_body(path, &self.request_id, &self.body);
+            }
+        }
+    }
 }
 
 fn log_body_chunks(
@@ -154,17 +174,30 @@ fn log_body_chunks(
     uri: Uri,
     request_id: String,
     event_channel: Option<Channel<ProxyEvent>>,
+    db_path: Option<String>,
 ) -> Body {
+    let mut acc = ChunkAccumulator {
+        db_path: db_path.clone(),
+        request_id: request_id.clone(),
+        body: String::new(),
+    };
+    let mut seq: i64 = 0;
+
     Body::from_stream(body.into_data_stream().map(move |result| {
         if let Ok(ref bytes) = result {
-            let chunk_str = String::from_utf8_lossy(bytes);
+            let chunk_str = String::from_utf8_lossy(bytes).into_owned();
             info!("{label} chunk [{} {}]: {chunk_str}", method, uri);
             if let Some(ref ch) = event_channel {
                 let event = ProxyEvent::ResponseChunk {
                     id: request_id.clone(),
-                    chunk: chunk_str.into_owned(),
+                    chunk: chunk_str.clone(),
                 };
                 ch.send(event).ok();
+            }
+            seq += 1;
+            acc.body.push_str(&chunk_str);
+            if let Some(ref path) = db_path {
+                spawn_insert_chunk(path, &request_id, &chunk_str, seq, chrono::Utc::now().timestamp_millis());
             }
         }
         result

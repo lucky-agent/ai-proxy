@@ -9,6 +9,7 @@ import { SslConfigDialog } from '@/features/ssl-config'
 import { ScriptConfigDialog } from '@/features/script-config'
 import { TitleBar } from '@/features/title-bar'
 import { ToolBar } from '@/features/tool-bar'
+import { BottomBar, type DetailPosition } from '@/features/bottom-bar'
 import { AiView } from '@/features/ai-view'
 import { NewRequestView } from '@/features/new-request'
 import type { ViewId } from '@/types/view'
@@ -66,7 +67,7 @@ function TypeFilterBar({
               )}>
               {t(TYPE_FILTER_LABELS[f])}
               {active === f && (
-                <span className="absolute bottom-0 left-1 right-1 h-0.5 bg-primary rounded-full" />
+                <span className="absolute bottom-0 left-1 right-1 h-0.5 bg-foreground/70 rounded-full" />
               )}
               {count > 0 && (
                 <span className={cn(
@@ -106,10 +107,30 @@ function App() {
   const [scriptConfigOpen, setScriptConfigOpen] = useState(false)
   const [sendRequestOpen, setSendRequestOpen] = useState(false)
   const [showDomainSidebar, setShowDomainSidebar] = useState(true)
-  const [showDetailBottom, setShowDetailBottom] = useState(true)
-  const [showDetailRight, setShowDetailRight] = useState(false)
+  const [detailPosition, setDetailPosition] = useState<DetailPosition>('bottom')
+  const [scriptEnabled, setScriptEnabled] = useState(false)
+  const [sslEnabled, setSslEnabled] = useState(false)
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [activeView, setActiveView] = useState<ViewId>('proxy')
+  // mountedViews: which views have their component currently mounted.
+  // Closing a tab = unmount (remove from set) + switch to proxy.
+  // Clicking a tab = mount (add to set) + switch to it.
+  const [mountedViews, setMountedViews] = useState<Set<ViewId>>(new Set(['proxy']))
+
+  const handleCloseTab = useCallback((view: ViewId) => {
+    if (view === 'proxy') return
+    setMountedViews(prev => {
+      const next = new Set(prev)
+      next.delete(view)
+      return next
+    })
+    setActiveView('proxy')
+  }, [])
+
+  const handleViewChange = useCallback((view: ViewId) => {
+    setMountedViews(prev => new Set(prev).add(view))
+    setActiveView(view)
+  }, [])
 
   const handleNewRequestSuccess = useCallback((entryId: string) => {
     setActiveView('proxy')
@@ -130,6 +151,7 @@ function App() {
 
   useEffect(() => {
     checkStatus()
+    loadScriptAndSslState()
   }, [])
 
   useEffect(() => {
@@ -163,6 +185,30 @@ function App() {
     } catch (_) {}
   }
 
+  async function loadScriptAndSslState() {
+    try {
+      const settings = await invoke<{ ssl: { enabled: boolean }; script: { enabled: boolean } }>('get_settings')
+      setSslEnabled(settings.ssl.enabled)
+      setScriptEnabled(settings.script.enabled)
+    } catch (_) {}
+  }
+
+  async function toggleScript() {
+    const next = !scriptEnabled
+    setScriptEnabled(next)
+    try {
+      await invoke('save_script_config', { script: { enabled: next, scripts: [] } })
+    } catch (_) {}
+  }
+
+  async function toggleSsl() {
+    const next = !sslEnabled
+    setSslEnabled(next)
+    try {
+      await invoke('save_ssl_config', { ssl: { enabled: next, whitelist: [] } })
+    } catch (_) {}
+  }
+
   async function startProxy() {
     setError('')
     try {
@@ -186,73 +232,68 @@ function App() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-surface-deep text-foreground">
-      <ToolBar activeView={activeView} onViewChange={setActiveView} />
-      <div className="flex h-full flex-col overflow-hidden flex-1">
-        <TitleBar
-          onOpenSettings={() => setSettingsOpen(true)}
-          onOpenAbout={() => setAboutOpen(true)}
-          onOpenSslConfig={() => setSslConfigOpen(true)}
-          onOpenScriptConfig={() => setScriptConfigOpen(true)}
-          onOpenSendRequest={() => setSendRequestOpen(true)}
-          showDomainSidebar={showDomainSidebar}
-          onToggleDomainSidebar={() => setShowDomainSidebar(v => !v)}
-          showDetailBottom={showDetailBottom}
-          onToggleDetailBottom={() => {
-            if (showDetailBottom) {
-              setShowDetailBottom(false)
-            } else {
-              setShowDetailBottom(true)
-              setShowDetailRight(false)
-            }
-          }}
-          showDetailRight={showDetailRight}
-          onToggleDetailRight={() => {
-            if (showDetailRight) {
-              setShowDetailRight(false)
-            } else {
-              setShowDetailRight(true)
-              setShowDetailBottom(false)
-            }
-          }}
-          running={running}
-          onStartProxy={startProxy}
-          onStopProxy={stopProxy}
-          onClearTraffic={clear}
-          activeView={activeView}
-          onViewChange={setActiveView}
-          onCloseTab={() => setActiveView('proxy')}
-        />
+    <div className="flex h-full flex-col overflow-hidden bg-surface-deep text-foreground">
+      <TitleBar
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenAbout={() => setAboutOpen(true)}
+        onOpenSslConfig={() => setSslConfigOpen(true)}
+        onOpenScriptConfig={() => setScriptConfigOpen(true)}
+        onOpenSendRequest={() => setSendRequestOpen(true)}
+        running={running}
+        onStartProxy={startProxy}
+        onStopProxy={stopProxy}
+        onClearTraffic={clear}
+        activeView={activeView}
+        mountedViews={mountedViews}
+        onViewChange={handleViewChange}
+        onCloseTab={handleCloseTab}
+      />
 
-        {activeView === 'proxy' && (
-          <>
-            <TypeFilterBar active={typeFilter} counts={typeCounts} onChange={setTypeFilter} running={running} status={status} />
-            {error && (
-              <div className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-5 py-2 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-            <TrafficLog entries={entries} showDomainSidebar={showDomainSidebar} showDetailBottom={showDetailBottom} showDetailRight={showDetailRight} onAutoOpenDetail={() => setShowDetailBottom(true)} typeFilter={typeFilter} />
-          </>
-        )}
-        {activeView === 'new-request' && <NewRequestView onSendSuccess={handleNewRequestSuccess} />}
-        {activeView === 'ai' && <AiView />}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <ToolBar activeView={activeView} mountedViews={mountedViews} onViewChange={handleViewChange} />
 
-        <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
-        <SslConfigDialog open={sslConfigOpen} onOpenChange={setSslConfigOpen} />
-        <ScriptConfigDialog open={scriptConfigOpen} onOpenChange={setScriptConfigOpen} />
-        <EditRequestDialog
-          open={sendRequestOpen}
-          onOpenChange={setSendRequestOpen}
-          entry={null}
-        />
-        <SettingsDialog
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          theme={theme}
-          onThemeChange={setTheme}
-        />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {mountedViews.has('proxy') && activeView === 'proxy' && (
+            <>
+              <TypeFilterBar active={typeFilter} counts={typeCounts} onChange={setTypeFilter} running={running} status={status} />
+              {error && (
+                <div className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-5 py-2 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+              <TrafficLog entries={entries} showDomainSidebar={showDomainSidebar} detailPosition={detailPosition} onAutoOpenDetail={() => setDetailPosition('bottom')} typeFilter={typeFilter} />
+            </>
+          )}
+          {mountedViews.has('new-request') && activeView === 'new-request' && <NewRequestView onSendSuccess={handleNewRequestSuccess} />}
+          {mountedViews.has('ai') && activeView === 'ai' && <AiView />}
+        </div>
       </div>
+
+      <BottomBar
+        showDomainSidebar={showDomainSidebar}
+        onToggleDomainSidebar={() => setShowDomainSidebar(v => !v)}
+        detailPosition={detailPosition}
+        onToggleDetailPosition={setDetailPosition}
+        scriptEnabled={scriptEnabled}
+        onToggleScript={toggleScript}
+        sslEnabled={sslEnabled}
+        onToggleSsl={toggleSsl}
+      />
+
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
+      <SslConfigDialog open={sslConfigOpen} onOpenChange={setSslConfigOpen} />
+      <ScriptConfigDialog open={scriptConfigOpen} onOpenChange={setScriptConfigOpen} />
+      <EditRequestDialog
+        open={sendRequestOpen}
+        onOpenChange={setSendRequestOpen}
+        entry={null}
+      />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        theme={theme}
+        onThemeChange={setTheme}
+      />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use rama::http::HeaderMap;
 use serde::Serialize;
@@ -29,20 +30,31 @@ pub(crate) struct StoredEntry {
     pub response_body: Option<String>,
     pub error: Option<String>,
     pub edited: Option<bool>,
+    #[serde(rename = "responseChunks", default)]
+    pub response_chunks: Vec<ChunkRecord>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct ChunkRecord {
+    pub data: String,
 }
 
 pub(crate) struct Db {
     conn: Option<sqlite::Connection>,
     db_path: Option<String>,
+    retention_days: u32,
+    cleanup_done: AtomicBool,
 }
 
 impl Db {
-    pub(crate) fn open(path: &Path) -> Result<Self, sqlite::Error> {
+    pub(crate) fn open(path: &Path, retention_days: u32) -> Result<Self, sqlite::Error> {
         let conn = sqlite::open(path)?;
         let db_path = Some(path.to_string_lossy().to_string());
         let db = Self {
             conn: Some(conn),
             db_path,
+            retention_days,
+            cleanup_done: AtomicBool::new(false),
         };
         db.migrate()?;
         Ok(db)
@@ -52,6 +64,18 @@ impl Db {
         Self {
             conn: None,
             db_path: None,
+            retention_days: 0,
+            cleanup_done: AtomicBool::new(false),
+        }
+    }
+
+    /// Create a temporary Db instance for use inside spawned threads.
+    fn ephemeral(conn: sqlite::Connection) -> Self {
+        Self {
+            conn: Some(conn),
+            db_path: None,
+            retention_days: 0,
+            cleanup_done: AtomicBool::new(false),
         }
     }
 
@@ -88,6 +112,7 @@ impl Db {
                 request_id TEXT NOT NULL,
                 chunk TEXT NOT NULL,
                 seq INTEGER NOT NULL,
+                created_at INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (request_id) REFERENCES requests(id)
             )",
         )?;
@@ -218,6 +243,30 @@ impl Db {
             Some(ref p) => p.clone(),
             None => return,
         };
+        // Trigger async cleanup once per session.
+        if self.retention_days > 0 && !self.cleanup_done.swap(true, Ordering::SeqCst) {
+            let cleanup_path = path.clone();
+            let retention = self.retention_days;
+            std::thread::spawn(move || {
+                if let Ok(conn) = sqlite::open(&cleanup_path) {
+                    let cutoff = chrono::Utc::now().timestamp_millis()
+                        - (retention as i64) * 86_400_000;
+                    // Delete chunks older than cutoff, then requests.
+                    if let Ok(mut stmt) = conn.prepare(
+                        "DELETE FROM response_chunks WHERE created_at < ?",
+                    ) {
+                        stmt.bind((1_usize, cutoff)).ok();
+                        stmt.next().ok();
+                    }
+                    if let Ok(mut stmt) = conn.prepare(
+                        "DELETE FROM requests WHERE request_timestamp < ?",
+                    ) {
+                        stmt.bind((1_usize, cutoff)).ok();
+                        stmt.next().ok();
+                    }
+                }
+            });
+        }
         let rid = id.to_string();
         let m = method.to_string();
         let u = uri.to_string();
@@ -228,10 +277,7 @@ impl Db {
         let ed = edited;
         std::thread::spawn(move || {
             if let Ok(conn) = sqlite::open(&path) {
-                let db = Self {
-                    conn: Some(conn),
-                    db_path: None,
-                };
+                let db = Self::ephemeral(conn);
                 if let Err(e) = db.upsert_request(&rid, &m, &u, ts, &h, &q, b.as_deref(), ed) {
                     log::warn!("upsert_request_async failed: {e}");
                 }
@@ -259,10 +305,7 @@ impl Db {
         let h = headers_json.to_string();
         std::thread::spawn(move || {
             if let Ok(conn) = sqlite::open(&path) {
-                let db = Self {
-                    conn: Some(conn),
-                    db_path: None,
-                };
+                let db = Self::ephemeral(conn);
                 if let Err(e) = db.update_response(&rid, st, ts, dur, &h) {
                     log::warn!("update_response_async failed: {e}");
                 }
@@ -280,15 +323,80 @@ impl Db {
         let err = error.to_string();
         std::thread::spawn(move || {
             if let Ok(conn) = sqlite::open(&path) {
-                let db = Self {
-                    conn: Some(conn),
-                    db_path: None,
-                };
+                let db = Self::ephemeral(conn);
                 if let Err(e) = db.set_error(&rid, &err) {
                     log::warn!("set_error_async failed: {e}");
                 }
             }
         });
+    }
+
+    /// Synchronous insert of a single response chunk.
+    pub(crate) fn insert_chunk(
+        &self,
+        request_id: &str,
+        chunk: &str,
+        seq: i64,
+        created_at: i64,
+    ) -> Result<(), sqlite::Error> {
+        let conn = match self.conn {
+            Some(ref conn) => conn,
+            None => return Ok(()),
+        };
+        let mut stmt = conn.prepare(
+            "INSERT INTO response_chunks (request_id, chunk, seq, created_at) VALUES (?, ?, ?, ?)",
+        )?;
+        stmt.bind((1_usize, request_id))?;
+        stmt.bind((2_usize, chunk))?;
+        stmt.bind((3_usize, seq))?;
+        stmt.bind((4_usize, created_at))?;
+        stmt.next()?;
+        Ok(())
+    }
+
+    /// Spawn a background thread to insert a response chunk. Returns immediately.
+    #[allow(dead_code)]
+    pub(crate) fn insert_chunk_async(&self, request_id: &str, chunk: &str, seq: i64) {
+        let path = match self.db_path {
+            Some(ref p) => p.clone(),
+            None => return,
+        };
+        let rid = request_id.to_string();
+        let c = chunk.to_string();
+        let s = seq;
+        let ts = chrono::Utc::now().timestamp_millis();
+        std::thread::spawn(move || {
+            if let Ok(conn) = sqlite::open(&path) {
+                let db = Self::ephemeral(conn);
+                if let Err(e) = db.insert_chunk(&rid, &c, s, ts) {
+                    log::warn!("insert_chunk_async failed: {e}");
+                }
+            }
+        });
+    }
+
+    /// Spawn a background thread to update the full response body. Returns immediately.
+    #[allow(dead_code)]
+    pub(crate) fn update_response_body_async(&self, id: &str, body: &str) {
+        let path = match self.db_path {
+            Some(ref p) => p.clone(),
+            None => return,
+        };
+        let rid = id.to_string();
+        let b = body.to_string();
+        std::thread::spawn(move || {
+            if let Ok(conn) = sqlite::open(&path) {
+                let db = Self::ephemeral(conn);
+                if let Err(e) = db.update_response_body(&rid, &b) {
+                    log::warn!("update_response_body_async failed: {e}");
+                }
+            }
+        });
+    }
+
+    /// Return the DB path for async spawning, or None when persistence is disabled.
+    pub(crate) fn async_path(&self) -> Option<String> {
+        self.db_path.clone()
     }
 
     pub(crate) fn load_all(&self) -> Result<Vec<StoredEntry>, sqlite::Error> {
@@ -327,9 +435,29 @@ impl Db {
                 response_body: stmt.read::<Option<String>, _>(11)?,
                 error: stmt.read::<Option<String>, _>(12)?,
                 edited: if edited_int != 0 { Some(true) } else { None },
+                response_chunks: Vec::new(),
             });
         }
         Ok(entries)
+    }
+
+    /// Load response chunks for a given request, ordered by seq.
+    pub(crate) fn load_chunks(&self, request_id: &str) -> Result<Vec<ChunkRecord>, sqlite::Error> {
+        let conn = match self.conn {
+            Some(ref conn) => conn,
+            None => return Ok(Vec::new()),
+        };
+        let mut stmt = conn.prepare(
+            "SELECT chunk FROM response_chunks WHERE request_id = ? ORDER BY seq",
+        )?;
+        stmt.bind((1_usize, request_id))?;
+        let mut chunks = Vec::new();
+        while let sqlite::State::Row = stmt.next()? {
+            chunks.push(ChunkRecord {
+                data: stmt.read::<String, _>(0)?,
+            });
+        }
+        Ok(chunks)
     }
 
     #[allow(dead_code)]
@@ -342,4 +470,36 @@ impl Db {
         conn.execute("DELETE FROM requests")?;
         Ok(())
     }
+}
+
+/// Spawn a background thread to insert a response chunk (free-function variant).
+/// Usable when a Db instance is not available (e.g. from the body stream map closure).
+pub(crate) fn spawn_insert_chunk(path: &str, request_id: &str, chunk: &str, seq: i64, created_at: i64) {
+    let p = path.to_string();
+    let rid = request_id.to_string();
+    let c = chunk.to_string();
+    let ts = created_at;
+    std::thread::spawn(move || {
+        if let Ok(conn) = sqlite::open(&p) {
+            let db = Db::ephemeral(conn);
+            if let Err(e) = db.insert_chunk(&rid, &c, seq, ts) {
+                log::warn!("spawn_insert_chunk failed: {e}");
+            }
+        }
+    });
+}
+
+/// Spawn a background thread to update the full response body (free-function variant).
+pub(crate) fn spawn_update_response_body(path: &str, id: &str, body: &str) {
+    let p = path.to_string();
+    let rid = id.to_string();
+    let b = body.to_string();
+    std::thread::spawn(move || {
+        if let Ok(conn) = sqlite::open(&p) {
+            let db = Db::ephemeral(conn);
+            if let Err(e) = db.update_response_body(&rid, &b) {
+                log::warn!("spawn_update_response_body failed: {e}");
+            }
+        }
+    });
 }

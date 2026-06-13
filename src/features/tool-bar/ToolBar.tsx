@@ -11,10 +11,11 @@ const VIEW_ITEMS: { id: ViewId; icon: typeof GlobeIcon; labelKey: string }[] = [
 
 interface ToolBarProps {
   activeView: ViewId
+  mountedViews: Set<ViewId>
   onViewChange: (view: ViewId) => void
 }
 
-export function ToolBar({ activeView, onViewChange }: ToolBarProps) {
+export function ToolBar({ activeView, mountedViews, onViewChange }: ToolBarProps) {
   const { t } = useLocale()
 
   return (
@@ -27,8 +28,10 @@ export function ToolBar({ activeView, onViewChange }: ToolBarProps) {
           className={cn(
             'relative flex h-8 w-8 items-center justify-center rounded-md transition-colors my-0.5',
             activeView === id
-              ? 'bg-primary/10 text-primary'
-              : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+              ? 'bg-surface-elevated text-primary'
+              : mountedViews.has(id)
+                ? 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+                : 'text-muted-foreground/50 hover:bg-surface-elevated/50 hover:text-foreground'
           )}
           title={t(labelKey)}>
           <Icon className="size-[18px]" />
