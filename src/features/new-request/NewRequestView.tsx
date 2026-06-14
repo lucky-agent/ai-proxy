@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { SendIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useLocale } from '@/hooks/useLocale'
 import { cn } from '@/lib/utils'
@@ -138,7 +138,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
   return (
     <ResizablePanelGroup orientation="horizontal" id="new-request" className="h-full bg-surface-deep">
       {/* Left: API collection panel */}
-      <ResizablePanel id="collection" defaultSize={22} minSize={15} maxSize={40} collapsible collapsedSize={0}>
+      <ResizablePanel id="collection" defaultSize="22%" minSize="15%" maxSize="40%" collapsible collapsedSize={0}>
         <div className="h-full overflow-hidden">
           <ApiCollectionPanel
             collections={collections}
@@ -157,28 +157,38 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
       <ResizableHandle withHandle />
 
       {/* Right: editor + response */}
-      <ResizablePanel id="right" defaultSize={78} minSize={60}>
+      <ResizablePanel id="right" defaultSize="78%" minSize="60%">
         {activeEntry ? (
           <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="h-full">
-            <ResizablePanel id="editor" defaultSize={45} minSize={15} maxSize={75}>
+            <ResizablePanel id="editor" defaultSize="45%" minSize="15%" maxSize="75%">
               <div className="flex flex-col min-h-0 h-full overflow-hidden">
                 <div className="flex shrink-0 items-center gap-2 px-4 py-2 border-b border-border bg-surface-base/50">
-                  <Select value={method} onValueChange={(v) => setMethod(v as HttpMethod)}>
-                    <SelectTrigger size="sm" className={cn('shrink-0 text-xs font-semibold', METHOD_COLORS[method] ? `text-${METHOD_COLORS[method]}` : '')}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {METHODS.map(m => (
-                        <SelectItem key={m} value={m}>{m}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    value={url}
-                    onChange={e => setUrl(e.target.value)}
-                    className="flex-1 h-auto py-1.5 text-xs font-mono"
-                    placeholder="https://api.example.com/v1/endpoint"
-                  />
+                  <InputGroup className="flex-1">
+                    <InputGroupAddon align="inline-start" className="py-0 pl-0">
+                      <Select value={method} onValueChange={(v) => setMethod(v as HttpMethod)}>
+                        <SelectTrigger className={cn(
+                          'h-8 py-0 border-0 shadow-none rounded-none rounded-l-lg bg-transparent',
+                          'focus-visible:ring-0 focus-visible:ring-offset-0',
+                          'min-w-0 w-auto px-2 text-xs font-semibold',
+                          'data-[size=sm]:h-8',
+                          METHOD_COLORS[method] ? `text-${METHOD_COLORS[method]}` : '',
+                        )}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="start" alignItemWithTrigger={false} className="min-w-[120px] overflow-y-auto [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-xs" style={{ maxHeight: 144 }}>
+                          {METHODS.map(m => (
+                            <SelectItem key={m} value={m}>{m}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      value={url}
+                      onChange={e => setUrl(e.target.value)}
+                      className="text-xs font-mono"
+                      placeholder="https://api.example.com/v1/endpoint"
+                    />
+                  </InputGroup>
                   {selectedId && (
                     <Button onClick={handleSave} variant="outline" size="sm">
                       {t('settings.save')}
@@ -209,7 +219,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
               </div>
             </ResizablePanel>
             <ResizableHandle withHandle />
-            <ResizablePanel id="response" defaultSize={55} minSize={25}>
+            <ResizablePanel id="response" defaultSize="55%" minSize="25%">
               <div className="h-full min-h-0">
                 <DetailPanel entry={activeEntry} showRequest={false} />
               </div>
@@ -218,22 +228,31 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
         ) : (
           <div className="flex flex-col min-h-0 h-full">
             <div className="flex shrink-0 items-center gap-2 px-4 py-2 border-b border-border bg-surface-base/50">
-              <Select value={method} onValueChange={(v) => setMethod(v as HttpMethod)}>
-                <SelectTrigger size="sm" className={cn('shrink-0 text-xs font-semibold', METHOD_COLORS[method] ? `text-${METHOD_COLORS[method]}` : '')}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {METHODS.map(m => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                value={url}
-                onChange={e => setUrl(e.target.value)}
-                className="flex-1 h-auto py-1.5 text-xs font-mono"
-                placeholder="https://api.example.com/v1/endpoint"
-              />
+              <InputGroup className="flex-1">
+                <InputGroupAddon align="inline-start" className="py-0 pl-0">
+                  <Select value={method} onValueChange={(v) => setMethod(v as HttpMethod)}>
+                    <SelectTrigger className={cn(
+                      'h-full py-0 border-0 shadow-none rounded-none rounded-l-lg bg-transparent',
+                      'focus-visible:ring-0 focus-visible:ring-offset-0',
+                      'min-w-0 w-auto px-2.5 text-xs font-semibold',
+                      METHOD_COLORS[method] ? `text-${METHOD_COLORS[method]}` : '',
+                    )}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start" alignItemWithTrigger={false} className="overflow-y-auto [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-xs" style={{ maxHeight: 144 }}>
+                      {METHODS.map(m => (
+                        <SelectItem key={m} value={m}>{m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </InputGroupAddon>
+                <InputGroupInput
+                  value={url}
+                  onChange={e => setUrl(e.target.value)}
+                  className="text-xs font-mono"
+                  placeholder="https://api.example.com/v1/endpoint"
+                />
+              </InputGroup>
               {selectedId && (
                 <Button onClick={handleSave} variant="outline" size="sm">
                   {t('settings.save')}

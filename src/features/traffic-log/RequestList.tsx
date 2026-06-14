@@ -235,7 +235,7 @@ export default function RequestList({
         <VList key={listKey} style={{ flex: 1, minHeight: 0 }}>
           {entries.map((entry, i) => (
             <ContextMenu key={entry.id || i}>
-              <ContextMenuTrigger asChild>
+              <ContextMenuTrigger>
                 <div
                   className={cn(
                     'grid text-xs border-b border-surface-elevated/50 cursor-pointer transition-colors hover:bg-surface-elevated/50 border-l-2',

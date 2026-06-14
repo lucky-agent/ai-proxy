@@ -61,7 +61,7 @@ export default function DomainSidebar({
             className={`flex items-center gap-1 pl-7 pr-2 py-1.5 text-xs cursor-pointer transition-colors border-b border-surface-elevated/30 ${
               selectedDomain === host
                 ? 'bg-surface-elevated text-foreground'
-                : 'hover:bg-surface-elevated/50 text-foreground/80'
+                : 'hover:bg-surface-elevated/50 text-muted-foreground'
             }`}
             onClick={() => onSelectDomain(host)}>
             <span className="flex-1 truncate" title={host}>
@@ -84,7 +84,7 @@ export default function DomainSidebar({
           className={`flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors ${
             !selectedDomain
               ? 'bg-surface-elevated text-foreground'
-              : 'hover:bg-surface-elevated/50 text-foreground/80'
+              : 'hover:bg-surface-elevated/50 text-muted-foreground'
           }`}
         >
           <button
@@ -113,7 +113,7 @@ export default function DomainSidebar({
               className={`flex items-center gap-1 pl-7 pr-2 py-1.5 text-xs cursor-pointer transition-colors border-b border-surface-elevated/30 group ${
                 selectedDomain === host
                   ? 'bg-surface-elevated text-foreground'
-                  : 'hover:bg-surface-elevated/50 text-foreground/80'
+                  : 'hover:bg-surface-elevated/50 text-muted-foreground'
               }`}
               onClick={() => onSelectDomain(host)}>
               <span className="flex-1 truncate" title={host}>

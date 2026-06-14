@@ -102,10 +102,10 @@ export default function DetailPanel({ entry, onClose, showRequest = true }: Prop
     const panel = requestPanelRef.current
     if (!panel) return
     if (panel.isCollapsed()) {
-      panel.resize(50)
+      panel.resize("50%")
     } else {
       const size = panel.getSize().asPercentage
-      panel.resize(size > 90 ? 50 : 100)
+      panel.resize(size > 90 ? "50%" : "100%")
     }
   }, [])
 
@@ -113,10 +113,10 @@ export default function DetailPanel({ entry, onClose, showRequest = true }: Prop
     const panel = responsePanelRef.current
     if (!panel) return
     if (panel.isCollapsed()) {
-      panel.resize(50)
+      panel.resize("50%")
     } else {
       const size = panel.getSize().asPercentage
-      panel.resize(size > 90 ? 50 : 100)
+      panel.resize(size > 90 ? "50%" : "100%")
     }
   }, [])
 
@@ -129,9 +129,8 @@ export default function DetailPanel({ entry, onClose, showRequest = true }: Prop
           <>
             <ResizablePanel
               id="request"
-              defaultSize={50}
-              minSize={15}
-              maxSize={85}
+              defaultSize="50%"
+              minSize="15%"
               collapsible
               collapsedSize={0}
               panelRef={requestPanelRef}>

@@ -77,7 +77,7 @@ export function ApiTreeItem({
 
   return (
     <ContextMenu onOpenChange={setContextMenuOpen}>
-      <ContextMenuTrigger asChild>
+      <ContextMenuTrigger>
         <div
           className={cn(
             'group flex items-center gap-1 px-2 py-1 cursor-pointer rounded-sm text-xs transition-colors',

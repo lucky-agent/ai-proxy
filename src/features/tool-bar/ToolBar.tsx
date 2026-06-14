@@ -28,7 +28,7 @@ export function ToolBar({ activeView, mountedViews, onViewChange }: ToolBarProps
           className={cn(
             'relative flex h-8 w-8 items-center justify-center rounded-md transition-colors my-0.5',
             activeView === id
-              ? 'bg-surface-elevated text-primary'
+              ? 'bg-surface-elevated text-foreground'
               : mountedViews.has(id)
                 ? 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
                 : 'text-muted-foreground/50 hover:bg-surface-elevated/50 hover:text-foreground'

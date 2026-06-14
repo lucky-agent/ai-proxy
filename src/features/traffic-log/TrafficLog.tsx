@@ -42,7 +42,7 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
     const panel = domainPanelRef.current
     if (!panel) return
     if (showDomainSidebar) {
-      panel.resize(18)
+      panel.resize("18%")
     } else {
       panel.collapse()
     }
@@ -200,7 +200,7 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
 
   // Inner content: varies by detailPosition.
   const mainContent = (() => {
-    if (detailPosition === 'hidden' || !selected) {
+    if (detailPosition === 'hidden') {
       return (
         <div className="h-full min-h-0 min-w-0">
           {requestList}
@@ -210,13 +210,13 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
     if (detailPosition === 'bottom') {
       return (
         <ResizablePanelGroup key="bottom" orientation="vertical" id="main-bottom" className="h-full">
-          <ResizablePanel id="list" defaultSize={40} minSize={25} maxSize={75}>
+          <ResizablePanel id="list" defaultSize="40%" minSize="20%">
             <div className="h-full min-h-0">
               {requestList}
             </div>
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel id="detail" defaultSize={60} minSize={25} maxSize={75}>
+          <ResizablePanel id="detail" defaultSize="60%" minSize="20%">
             <div className="h-full min-h-0">
               {detailPanel}
             </div>
@@ -227,13 +227,13 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
     // right
     return (
       <ResizablePanelGroup key="right" orientation="horizontal" id="main-right" className="h-full">
-        <ResizablePanel id="list" defaultSize={55} minSize={30} maxSize={75}>
+        <ResizablePanel id="list" defaultSize="55%" minSize="20%">
           <div className="h-full min-h-0 min-w-0">
             {requestList}
           </div>
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel id="detail" defaultSize={45} minSize={25} maxSize={70}>
+        <ResizablePanel id="detail" defaultSize="45%" minSize="20%">
           <div className="h-full min-h-0 min-w-0">
             {detailPanel}
           </div>
@@ -248,8 +248,8 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
         <ResizablePanel
           id="domain-sidebar"
           defaultSize={showDomainSidebar ? 18 : 0}
-          minSize={8}
-          maxSize={35}
+          minSize="8%"
+          maxSize="100%"
           collapsible
           collapsedSize={0}
           panelRef={domainPanelRef}>
@@ -265,7 +265,7 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
           </div>
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel id="main" defaultSize={82} minSize={50}>
+        <ResizablePanel id="main" defaultSize="82%" minSize="20%">
           {mainContent}
         </ResizablePanel>
       </ResizablePanelGroup>
