@@ -1,5 +1,6 @@
 import { PlusIcon, Trash2Icon } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Empty, EmptyTitle } from '@/components/ui/empty'
 import type { KeyValuePair } from '@/types/collection'
 
 interface KeyValueEditorProps {
@@ -38,8 +39,8 @@ export function KeyValueEditor({ entries, onChange, title, addLabel, emptyLabel 
         </button>
       </div>
       {entries.length === 0 ? (
-        <div className="py-8 text-center text-xs text-muted-foreground">
-          {emptyLabel}
+        <div className="py-8 text-center">
+          <Empty><EmptyTitle>{emptyLabel}</EmptyTitle></Empty>
         </div>
       ) : (
         <div className="space-y-1">

@@ -62,8 +62,21 @@ pub(crate) fn log_request(
     let req_headers: HashMap<String, String> = parts
         .headers
         .iter()
-        .filter_map(|(name, value)| Some((name.to_string(), value.to_str().ok()?.to_string())))
-        .collect();
+        .filter_map(|(name, value)| {
+            let key = name.to_string();
+            let val = value.to_str().ok()?.to_string();
+            // 合并重复的 header（如 Cookie 可能在请求头中出现多次）
+            Some((key, val))
+        })
+        .fold(HashMap::new(), |mut acc, (key, val)| {
+            if let Some(existing) = acc.get_mut(&key) {
+                existing.push_str("; ");
+                existing.push_str(&val);
+            } else {
+                acc.insert(key, val);
+            }
+            acc
+        });
 
     if let Some(ch) = event_channel {
        ch.send(ProxyEvent::Request {
@@ -123,8 +136,28 @@ pub(crate) fn log_response(
     let resp_headers: HashMap<String, String> = parts
         .headers
         .iter()
-        .filter_map(|(name, value)| Some((name.to_string(), value.to_str().ok()?.to_string())))
-        .collect();
+        .filter_map(|(name, value)| {
+            let key = name.to_string();
+            let val = value.to_str().ok()?.to_string();
+            Some((key, val))
+        })
+        .fold(HashMap::new(), |mut acc, (key, val)| {
+            // Set-Cookie 可能多次出现，合并为新行分隔
+            if key.to_lowercase() == "set-cookie" {
+                if let Some(existing) = acc.get_mut(&key) {
+                    existing.push('\n');
+                    existing.push_str(&val);
+                } else {
+                    acc.insert(key, val);
+                }
+            } else if let Some(existing) = acc.get_mut(&key) {
+                existing.push_str(", ");
+                existing.push_str(&val);
+            } else {
+                acc.insert(key, val);
+            }
+            acc
+        });
 
     if let Some(ch) = event_channel {
         ch.send(ProxyEvent::Response {

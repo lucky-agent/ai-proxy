@@ -201,11 +201,31 @@ impl Db {
     }
 
     /// Convert an HTTP HeaderMap to a JSON string.
+    /// Duplicate header values (like Set-Cookie) are joined with newline.
     pub(crate) fn headers_to_json(headers: &HeaderMap) -> String {
         let h: std::collections::HashMap<String, String> = headers
             .iter()
-            .filter_map(|(k, v)| Some((k.to_string(), v.to_str().ok()?.to_string())))
-            .collect();
+            .filter_map(|(k, v)| {
+                let key = k.to_string();
+                let val = v.to_str().ok()?.to_string();
+                Some((key, val))
+            })
+            .fold(std::collections::HashMap::new(), |mut acc, (key, val)| {
+                if key.to_lowercase() == "set-cookie" {
+                    if let Some(existing) = acc.get_mut(&key) {
+                        existing.push('\n');
+                        existing.push_str(&val);
+                    } else {
+                        acc.insert(key, val);
+                    }
+                } else if let Some(existing) = acc.get_mut(&key) {
+                    existing.push_str(", ");
+                    existing.push_str(&val);
+                } else {
+                    acc.insert(key, val);
+                }
+                acc
+            });
         serde_json::to_string(&h).unwrap_or_default()
     }
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { TrafficLog, EditRequestDialog } from '@/features/traffic-log'
+import { EditRequestDialog } from '@/features/proxy'
 import { SettingsDialog } from '@/features/settings'
 import { AboutDialog } from '@/features/about'
 import { SslConfigDialog } from '@/features/ssl-config'
@@ -12,91 +12,12 @@ import { ToolBar } from '@/features/tool-bar'
 import { BottomBar, type DetailPosition } from '@/features/bottom-bar'
 import { AiView } from '@/features/ai-view'
 import { NewRequestView } from '@/features/new-request'
+import { ProxyView } from '@/features/proxy'
 import type { ViewId } from '@/types/view'
 import { useProxyEvents } from '@/hooks/useProxyEvents'
 import { useTheme } from '@/hooks/useTheme'
-import { useLocale } from '@/hooks/useLocale'
-import { classifyEntry, TYPE_FILTERS, type TypeFilter } from '@/lib/format'
+import { classifyEntry, type TypeFilter } from '@/lib/format'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-
-const TYPE_FILTER_LABELS: Record<TypeFilter, string> = {
-  all: 'typeFilter.all',
-  http: 'typeFilter.http',
-  https: 'typeFilter.https',
-  websocket: 'typeFilter.websocket',
-  js: 'typeFilter.js',
-  css: 'typeFilter.css',
-  html: 'typeFilter.html',
-  json: 'typeFilter.json',
-  img: 'typeFilter.img',
-  font: 'typeFilter.font',
-  media: 'typeFilter.media',
-  other: 'typeFilter.other',
-}
-
-function TypeFilterBar({
-  active,
-  counts,
-  onChange,
-  running,
-  status,
-}: {
-  active: TypeFilter
-  counts: Map<TypeFilter, number>
-  onChange: (f: TypeFilter) => void
-  running: boolean
-  status: string
-}) {
-  const { t } = useLocale()
-
-  return (
-    <div className="flex shrink-0 items-center gap-0.5 overflow-x-auto px-1.5 py-1 border-b border-surface-elevated bg-surface-base/50">
-      <div className="flex items-center gap-0.5 overflow-x-auto">
-        {TYPE_FILTERS.map(f => {
-          const count = counts.get(f) ?? 0
-          return (
-            <button
-              key={f}
-              type="button"
-              onClick={() => onChange(f)}
-              className={cn(
-                'relative px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap',
-                active === f
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}>
-              {t(TYPE_FILTER_LABELS[f])}
-              {active === f && (
-                <span className="absolute bottom-0 left-1 right-1 h-0.5 bg-foreground/70 rounded-full" />
-              )}
-              {count > 0 && (
-                <span className={cn(
-                  'text-[10px] tabular-nums',
-                  active === f ? 'text-foreground/50' : 'text-muted-foreground/60'
-                )}>
-                  {count}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-      <div className="ml-auto shrink-0" />
-      {running ? (
-        <span className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium bg-emerald-500/10 text-emerald-400 shrink-0">
-          <span className="inline-block size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          {status.replace('Running on ', '')}
-        </span>
-      ) : (
-        <span className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium bg-muted text-muted-foreground shrink-0">
-          <span className="inline-block size-1.5 rounded-full bg-muted-foreground" />
-          {t('app.stopped')}
-        </span>
-      )}
-    </div>
-  )
-}
 
 function App() {
   const [status, setStatus] = useState('Stopped')
@@ -138,7 +59,6 @@ function App() {
   }, [])
   const { entries, clear } = useProxyEvents()
   const { theme, setTheme } = useTheme()
-  const { t } = useLocale()
 
   const typeCounts = useMemo(() => {
     const counts = new Map<TypeFilter, number>()
@@ -256,15 +176,18 @@ function App() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {mountedViews.has('proxy') && activeView === 'proxy' && (
-            <>
-              <TypeFilterBar active={typeFilter} counts={typeCounts} onChange={setTypeFilter} running={running} status={status} />
-              {error && (
-                <div className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-5 py-2 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-              <TrafficLog entries={entries} showDomainSidebar={showDomainSidebar} detailPosition={detailPosition} onAutoOpenDetail={() => setDetailPosition('bottom')} typeFilter={typeFilter} />
-            </>
+            <ProxyView
+              entries={entries}
+              error={error}
+              showDomainSidebar={showDomainSidebar}
+              detailPosition={detailPosition}
+              onAutoOpenDetail={() => setDetailPosition('bottom')}
+              typeFilter={typeFilter}
+              typeCounts={typeCounts}
+              onTypeFilterChange={setTypeFilter}
+              running={running}
+              status={status}
+            />
           )}
           {mountedViews.has('new-request') && activeView === 'new-request' && <NewRequestView onSendSuccess={handleNewRequestSuccess} entries={entries} />}
           {mountedViews.has('ai') && activeView === 'ai' && <AiView />}

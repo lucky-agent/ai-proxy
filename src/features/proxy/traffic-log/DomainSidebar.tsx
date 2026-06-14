@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { ChevronRightIcon, PinIcon, PinOffIcon } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 
 interface Props {
   domains: [string, number][]
@@ -37,25 +38,20 @@ export default function DomainSidebar({
       <Separator />
       <ScrollArea className="flex-1 min-h-0 bg-surface-base">
         {/* 置顶折叠组 */}
-        <div className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors hover:bg-surface-elevated/50 text-foreground/80">
-          <button
-            className="shrink-0 p-0 rounded hover:bg-surface-elevated/50 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation()
-              setPinnedCollapsed(!pinnedCollapsed)
-            }}
-          >
-            <ChevronRightIcon
-              className={`size-3 transition-transform ${pinnedCollapsed ? '' : 'rotate-90'}`}
-            />
-          </button>
-          <span className="flex-1 truncate font-medium text-amber-500">
-            {t('hosts.pinned')}
-          </span>
-          <span className="text-muted-foreground tabular-nums text-[10px]">{pinned.length}</span>
-        </div>
-        {!pinnedCollapsed &&
-          pinned.map(([host, count]) => (
+        <Collapsible open={!pinnedCollapsed} onOpenChange={(v) => setPinnedCollapsed(!v)}>
+          <div className="flex items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-surface-elevated/50 text-foreground/80">
+            <CollapsibleTrigger className="shrink-0 p-0 rounded hover:bg-surface-elevated/50 transition-colors">
+              <ChevronRightIcon
+                className={`size-3 transition-transform ${pinnedCollapsed ? '' : 'rotate-90'}`}
+              />
+            </CollapsibleTrigger>
+            <span className="flex-1 truncate font-medium text-amber-500">
+              {t('hosts.pinned')}
+            </span>
+            <span className="text-muted-foreground tabular-nums text-[10px]">{pinned.length}</span>
+          </div>
+          <CollapsibleContent>
+          {pinned.map(([host, count]) => (
           <div
             key={host}
             className={`flex items-center gap-1 pl-7 pr-2 py-1.5 text-xs cursor-pointer transition-colors border-b border-surface-elevated/30 ${
@@ -79,35 +75,34 @@ export default function DomainSidebar({
                 </button>
               </div>
             ))}
+          </CollapsibleContent>
+        </Collapsible>
         {/* 全部 */}
-        <div
-          className={`flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors ${
-            !selectedDomain
-              ? 'bg-surface-elevated text-foreground'
-              : 'hover:bg-surface-elevated/50 text-muted-foreground'
-          }`}
-        >
-          <button
-            className="shrink-0 p-0 rounded hover:bg-surface-elevated/50 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation()
-              setListCollapsed(!listCollapsed)
-            }}
+        <Collapsible open={!listCollapsed} onOpenChange={(v) => setListCollapsed(!v)}>
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+              !selectedDomain
+                ? 'bg-surface-elevated text-foreground'
+                : 'hover:bg-surface-elevated/50 text-muted-foreground'
+            }`}
           >
-            <ChevronRightIcon
-              className={`size-3 transition-transform ${listCollapsed ? '' : 'rotate-90'}`}
-            />
-          </button>
-          <span
-            className="flex-1 truncate font-medium"
-            onClick={() => onSelectDomain(null)}
-          >
-            {t('hosts.all')}
-          </span>
-          <span className="text-muted-foreground tabular-nums text-[10px]">{totalEntries}</span>
-        </div>
-        {!listCollapsed &&
-          domains.map(([host, count]) => (
+            <CollapsibleTrigger
+              className="shrink-0 p-0 rounded hover:bg-surface-elevated/50 transition-colors"
+            >
+              <ChevronRightIcon
+                className={`size-3 transition-transform ${listCollapsed ? '' : 'rotate-90'}`}
+              />
+            </CollapsibleTrigger>
+            <span
+              className="flex-1 truncate font-medium"
+              onClick={() => onSelectDomain(null)}
+            >
+              {t('hosts.all')}
+            </span>
+            <span className="text-muted-foreground tabular-nums text-[10px]">{totalEntries}</span>
+          </div>
+          <CollapsibleContent>
+          {domains.map(([host, count]) => (
             <div
               key={host}
               className={`flex items-center gap-1 pl-7 pr-2 py-1.5 text-xs cursor-pointer transition-colors border-b border-surface-elevated/30 group ${
@@ -131,6 +126,8 @@ export default function DomainSidebar({
               </button>
             </div>
           ))}
+          </CollapsibleContent>
+        </Collapsible>
       </ScrollArea>
     </div>
   )

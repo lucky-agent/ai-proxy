@@ -12,6 +12,7 @@ import { ApiCollectionPanel } from './ApiCollectionPanel'
 import { DetailPanel } from '@/features/detail-panel'
 import RequestEditor from './RequestEditor'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { ApiRequestNode, HttpMethod, KeyValuePair, BodyType } from '@/types/collection'
 import type { TrafficEntry } from '@/types/proxy'
 
@@ -175,7 +176,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                         )}>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent align="start" alignItemWithTrigger={false} className="min-w-[120px] overflow-y-auto [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-xs" style={{ maxHeight: 144 }}>
+                        <SelectContent align="start" alignItemWithTrigger={false} className="min-w-[120px] max-h-36 overflow-y-auto [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-xs">
                           {METHODS.map(m => (
                             <SelectItem key={m} value={m}>{m}</SelectItem>
                           ))}
@@ -212,9 +213,9 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                   onBodyTypeChange={setBodyType}
                 />
                 {error && (
-                  <div className="shrink-0 mx-4 mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                    {error}
-                  </div>
+                  <Alert variant="destructive" className="shrink-0 mx-4 mb-2">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
                 )}
               </div>
             </ResizablePanel>
@@ -239,7 +240,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                     )}>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent align="start" alignItemWithTrigger={false} className="overflow-y-auto [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-xs" style={{ maxHeight: 144 }}>
+                    <SelectContent align="start" alignItemWithTrigger={false} className="max-h-36 overflow-y-auto [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-xs">
                       {METHODS.map(m => (
                         <SelectItem key={m} value={m}>{m}</SelectItem>
                       ))}
@@ -276,9 +277,9 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
               onBodyTypeChange={setBodyType}
             />
             {error && (
-              <div className="shrink-0 mx-4 mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {error}
-              </div>
+              <Alert variant="destructive" className="shrink-0 mx-4 mb-2">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
           </div>
         )}

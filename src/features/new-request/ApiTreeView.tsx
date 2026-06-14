@@ -4,6 +4,7 @@ import type { ApiCollection, ApiRequestNode } from '@/types/collection'
 import { useLocale } from '@/hooks/useLocale'
 import { ApiTreeItem } from './ApiTreeItem'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Empty, EmptyTitle } from '@/components/ui/empty'
 
 interface ApiTreeViewProps {
   collections: ApiCollection[]
@@ -78,8 +79,8 @@ export function ApiTreeView({
 
       {/* 空状态 */}
       {collections.length === 0 && (
-        <div className="px-4 py-6 text-xs text-muted-foreground text-center">
-          {t('collection.emptyTree')}
+        <div className="px-4 py-6">
+          <Empty><EmptyTitle>{t('collection.emptyTree')}</EmptyTitle></Empty>
         </div>
       )}
     </ScrollArea>

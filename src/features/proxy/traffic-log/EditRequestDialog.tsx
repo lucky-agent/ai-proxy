@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useLocale } from '@/hooks/useLocale'
 import { cn } from '@/lib/utils'
 import { buildFullUrl, METHOD_COLORS } from '@/lib/http-constants'
@@ -195,9 +196,9 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
 
           {/* Error */}
           {error && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </div>
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
         </div>
         </ScrollArea>

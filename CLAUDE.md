@@ -40,33 +40,28 @@ bun run build:vite
 ai-proxy/
 ├── src/                          # 前端（React + TypeScript）
 │   ├── main.tsx                  # 入口，渲染后显示窗口
-│   ├── App.tsx                   # 根组件：代理控制、布局编排
+│   ├── App.tsx                   # 根组件：视图路由、全局状态、弹窗编排
 │   └── index.css                 # 全局样式（Tailwind 主题变量 + 自定义组件样式）
 │   │
-│   ├── components/
-│   │   └── ui/                   # 通用 UI 原子组件（shadcn）
-│   │       ├── button.tsx
-│   │       ├── dialog.tsx
-│   │       └── dropdown-menu.tsx
+│   ├── components/               # 公共组件（跨 feature 共享，无业务含义）
+│   │   ├── ui/                   # shadcn/ui 原子组件（button、dialog 等）
+│   │   ├── icons/                # 自定义图标组件（GripDots、ScriptIcon 等）
+│   │   └── json-tree/            # JSON 树形展示组件
 │   │
 │   ├── features/                 # 按功能域组织的业务组件
-│   │   ├── traffic-log/          # 主内容区（三栏布局）
-│   │   │   ├── TrafficLog.tsx    # 容器：域名侧栏 + 请求列表 + 详情面板
-│   │   │   ├── DomainSidebar.tsx
-│   │   │   ├── RequestList.tsx
-│   │   │   ├── DetailPanel.tsx
-│   │   │   └── index.ts          # 对外导出入口
-│   │   ├── title-bar/            # 自定义标题栏
-│   │   │   ├── TitleBar.tsx
-│   │   │   └── index.ts
-│   │   └── settings/             # 设置弹窗
-│   │       ├── SettingsDialog.tsx
-│   │       └── index.ts
+│   │   ├── proxy/                # 代理视图（TypeFilterBar + traffic-log 子模块）
+│   │   ├── new-request/          # 新建请求（Postman 风格）
+│   │   ├── title-bar/            # 自定义标题栏 + 标签页
+│   │   ├── tool-bar/             # 左侧图标工具栏
+│   │   ├── bottom-bar/           # 底部状态栏
+│   │   ├── detail-panel/         # 请求详情面板（proxy + new-request 共享）
+│   │   ├── settings/             # 设置弹窗
+│   │   ├── about/                # 关于弹窗
+│   │   ├── ssl-config/           # SSL 配置弹窗
+│   │   ├── script-config/        # 脚本配置弹窗
+│   │   └── ai-view/              # AI 视图
 │   │
 │   ├── hooks/                    # 跨 feature 复用的 React hooks
-│   │   ├── useProxyEvents.ts     # 监听后端流量事件
-│   │   ├── useTheme.ts
-│   │   └── useLocale.ts
 │   ├── i18n/                     # i18next 初始化
 │   ├── locales/                  # 翻译文件（en.json、zh.json）
 │   ├── lib/                      # 工具函数（format、cn 等）
@@ -103,17 +98,18 @@ ai-proxy/
 
 ### 前端组织原则
 
-| 目录 | 放什么 | 判断标准 |
-|------|--------|----------|
-| `components/ui/` | Button、Dialog 等 | 无业务含义，任何地方可复用 |
-| `features/<区域>/` | TrafficLog、SettingsDialog 等 | 属于某块功能/布局 |
-| `features/<区域>/components/` | 仅该区域用的子组件 | 不跨 feature 复用时放这里 |
-| `hooks/`、`lib/`、`types/` | 逻辑、工具、类型 | 非 UI |
+| 目录                        | 放什么                                     | 判断标准                        |
+| --------------------------- | ------------------------------------------ | ------------------------------- |
+| `components/`               | ui/、icons/、json-tree/ 等公共组件         | 无业务含义，任何 feature 可复用 |
+| `features/<区域>/`          | proxy/、new-request/、settings/ 等业务组件 | 属于某块功能/布局               |
+| `features/<区域>/` 的子目录 | 仅该区域用的子模块/子组件                  | 不跨 feature 复用               |
+| `hooks/`、`lib/`、`types/`  | 逻辑、工具、类型                           | 非 UI                           |
 
 `App.tsx` 通过 `@/features/<区域>` 导入各功能域入口，例如：
 
 ```ts
-import { TrafficLog } from '@/features/traffic-log'
+import { ProxyView, EditRequestDialog } from '@/features/proxy'
+import { NewRequestView } from '@/features/new-request'
 import { SettingsDialog } from '@/features/settings'
 import { TitleBar } from '@/features/title-bar'
 ```
@@ -149,9 +145,10 @@ import { TitleBar } from '@/features/title-bar'
 - MITM 代理使用自签名证书，客户端需要信任或忽略证书警告
 - SSE 流式响应（`text/event-stream`）采用逐 chunk 透传模式，非流式响应会完整收集后转发
 - 错误处理不使用 anyhow，而是自建的 `bail!` / `anyhow!` 宏 + rama 的 `OpaqueError`
-- 新增业务组件放 `features/<区域>/`，通用 UI 组件放 `components/ui/`，跨 feature 复用逻辑放 `hooks/` 或 `lib/`
+- 新增业务组件放 `features/<区域>/`，公共组件放 `components/<类别>/`，跨 feature 复用逻辑放 `hooks/` 或 `lib/`
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
+
 # Superpowers-ZH 中文增强版
 
 本项目已安装 superpowers-zh 技能框架（20 个 skills）。
@@ -193,4 +190,5 @@ Skills 位于 `.claude/skills/` 目录，每个 skill 有独立的 `SKILL.md` �
 当任务匹配某个 skill 时，使用 `Skill` 工具加载对应 skill 并严格遵循其流程。绝不要用 Read 工具读取 SKILL.md 文件。
 
 如果你认为哪怕只有 1% 的可能性某个 skill 适用于你正在做的事情，你必须调用该 skill 检查。
+
 <!-- superpowers-zh:end -->

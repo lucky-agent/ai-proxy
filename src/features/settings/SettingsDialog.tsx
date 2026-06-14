@@ -13,7 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useLocale } from '@/hooks/useLocale'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { Theme } from '@/hooks/useTheme'
 import type { LocaleSetting } from '@/i18n'
 import type { ProxyConfig } from '@/types/settings'
@@ -102,7 +104,15 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
               <span className="text-xs font-medium text-muted-foreground">
                 {t('settings.theme')}
               </span>
-              <div className="flex w-fit items-center gap-0.5 rounded-md border border-border bg-surface-elevated/50 p-0.5">
+              <ToggleGroup
+                type="single"
+                value={theme}
+                onValueChange={(value) => {
+                  if (value) onThemeChange(value as Theme)
+                }}
+                variant="outline"
+                size="sm"
+                className="w-fit rounded-md border border-border bg-surface-elevated/50 p-0.5">
                 {(
                   [
                     { value: 'light' as Theme, icon: SunIcon },
@@ -110,20 +120,15 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
                     { value: 'system' as Theme, icon: MonitorIcon },
                   ] as const
                 ).map(({ value, icon: Icon }) => (
-                  <button
+                  <ToggleGroupItem
                     key={value}
-                    type="button"
-                    onClick={() => onThemeChange(value)}
-                    className={`inline-flex size-7 items-center justify-center rounded-[4px] transition-colors ${
-                      theme === value
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                    value={value}
+                    className="inline-flex size-7 items-center justify-center rounded-[4px] transition-colors cursor-pointer"
                     title={t(`theme.${value}`)}>
                     <Icon className="size-3.5" />
-                  </button>
+                  </ToggleGroupItem>
                 ))}
-              </div>
+              </ToggleGroup>
             </div>
             <label className="grid gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">
@@ -161,7 +166,7 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
           </div>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

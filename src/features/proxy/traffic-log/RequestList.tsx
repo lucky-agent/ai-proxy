@@ -9,6 +9,8 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { GripDots } from '@/components/icons'
+import { Empty, EmptyTitle } from '@/components/ui/empty'
+import { Badge } from '@/components/ui/badge'
 import type { TrafficEntry } from '@/types/proxy'
 import { statusCategory, formatDuration, formatTime, formatCurl } from '@/lib/format'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
@@ -100,18 +102,6 @@ const Grip = ({
     <GripDots className="text-current pointer-events-none" />
   </span>
 )
-
-function badgeStyle(varName: string, options?: { pill?: boolean }) {
-  const base = { color: `var(${varName})` }
-  if (options?.pill) {
-    return {
-      ...base,
-      background: `color-mix(in oklch, var(${varName}) 10%, transparent)`,
-      borderColor: `color-mix(in oklch, var(${varName}) 20%, transparent)`,
-    }
-  }
-  return base
-}
 
 interface Props {
   entries: ListEntry[]
@@ -227,12 +217,13 @@ export default function RequestList({
       </div>
 
       {entries.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm">
-          <p>{t('requestList.emptyTitle')}</p>
-          <p className="mt-1 text-xs">{t('requestList.emptyHint')}</p>
+        <div className="flex-1 flex items-center justify-center">
+          <Empty>
+            <EmptyTitle>{t('requestList.emptyTitle')}</EmptyTitle>
+          </Empty>
         </div>
       ) : (
-        <VList key={listKey} style={{ flex: 1, minHeight: 0 }}>
+        <VList key={listKey} className="flex-1 min-h-0">
           {entries.map((entry, i) => (
             <ContextMenu key={entry.id || i}>
               <ContextMenuTrigger>
@@ -254,19 +245,27 @@ export default function RequestList({
                     <span className="block truncate">{entry.uri}</span>
                   </div>
                   <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
-                    <span
-                      className="badge-method"
-                      style={badgeStyle(`--badge-${entry.method.toLowerCase()}`, { pill: true })}>
+                    <Badge
+                      className="rounded font-semibold uppercase"
+                      style={{
+                        color: `var(--badge-${entry.method.toLowerCase()})`,
+                        background: `color-mix(in oklch, var(--badge-${entry.method.toLowerCase()}) 10%, transparent)`,
+                        borderColor: `color-mix(in oklch, var(--badge-${entry.method.toLowerCase()}) 20%, transparent)`,
+                      }}>
                       {entry.method}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
-                    <span
-                      className="badge-status"
-                      style={badgeStyle(`--badge-${statusCategory(entry.status)}`)}
-                      data-dot={entry.status != null}>
+                    <Badge
+                      className="rounded font-semibold"
+                      style={{ color: `var(--badge-${statusCategory(entry.status)})` }}>
+                      {entry.status != null && (
+                        <span
+                          className="inline-block size-1.5 rounded-full shrink-0 bg-current"
+                        />
+                      )}
                       {entry.status ?? t('requestList.pending')}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground">
                     {formatDuration(entry.durationMs)}

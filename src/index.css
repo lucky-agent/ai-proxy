@@ -209,35 +209,7 @@
   [data-slot='button'][data-variant='default'] {
     border-color: var(--primary-border);
   }
-  /* 全局 badge 颜色映射 */
-  .badge-method {
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    border: 1px solid transparent;
-  }
-  .badge-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .badge-status::before {
-    content: '';
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-    vertical-align: middle;
-    flex-shrink: 0;
-  }
-  .badge-status[data-dot='false']::before {
-    display: none;
-  }
+  /* 全局 badge 颜色变量仍保留在 :root/.dark 中以支持 Badge 内联 style 引用 */
 }
 
 /* shiki 代码高亮 */

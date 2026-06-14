@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { CopyIcon, CheckIcon, ChevronRight, ChevronDown, ListChecks } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Empty, EmptyTitle } from '@/components/ui/empty'
 import type { TrafficEntry } from '@/types/proxy'
 import { parseSse, isStreamingContentType, mergeSseMessages, estimateTokens, extractTokenUsage, type SseEvent, type MergeFormat, type MergeResult, type TokenUsage } from '@/lib/sse'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
@@ -106,7 +107,7 @@ export default function StreamingViewer({ entry }: Props) {
       <TabsContent value="chunks" className="min-h-0 flex-1 overflow-hidden mt-0">
         <ScrollArea className="h-full">
         {chunks.length === 0 ? (
-          <EmptyState label={t('detail.noStreamData')} />
+          <Empty><EmptyTitle>{t('detail.noStreamData')}</EmptyTitle></Empty>
         ) : (
           chunks.map((chunk, idx) => (
             <ChunkItem key={idx} index={idx} data={chunk.data} totalChunks={chunks.length} />
@@ -118,7 +119,7 @@ export default function StreamingViewer({ entry }: Props) {
       <TabsContent value="events" className="min-h-0 flex-1 overflow-hidden mt-0">
         <ScrollArea className="h-full">
         {sseEvents.length === 0 ? (
-          <EmptyState label={t('detail.noSseEvents')} />
+          <Empty><EmptyTitle>{t('detail.noSseEvents')}</EmptyTitle></Empty>
         ) : (
           sseEvents.map((evt, idx) => <SseEventItem key={idx} index={idx} event={evt} />)
         )}
@@ -130,22 +131,11 @@ export default function StreamingViewer({ entry }: Props) {
         {mergedResult ? (
           <MergedView result={mergedResult} tokenUsage={tokenUsage} />
         ) : (
-          <EmptyState label={t('detail.noSseEvents')} />
+          <Empty><EmptyTitle>{t('detail.noSseEvents')}</EmptyTitle></Empty>
         )}
         </ScrollArea>
       </TabsContent>
     </Tabs>
-  )
-}
-
-// -------------------------------------------------------------------
-// EmptyState
-// -------------------------------------------------------------------
-function EmptyState({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
-      {label}
-    </div>
   )
 }
 

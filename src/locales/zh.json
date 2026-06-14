@@ -62,6 +62,8 @@
     "noRequestBody": "未捕获请求正文",
     "query": "Query",
     "noQuery": "无 Query 参数",
+    "cookies": "Cookies",
+    "noCookies": "无 Cookie 数据",
     "noFormData": "无表单数据",
     "formData": "Form-Data",
     "copyUri": "复制 URI",

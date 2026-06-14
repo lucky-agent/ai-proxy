@@ -5,6 +5,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { useShiki } from '@/hooks/useShiki'
 import { CopyIcon, CheckIcon, ChevronDown, ChevronRight } from 'lucide-react'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 
 interface FormField {
   name: string
@@ -154,13 +155,15 @@ function MultipartPartCard({ part }: { part: FormField }) {
   const headerCount = Object.keys(part.headers).length
   const fileInfo = part.filename ? part.filename + (part.contentType ? ' (' + part.contentType + ')' : '') : null
   return (
-    <div className='rounded border border-surface-elevated overflow-hidden'>
-      <div className='flex items-center gap-2 px-2.5 py-1.5 bg-surface-elevated/20 border-b border-surface-elevated hover:bg-surface-elevated/30 transition-colors select-none' onClick={() => setExpanded(e => !e)}>
-        {expanded ? <ChevronDown className='size-3 shrink-0 text-muted-foreground/60' /> : <ChevronRight className='size-3 shrink-0 text-muted-foreground/60' />}
+    <Collapsible open={expanded} onOpenChange={setExpanded} className='rounded border border-surface-elevated overflow-hidden'>
+      <div className='flex items-center gap-2 px-2.5 py-1.5 bg-surface-elevated/20 border-b border-surface-elevated hover:bg-surface-elevated/30 transition-colors select-none'>
+        <CollapsibleTrigger className="shrink-0 p-0 rounded">
+          {expanded ? <ChevronDown className='size-3 shrink-0 text-muted-foreground/60' /> : <ChevronRight className='size-3 shrink-0 text-muted-foreground/60' />}
+        </CollapsibleTrigger>
         <span className='text-xs font-medium text-foreground/90 truncate min-w-0'>{part.name}</span>
         {fileInfo ? <span className='text-[10px] text-muted-foreground/70 truncate min-w-0 shrink-0'>{fileInfo}</span> : <span className='text-[10px] text-muted-foreground/50 shrink-0'>{part.value.length}B</span>}
       </div>
-      {expanded && (
+      <CollapsibleContent>
         <div className='text-xs'>
           {headerCount > 0 && (
             <div className='border-b border-surface-elevated/30 bg-surface-elevated/10 px-2.5 py-1'>
@@ -178,7 +181,7 @@ function MultipartPartCard({ part }: { part: FormField }) {
             {highlightedBody ? <div className='shiki-root whitespace-pre-wrap break-all overflow-x-auto px-2.5 py-1.5' dangerouslySetInnerHTML={{ __html: highlightedBody }} /> : <pre className='whitespace-pre-wrap break-all px-2.5 py-1.5 text-foreground/80 font-mono'>{part.value}</pre>}
           </div>
         </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

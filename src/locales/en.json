@@ -62,6 +62,8 @@
     "noRequestBody": "Request body not captured",
     "query": "Query",
     "noQuery": "No query parameters",
+    "cookies": "Cookies",
+    "noCookies": "No cookie data",
     "noFormData": "No form data",
     "formData": "Form-Data",
     "copyUri": "Copy URI",

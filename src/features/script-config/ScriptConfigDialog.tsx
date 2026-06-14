@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useLocale } from '@/hooks/useLocale'
 import type { ScriptConfig, ScriptItem } from '@/types/settings'
 
@@ -189,7 +190,7 @@ export default function ScriptConfigDialog({ open, onOpenChange }: Props) {
           </div>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
