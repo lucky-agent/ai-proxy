@@ -16,11 +16,7 @@ async function getCodeToHtml(): Promise<CodeToHtmlFn> {
 /**
  * 使用 shiki 进行语法高亮，自动处理异步加载和清理
  */
-export function useShiki(
-  code: string,
-  lang: string,
-  theme: string,
-): string {
+export function useShiki(code: string, lang: string, theme: string): string {
   const [html, setHtml] = useState('')
   const codeRef = useRef(code)
   codeRef.current = code

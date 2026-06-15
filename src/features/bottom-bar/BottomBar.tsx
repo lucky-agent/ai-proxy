@@ -52,9 +52,7 @@ export function BottomBar({
       clickTimerRef.current = setTimeout(() => {
         clickTimerRef.current = null
         onToggleDetailPosition(
-          detailPosition === 'hidden' ? 'bottom'
-            : detailPosition === 'bottom' ? 'right'
-            : 'bottom'
+          detailPosition === 'hidden' ? 'bottom' : detailPosition === 'bottom' ? 'right' : 'bottom'
         )
       }, 250)
     }

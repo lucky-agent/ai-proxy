@@ -26,8 +26,8 @@ export default function DetailPanel({ entry, onClose, showRequest = true }: Prop
     setFullPanel(null)
     const req = requestPanelRef.current
     const resp = responsePanelRef.current
-    if (req?.isCollapsed()) req.resize(50)
-    if (resp?.isCollapsed()) resp.resize(50)
+    if (req?.isCollapsed()) req.resize("50")
+    if (resp?.isCollapsed()) resp.resize("50")
   }, [entry?.id])
 
   const handleRequestTitleClick = useCallback(() => {
@@ -38,11 +38,11 @@ export default function DetailPanel({ entry, onClose, showRequest = true }: Prop
     if (fullPanel === 'request') {
       // Request 已占满 → 恢复 50/50
       resp.expand()
-      req.resize(50)
+      req.resize("50")
       setFullPanel(null)
     } else {
       // 50/50 或 Response 占满 → Request 占满
-      req.resize(100)
+      req.resize("100")
       resp.collapse()
       setFullPanel('request')
     }
@@ -56,11 +56,11 @@ export default function DetailPanel({ entry, onClose, showRequest = true }: Prop
     if (fullPanel === 'response') {
       // Response 已占满 → 恢复 50/50
       req.expand()
-      resp.resize(50)
+      resp.resize("50")
       setFullPanel(null)
     } else {
       // 50/50 或 Request 占满 → Response 占满
-      resp.resize(100)
+      resp.resize("100")
       req.collapse()
       setFullPanel('response')
     }

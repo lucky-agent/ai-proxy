@@ -78,6 +78,13 @@ pub(crate) fn log_request(
             acc
         });
 
+    let req_content_type = parts.headers.get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let req_content_length = parts.headers.get("content-length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok());
+
     if let Some(ch) = event_channel {
        ch.send(ProxyEvent::Request {
            id: request_id.clone(),
@@ -87,6 +94,8 @@ pub(crate) fn log_request(
            headers: req_headers,
            query_params,
             decrypted: true,
+            content_type: req_content_type,
+            content_length: req_content_length,
        })
         .ok();
         if !body_str.is_empty() {
@@ -160,12 +169,21 @@ pub(crate) fn log_response(
         });
 
     if let Some(ch) = event_channel {
+        let resp_content_type = parts.headers.get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        let resp_content_length = parts.headers.get("content-length")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok());
+
         ch.send(ProxyEvent::Response {
             id: request_id.to_string(),
             status: status.as_u16(),
             timestamp: chrono::Utc::now().timestamp_millis(),
             duration_ms,
             headers: resp_headers,
+            content_type: resp_content_type,
+            content_length: resp_content_length,
         })
         .ok();
     }

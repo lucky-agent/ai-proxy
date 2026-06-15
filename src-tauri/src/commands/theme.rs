@@ -5,9 +5,7 @@ use crate::config::Settings;
 
 #[tauri::command]
 pub fn get_theme(state: tauri::State<'_, AppState>) -> Result<String, String> {
-    let data_dir = state.store().data_dir();
-    let settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
-    Ok(settings.ui.theme)
+    Ok(state.settings().ui.theme)
 }
 
 #[tauri::command]

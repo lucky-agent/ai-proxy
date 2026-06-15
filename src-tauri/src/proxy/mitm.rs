@@ -122,6 +122,8 @@ where
             headers,
             query_params: HashMap::new(),
             decrypted: false,
+            content_type: None,
+            content_length: None,
         })
         .ok();
     }
@@ -142,6 +144,8 @@ where
                     timestamp: chrono::Utc::now().timestamp_millis(),
                     duration_ms,
                     headers: HashMap::new(),
+                    content_type: None,
+                    content_length: None,
                 })
                 .ok();
             }

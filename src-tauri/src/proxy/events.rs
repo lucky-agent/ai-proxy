@@ -14,6 +14,10 @@ pub(crate) enum ProxyEvent {
         headers: HashMap<String, String>,
         query_params: HashMap<String, String>,
         decrypted: bool,
+        /// 从 Content-Type header 提取的值
+        content_type: Option<String>,
+        /// 从 Content-Length header 解析的值
+        content_length: Option<u64>,
     },
     RequestChunk {
         id: String,
@@ -25,6 +29,10 @@ pub(crate) enum ProxyEvent {
         timestamp: i64,
         duration_ms: u64,
         headers: HashMap<String, String>,
+        /// 从 Content-Type header 提取的值
+        content_type: Option<String>,
+        /// 从 Content-Length header 解析的值
+        content_length: Option<u64>,
     },
     ResponseChunk {
         id: String,

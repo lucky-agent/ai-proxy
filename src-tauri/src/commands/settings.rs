@@ -3,8 +3,7 @@ use crate::config::{ProxyConfig, ScriptConfig, Settings, SslConfig};
 
 #[tauri::command]
 pub fn get_settings(state: tauri::State<'_, AppState>) -> Result<Settings, String> {
-    let data_dir = state.store().data_dir();
-    Settings::load_from_path(&data_dir).map_err(|e| e.to_string())
+    Ok(state.settings())
 }
 
 #[tauri::command]

@@ -3,9 +3,9 @@ import { Channel, invoke } from '@tauri-apps/api/core'
 import type { ProxyEvent, TrafficEntry } from '@/types/proxy'
 const MAX_CHUNKS = 2000
 const MAX_BODY_ACCUMULATE = 2 * 1024 * 1024
- export function useProxyEvents() {
-   const counterRef = useRef(0)
-   const entriesRef = useRef<Map<string, TrafficEntry>>(new Map())
+export function useProxyEvents() {
+  const counterRef = useRef(0)
+  const entriesRef = useRef<Map<string, TrafficEntry>>(new Map())
   const forceUpdateRef = useRef(0)
   const [, setTick] = useState(0)
   const triggerUpdate = useCallback(() => {
@@ -16,32 +16,36 @@ const MAX_BODY_ACCUMULATE = 2 * 1024 * 1024
     const channel = new Channel<ProxyEvent>()
     channel.onmessage = (event: ProxyEvent) => {
       switch (event.type) {
-      case 'request': {
-       const { id, method, uri, timestamp, headers, decrypted } = event
-       console.log('[ProxyEvent] request', { id, method, uri, timestamp, decrypted })
-       const query_params = 'query_params' in event ? (event as any).query_params : undefined
-        counterRef.current += 1
-        entriesRef.current.set(id, {
-           id,
-           method,
-           uri,
-           requestNumber: counterRef.current,
-           requestTimestamp: timestamp,
-           requestHeaders: headers,
-           requestBody: null,
-           requestQuery: query_params,
+        case 'request': {
+          const { id, method, uri, timestamp, headers, decrypted } = event
+          console.log('[ProxyEvent] request', { id, method, uri, timestamp, decrypted })
+          const query_params = 'query_params' in event ? (event as any).query_params : undefined
+          counterRef.current += 1
+          entriesRef.current.set(id, {
+            id,
+            method,
+            uri,
+            requestNumber: counterRef.current,
+            requestTimestamp: timestamp,
+            requestHeaders: headers,
+            requestBody: null,
+            requestQuery: query_params,
             decrypted,
-           status: null,
+            requestContentType: event.content_type,
+            requestContentLength: event.content_length,
+            status: null,
             responseTimestamp: null,
             durationMs: null,
             responseHeaders: null,
             responseBody: '',
             responseChunks: [],
+            responseContentType: undefined,
+            responseContentLength: undefined,
             error: null,
           })
           triggerUpdate()
           break
-       }
+        }
         case 'request_chunk': {
           const { id, chunk } = event
           const entry = entriesRef.current.get(id)
@@ -63,6 +67,8 @@ const MAX_BODY_ACCUMULATE = 2 * 1024 * 1024
             entry.responseTimestamp = timestamp
             entry.durationMs = duration_ms
             entry.responseHeaders = headers
+            entry.responseContentType = event.content_type
+            entry.responseContentLength = event.content_length
             entriesRef.current.set(id, entry)
           }
           triggerUpdate()
@@ -95,6 +101,7 @@ const MAX_BODY_ACCUMULATE = 2 * 1024 * 1024
         }
       }
     }
+
     invoke('subscribe_proxy_events', { channel })
     return () => {
       // Channel is dropped when component unmounts;

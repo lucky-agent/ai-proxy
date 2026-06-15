@@ -4,8 +4,10 @@ export interface RequestEvent {
   uri: string
   timestamp: number
   headers: Record<string, string>
-   query_params?: Record<string, string>
+  query_params?: Record<string, string>
   decrypted: boolean
+  content_type?: string
+  content_length?: number
 }
 
 export interface ResponseEvent {
@@ -14,6 +16,8 @@ export interface ResponseEvent {
   timestamp: number
   duration_ms: number
   headers: Record<string, string>
+  content_type?: string
+  content_length?: number
 }
 
 export interface ResponseChunkEvent {
@@ -32,11 +36,30 @@ export interface RequestBodyChunkEvent {
 }
 
 export type ProxyEvent =
-  | { type: "request"; id: string; method: string; uri: string; timestamp: number; headers: Record<string, string>; decrypted: boolean }
-  | { type: "request_chunk"; id: string; chunk: string }
-  | { type: "response"; id: string; status: number; timestamp: number; duration_ms: number; headers: Record<string, string> }
-  | { type: "response_chunk"; id: string; chunk: string }
-  | { type: "error"; id: string; error: string }
+  | {
+      type: 'request'
+      id: string
+      method: string
+      uri: string
+      timestamp: number
+      headers: Record<string, string>
+      decrypted: boolean
+      content_type?: string
+      content_length?: number
+    }
+  | { type: 'request_chunk'; id: string; chunk: string }
+  | {
+      type: 'response'
+      id: string
+      status: number
+      timestamp: number
+      duration_ms: number
+      headers: Record<string, string>
+      content_type?: string
+      content_length?: number
+    }
+  | { type: 'response_chunk'; id: string; chunk: string }
+  | { type: 'error'; id: string; error: string }
 
 export interface ChunkRecord {
   data: string
@@ -51,13 +74,17 @@ export interface TrafficEntry {
   requestHeaders: Record<string, string>
   requestBody: string | null
   requestQuery?: Record<string, string>
- status: number | null
- responseTimestamp: number | null
- durationMs: number | null
- responseHeaders: Record<string, string> | null
- responseBody: string | null
- responseChunks: ChunkRecord[]
- error: string | null
+  requestContentType?: string
+  requestContentLength?: number
+  status: number | null
+  responseTimestamp: number | null
+  durationMs: number | null
+  responseHeaders: Record<string, string> | null
+  responseBody: string | null
+  responseChunks: ChunkRecord[]
+  responseContentType?: string
+  responseContentLength?: number
+  error: string | null
   edited?: boolean
   decrypted?: boolean
 }
