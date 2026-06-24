@@ -9,6 +9,12 @@ use sqlite;
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct StoredEntry {
     pub id: String,
+    #[serde(rename = "sourceType", default)]
+    pub source_type: Option<String>,
+    #[serde(rename = "collectionId", default)]
+    pub collection_id: Option<String>,
+    #[serde(default)]
+    pub name: Option<String>,
     pub method: String,
     pub uri: String,
     #[serde(rename = "requestTimestamp")]
@@ -17,8 +23,16 @@ pub(crate) struct StoredEntry {
     pub request_headers: HashMap<String, String>,
     #[serde(rename = "requestBody")]
     pub request_body: Option<String>,
+    #[serde(rename = "bodyType", default)]
+    pub body_type: Option<String>,
+    #[serde(rename = "authType", default)]
+    pub auth_type: Option<String>,
+    #[serde(rename = "authData", default)]
+    pub auth_data: Option<String>,
     #[serde(rename = "requestQuery")]
     pub request_query: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub cookies: Option<String>,
     pub status: Option<u16>,
     #[serde(rename = "responseTimestamp")]
     pub response_timestamp: Option<i64>,
@@ -65,6 +79,11 @@ impl Db {
         }
     }
 
+    /// Return a reference to the inner connection, if any.
+    pub(crate) fn conn_ref(&self) -> Option<&sqlite::Connection> {
+        self.conn.as_ref()
+    }
+
     /// Create a temporary Db instance for use inside spawned threads.
     fn ephemeral(conn: sqlite::Connection) -> Self {
         Self {
@@ -79,15 +98,35 @@ impl Db {
             Some(ref conn) => conn,
             None => return Ok(()),
         };
+        conn.execute("PRAGMA foreign_keys = ON")?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS collection_nodes (
+                id          TEXT PRIMARY KEY,
+                parent_id   TEXT NOT NULL DEFAULT '0',
+                name        TEXT NOT NULL,
+                node_type   TEXT NOT NULL,
+                request_id  TEXT,
+                sort_order  INTEGER DEFAULT 0,
+                created_at  INTEGER NOT NULL,
+                updated_at  INTEGER NOT NULL
+            )",
+        )?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS requests (
                 id TEXT PRIMARY KEY,
+                source_type TEXT NOT NULL DEFAULT 'traffic',
+                collection_id TEXT,
+                name TEXT,
                 method TEXT NOT NULL,
                 uri TEXT NOT NULL,
                 request_timestamp INTEGER NOT NULL,
-                request_headers TEXT NOT NULL DEFAULT '{}',
+                request_headers TEXT NOT NULL DEFAULT '[]',
                 request_body TEXT,
-                request_query TEXT DEFAULT '{}',
+                body_type TEXT,
+                auth_type TEXT,
+                auth_data TEXT,
+                request_query TEXT DEFAULT '[]',
+                cookies TEXT DEFAULT '[]',
                 status INTEGER,
                 response_timestamp INTEGER,
                 duration_ms INTEGER,
@@ -97,10 +136,6 @@ impl Db {
                 edited INTEGER NOT NULL DEFAULT 0
             )",
         )?;
-        let conn = match self.conn {
-            Some(ref conn) => conn,
-            None => return Ok(()),
-        };
         conn.execute(
             "CREATE TABLE IF NOT EXISTS response_chunks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,25 +159,40 @@ impl Db {
         query_json: &str,
         body: Option<&str>,
         edited: bool,
+        source_type: &str,
+        collection_id: Option<&str>,
+        cookies_json: &str,
+        body_type: &str,
+        auth_type: &str,
+        auth_data: &str,
     ) -> Result<(), sqlite::Error> {
         let conn = match self.conn {
             Some(ref conn) => conn,
             None => return Ok(()),
         };
         let mut stmt = conn.prepare(
-            "INSERT INTO requests (id, method, uri, request_timestamp, request_headers, request_query, request_body, edited) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO requests (id, source_type, collection_id, method, uri, request_timestamp, request_headers, request_query, cookies, request_body, body_type, auth_type, auth_data, edited) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )?;
         stmt.bind((1_usize, id))?;
-        stmt.bind((2_usize, method))?;
-        stmt.bind((3_usize, uri))?;
-        stmt.bind((4_usize, timestamp as i64))?;
-        stmt.bind((5_usize, headers_json))?;
-        stmt.bind((6_usize, query_json))?;
-        match body {
-            Some(b) => stmt.bind((7_usize, b))?,
-            None => stmt.bind((7_usize, sqlite::Value::Null))?,
+        stmt.bind((2_usize, source_type))?;
+        match collection_id {
+            Some(cid) => stmt.bind((3_usize, cid))?,
+            None => stmt.bind((3_usize, sqlite::Value::Null))?,
         }
-        stmt.bind((8_usize, if edited { 1 } else { 0 }))?;
+        stmt.bind((4_usize, method))?;
+        stmt.bind((5_usize, uri))?;
+        stmt.bind((6_usize, timestamp as i64))?;
+        stmt.bind((7_usize, headers_json))?;
+        stmt.bind((8_usize, query_json))?;
+        stmt.bind((9_usize, cookies_json))?;
+        match body {
+            Some(b) => stmt.bind((10_usize, b))?,
+            None => stmt.bind((10_usize, sqlite::Value::Null))?,
+        }
+        stmt.bind((11_usize, body_type))?;
+        stmt.bind((12_usize, auth_type))?;
+        stmt.bind((13_usize, auth_data))?;
+        stmt.bind((14_usize, if edited { 1 } else { 0 }))?;
         stmt.next()?;
         Ok(())
     }
@@ -195,51 +245,40 @@ impl Db {
         Ok(())
     }
 
-    /// Convert an HTTP HeaderMap to a JSON string.
-    /// Duplicate header values (like Set-Cookie) are joined with newline.
+    /// Convert an HTTP HeaderMap to a JSON array of key-value pairs.
+    /// Duplicate Set-Cookie headers are emitted as separate array elements.
     pub(crate) fn headers_to_json(headers: &HeaderMap) -> String {
-        let h: std::collections::HashMap<String, String> = headers
-            .iter()
-            .filter_map(|(k, v)| {
-                let key = k.to_string();
-                let val = v.to_str().ok()?.to_string();
-                Some((key, val))
-            })
-            .fold(std::collections::HashMap::new(), |mut acc, (key, val)| {
-                if key.to_lowercase() == "set-cookie" {
-                    if let Some(existing) = acc.get_mut(&key) {
-                        existing.push('\n');
-                        existing.push_str(&val);
-                    } else {
-                        acc.insert(key, val);
-                    }
-                } else if let Some(existing) = acc.get_mut(&key) {
-                    existing.push_str(", ");
-                    existing.push_str(&val);
-                } else {
-                    acc.insert(key, val);
-                }
-                acc
-            });
-        serde_json::to_string(&h).unwrap_or_default()
+        let mut pairs: Vec<serde_json::Value> = Vec::new();
+        for (k, v) in headers.iter() {
+            let key = k.to_string();
+            let val = v.to_str().ok().unwrap_or("");
+            if key.to_lowercase() == "set-cookie" {
+                // Split cookies by `; `? No — each Set-Cookie line is one cookie.
+                // Emit each occurrence as a separate pair (loop already iterates each).
+                pairs.push(serde_json::json!({"key": key, "value": val}));
+            } else {
+                pairs.push(serde_json::json!({"key": key, "value": val}));
+            }
+        }
+        serde_json::to_string(&pairs).unwrap_or_else(|_| "[]".to_string())
     }
 
-    /// Extract URI query parameters as a JSON string.
+    /// Extract URI query parameters as a JSON array of key-value pairs.
     pub(crate) fn query_to_json(uri: &rama::http::Uri) -> String {
         let q_str = uri.query().unwrap_or("");
         if q_str.is_empty() {
-            return "{}".to_string();
+            return "[]".to_string();
         }
-        let q: std::collections::HashMap<String, String> = q_str
+        let pairs: Vec<serde_json::Value> = q_str
             .split('&')
             .filter_map(|pair| {
                 let mut it = pair.splitn(2, '=');
                 let key = it.next()?;
                 let val = it.next().unwrap_or("");
-                Some((key.to_string(), val.to_string()))
+                Some(serde_json::json!({"key": key, "value": val}))
             })
             .collect();
-        serde_json::to_string(&q).unwrap_or_default()
+        serde_json::to_string(&pairs).unwrap_or_else(|_| "[]".to_string())
     }
 
     /// Spawn a background thread to upsert request. Returns immediately.
@@ -294,7 +333,10 @@ impl Db {
         std::thread::spawn(move || {
             if let Ok(conn) = sqlite::open(&path) {
                 let db = Self::ephemeral(conn);
-                if let Err(e) = db.upsert_request(&rid, &m, &u, ts, &h, &q, b.as_deref(), ed) {
+                if let Err(e) = db.upsert_request(
+                    &rid, &m, &u, ts, &h, &q, b.as_deref(), ed,
+                    "traffic", None, "[]", "", "", "",
+                ) {
                     log::warn!("upsert_request_async failed: {e}");
                 }
             }
@@ -415,41 +457,68 @@ impl Db {
         self.db_path.clone()
     }
 
+    /// Parse JSON headers or query from either array format `[{"key":"x","value":"y"}]`
+    /// or legacy object format `{"key":"value"}`, returning a HashMap.
+    fn parse_kv_json(s: &str) -> HashMap<String, String> {
+        // Try array format first: [{"key":"x","value":"y"}]
+        if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(s) {
+            let mut map = HashMap::new();
+            for item in arr {
+                if let (Some(k), Some(v)) = (
+                    item.get("key").and_then(|v| v.as_str()),
+                    item.get("value").and_then(|v| v.as_str()),
+                ) {
+                    map.insert(k.to_string(), v.to_string());
+                }
+            }
+            return map;
+        }
+        // Fallback to legacy object format {"key":"value"}
+        serde_json::from_str(s).unwrap_or_default()
+    }
+
     pub(crate) fn load_all(&self) -> Result<Vec<StoredEntry>, sqlite::Error> {
         let conn = match self.conn {
             Some(ref conn) => conn,
             None => return Ok(Vec::new()),
         };
         let mut stmt = conn.prepare(
-            "SELECT id, method, uri, request_timestamp, request_headers, request_body, request_query, status, response_timestamp, duration_ms, response_headers, response_body, error, edited FROM requests ORDER BY request_timestamp DESC",
+            "SELECT id, source_type, collection_id, name, method, uri, request_timestamp, request_headers, request_body, body_type, auth_type, auth_data, request_query, cookies, status, response_timestamp, duration_ms, response_headers, response_body, error, edited FROM requests ORDER BY request_timestamp DESC",
         )?;
         let mut entries = Vec::new();
         while let sqlite::State::Row = stmt.next()? {
-            let headers_str: String = stmt.read::<String, _>(4)?;
+            let headers_str: String = stmt.read::<String, _>(7)?;
             let headers: HashMap<String, String> =
-                serde_json::from_str(&headers_str).unwrap_or_default();
-            let query_str: Option<String> = stmt.read::<Option<String>, _>(6)?;
+                Self::parse_kv_json(&headers_str);
+            let query_str: Option<String> = stmt.read::<Option<String>, _>(12)?;
             let query: Option<HashMap<String, String>> =
-                query_str.and_then(|s| serde_json::from_str(&s).ok());
-            let resp_headers_str: Option<String> = stmt.read::<Option<String>, _>(10)?;
+                query_str.map(|s| Self::parse_kv_json(&s));
+            let resp_headers_str: Option<String> = stmt.read::<Option<String>, _>(18)?;
             let resp_headers: Option<HashMap<String, String>> =
                 resp_headers_str.and_then(|s| serde_json::from_str(&s).ok());
-            let edited_int: i64 = stmt.read::<i64, _>(13)?;
+            let edited_int: i64 = stmt.read::<i64, _>(21)?;
 
             entries.push(StoredEntry {
                 id: stmt.read::<String, _>(0)?,
-                method: stmt.read::<String, _>(1)?,
-                uri: stmt.read::<String, _>(2)?,
-                request_timestamp: stmt.read::<i64, _>(3)?,
+                source_type: stmt.read::<Option<String>, _>(1)?,
+                collection_id: stmt.read::<Option<String>, _>(2)?,
+                name: stmt.read::<Option<String>, _>(3)?,
+                method: stmt.read::<String, _>(4)?,
+                uri: stmt.read::<String, _>(5)?,
+                request_timestamp: stmt.read::<i64, _>(6)?,
                 request_headers: headers,
-                request_body: stmt.read::<Option<String>, _>(5)?,
+                request_body: stmt.read::<Option<String>, _>(8)?,
+                body_type: stmt.read::<Option<String>, _>(9)?,
+                auth_type: stmt.read::<Option<String>, _>(10)?,
+                auth_data: stmt.read::<Option<String>, _>(11)?,
                 request_query: query,
-                status: stmt.read::<Option<i64>, _>(7)?.map(|v| v as u16),
-                response_timestamp: stmt.read::<Option<i64>, _>(8)?,
-                duration_ms: stmt.read::<Option<i64>, _>(9)?.map(|v| v as u64),
+                cookies: stmt.read::<Option<String>, _>(13)?,
+                status: stmt.read::<Option<i64>, _>(15)?.map(|v| v as u16),
+                response_timestamp: stmt.read::<Option<i64>, _>(16)?,
+                duration_ms: stmt.read::<Option<i64>, _>(17)?.map(|v| v as u64),
                 response_headers: resp_headers,
-                response_body: stmt.read::<Option<String>, _>(11)?,
-                error: stmt.read::<Option<String>, _>(12)?,
+                response_body: stmt.read::<Option<String>, _>(19)?,
+                error: stmt.read::<Option<String>, _>(20)?,
                 edited: if edited_int != 0 { Some(true) } else { None },
                 response_chunks: Vec::new(),
             });

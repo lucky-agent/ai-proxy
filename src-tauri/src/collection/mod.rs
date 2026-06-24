@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+pub(crate) mod requests;
+
 /// A key-value pair representing an HTTP header.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HeaderPair {

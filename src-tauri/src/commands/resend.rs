@@ -49,6 +49,12 @@ pub async fn resend_request(
             &serde_json::to_string(&q).unwrap_or_default(),
             body.as_deref(),
             true,
+            "traffic",
+            None,
+            "[]",
+            "",
+            "",
+            "",
         )
         .ok();
     }
