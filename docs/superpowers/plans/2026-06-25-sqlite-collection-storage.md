@@ -79,7 +79,7 @@ Tauri commands 层重写，前端 hook 从 `save_collections` 批量改为逐操
 
 **验证**：`cargo check` 通过
 
-- [ ] **3.1** 创建 `collection/collection_nodes.rs`
+- [x] **3.1** 创建 `collection/collection_nodes.rs`
   - 定义 `CollectionNodesRepository` trait
   - `impl CollectionNodesRepository for Db` 方法：
     - `load_all_collections()` — 全量查询 + HashMap 递归组装
