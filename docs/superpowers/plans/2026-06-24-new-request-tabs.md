@@ -98,7 +98,7 @@ git commit -m "feat(i18n): add tab-related translation keys for new-request-tabs
 
 在 `collection.ts` 末尾新增 `RequestTab` interface。
 
-- [ ] **步骤 1：在 types/collection.ts 新增 RequestTab**
+- [x] **步骤 1：在 types/collection.ts 新增 RequestTab**
 
 在文件末尾追加：
 
@@ -123,7 +123,7 @@ export interface RequestTab {
 }
 ```
 
-- [ ] **步骤 2：验证 TypeScript 编译**
+- [x] **步骤 2：验证 TypeScript 编译**
 
 运行：
 
@@ -133,7 +133,7 @@ cd "E:\project\rust\ai-proxy" && npx tsc --noEmit --project tsconfig.json 2>&1 |
 
 预期：无新增类型错误（可能与当前分支已有错误一致）
 
-- [ ] **步骤 3：Commit**
+- [x] **步骤 3：Commit**
 
 ```bash
 git add src/types/collection.ts
