@@ -96,23 +96,23 @@ Tauri commands 层重写，前端 hook 从 `save_collections` 批量改为逐操
 
 **验证**：`cargo check` 通过
 
-- [ ] **4.1** 实现 `get_collections` — 调用 `CollectionNodesRepository::load_all_collections()`
+- [x] **4.1** 实现 `get_collections` — 调用 `CollectionNodesRepository::load_all_collections()`
 
-- [ ] **4.2** 实现 `create_collection` — `parent_id='0'`, 生成 UUID + 时间戳
+- [x] **4.2** 实现 `create_collection` — `parent_id='0'`, 生成 UUID + 时间戳
 
-- [ ] **4.3** 实现 `create_folder` — 生成 UUID，插入到指定 parent
+- [x] **4.3** 实现 `create_folder` — 生成 UUID，插入到指定 parent
 
-- [ ] **4.4** 实现 `create_request` — 生成两个 UUID（node + request），关联插入
+- [x] **4.4** 实现 `create_request` — 生成两个 UUID（node + request），关联插入
 
-- [ ] **4.5** 实现 `delete_node` — 级联删除
+- [x] **4.5** 实现 `delete_node` — 级联删除
 
-- [ ] **4.6** 实现 `rename_node` — 更新 name + updated_at
+- [x] **4.6** 实现 `rename_node` — 更新 name + updated_at
 
-- [ ] **4.7** 实现 `move_node` — 更新 parent_id + updated_at
+- [x] **4.7** 实现 `move_node` — 更新 parent_id + updated_at
 
-- [ ] **4.8** 实现 `save_request` — 调用 `RequestsRepository::update_collection_request()`
+- [x] **4.8** 实现 `save_request` — 调用 `RequestsRepository::update_collection_request()`
 
-- [ ] **4.9** 实现 `duplicate_request` — 复制节点 + 请求行
+- [x] **4.9** 实现 `duplicate_request` — 复制节点 + 请求行
 
 ### Task 5 — 注册与清理
 
