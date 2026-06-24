@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { SendIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,9 +11,11 @@ import { useCollections } from '@/hooks/useCollections'
 import { ApiCollectionPanel } from './ApiCollectionPanel'
 import { DetailPanel } from '@/features/detail-panel'
 import RequestEditor from './RequestEditor'
+import RequestTabBar from './RequestTabBar'
+import { useRequestTabs } from './useRequestTabs'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { ApiRequestNode, HttpMethod, KeyValuePair, BodyType } from '@/types/collection'
+import type { ApiRequestNode, KeyValuePair } from '@/types/collection'
 import type { TrafficEntry } from '@/types/proxy'
 
 interface NewRequestViewProps {
@@ -21,9 +23,8 @@ interface NewRequestViewProps {
   entries: TrafficEntry[]
 }
 
-const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 
-/** Serialize cookies KV array into a Cookie header value */
 function serializeCookies(cookies: KeyValuePair[]): string | null {
   const filled = cookies.filter(c => c.key.trim())
   if (filled.length === 0) return null
@@ -44,37 +45,43 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     renameCollection,
   } = useCollections()
 
-  const [method, setMethod] = useState<HttpMethod>('GET')
-  const [url, setUrl] = useState('')
-  const [params, setParams] = useState<KeyValuePair[]>([])
-  const [headers, setHeaders] = useState<KeyValuePair[]>([])
-  const [cookies, setCookies] = useState<KeyValuePair[]>([])
-  const [body, setBody] = useState('')
-  const [bodyType, setBodyType] = useState<BodyType>('json')
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [activeEntryId, setActiveEntryId] = useState<string | null>(null)
+  const {
+    tabs,
+    activeTab,
+    openTab,
+    closeTab,
+    activateTab,
+    updateActiveTab,
+    closeOthers,
+    closeAll,
+    unlinkNode,
+  } = useRequestTabs(updateRequest)
 
+  // 左侧树点击 request → 打开 tab
+  const handleSelectRequest = useCallback((node: ApiRequestNode) => {
+    openTab(node.id, node)
+  }, [openTab])
+
+  // 发送请求
   const handleSend = useCallback(async () => {
-    if (sending) return
-    if (!url.trim()) return
+    if (!activeTab) return
+    if (activeTab.sending) return
+    if (!activeTab.url.trim()) return
 
-    setSending(true)
-    setError('')
+    updateActiveTab({ sending: true, error: '' })
 
     const headerMap: Record<string, string> = {}
-    for (const { key, value } of headers) {
+    for (const { key, value } of activeTab.headers) {
       if (key.trim()) headerMap[key.trim()] = value
     }
 
-    const cookieStr = serializeCookies(cookies)
+    const cookieStr = serializeCookies(activeTab.cookies)
     if (cookieStr) {
       headerMap['Cookie'] = cookieStr
     }
 
-    const filledParams = params.filter(p => p.key.trim())
-    let finalUrl = url.trim()
+    const filledParams = activeTab.params.filter(p => p.key.trim())
+    let finalUrl = activeTab.url.trim()
     if (filledParams.length > 0) {
       const sep = finalUrl.includes('?') ? '&' : '?'
       const qs = filledParams
@@ -85,48 +92,28 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
 
     try {
       const entryId = await invoke<string>('resend_request', {
-        method,
+        method: activeTab.method,
         url: finalUrl,
         headers: headerMap,
-        body: body || null,
+        body: activeTab.body || null,
       })
-      setActiveEntryId(entryId)
+      updateActiveTab({ responseEntryId: entryId, sending: false })
       onSendSuccess(entryId)
     } catch (err) {
-      setError(String(err))
-    } finally {
-      setSending(false)
+      updateActiveTab({ sending: false, error: String(err) })
     }
-  }, [sending, url, method, params, headers, cookies, body, onSendSuccess])
+  }, [activeTab, updateActiveTab, onSendSuccess])
 
-  const handleSelectRequest = useCallback((node: ApiRequestNode) => {
-    setSelectedId(node.id)
-    setMethod(node.method)
-    setUrl(node.url)
-    setParams(node.params ?? [])
-    setHeaders(node.headers ?? [])
-    setCookies(node.cookies ?? [])
-    setBodyType(node.bodyType ?? 'json')
-    setBody(node.body ?? '')
-  }, [])
+  // 树节点删除 → 取消关联 tab
+  const handleRemoveNode = useCallback((nodeId: string) => {
+    unlinkNode(nodeId)
+    removeNode(nodeId)
+  }, [unlinkNode, removeNode])
 
-  const handleSave = useCallback(() => {
-    if (!selectedId) return
-    updateRequest(selectedId, {
-      method,
-      url,
-      params: params.filter(p => p.key.trim()),
-      headers: headers.filter(h => h.key.trim()),
-      cookies: cookies.filter(c => c.key.trim()),
-      bodyType,
-      body,
-    })
-  }, [selectedId, method, url, params, headers, cookies, bodyType, body, updateRequest])
-
-  const activeEntry = useMemo(() => {
-    if (!activeEntryId) return undefined
-    return entries.find(e => e.id === activeEntryId)
-  }, [activeEntryId, entries])
+  // 根据 activeTab.responseEntryId 查找 TrafficEntry
+  const activeEntry = activeTab?.responseEntryId
+    ? entries.find(e => e.id === activeTab.responseEntryId)
+    : undefined
 
   if (loading) {
     return (
@@ -143,11 +130,11 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
         <div className="h-full overflow-hidden">
           <ApiCollectionPanel
             collections={collections}
-            selectedId={selectedId}
+            selectedId={activeTab?.linkedNodeId ?? null}
             onSelectRequest={handleSelectRequest}
             addFolder={addFolder}
             addRequest={addRequest}
-            removeNode={removeNode}
+            removeNode={handleRemoveNode}
             renameNode={renameNode}
             duplicateRequest={duplicateRequest}
             renameCollection={renameCollection}
@@ -157,22 +144,56 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
 
       <ResizableHandle withHandle />
 
-      {/* Right: editor + response */}
+      {/* Right: tab container or empty state */}
       <ResizablePanel id="right" defaultSize="78%" minSize="60%">
-        {activeEntry ? (
-          <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="h-full">
-            <ResizablePanel id="editor" defaultSize="45%" minSize="15%" maxSize="75%">
+        {tabs.length === 0 ? (
+          /* --- 空状态占位 --- */
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+            <SendIcon className="size-10 opacity-20" />
+            <p className="text-sm font-medium">{t('tab.emptyTitle')}</p>
+            <p className="text-xs">{t('tab.emptySubtitle')}</p>
+            <div className="flex gap-2 mt-2">
+              <Button variant="outline" size="sm" onClick={() => openTab(null)}>
+                + {t('tab.newRequest')}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => {
+                // 聚焦左侧面板——通过点击 ResizablePanel 无法程序化触发
+                // 因此改为仅提示，用户需手动点击树节点
+              }}>
+                {t('tab.openFromCollection')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          /* --- Tab 区域 --- */
+          <div className="flex flex-col h-full min-h-0">
+            {/* Tab 标签条 */}
+            <RequestTabBar
+              tabs={tabs}
+              activeTabId={activeTab?.id ?? null}
+              onActivate={activateTab}
+              onClose={closeTab}
+              onNew={() => openTab(null)}
+              onCloseOthers={closeOthers}
+              onCloseAll={closeAll}
+            />
+
+            {/* 活跃 tab 内容（仅挂载 active tab） */}
+            {activeTab && (
               <div className="flex flex-col min-h-0 h-full overflow-hidden">
                 <div className="flex shrink-0 items-center gap-2 px-4 py-2 border-b border-border bg-surface-base/50">
                   <InputGroup className="flex-1">
                     <InputGroupAddon align="inline-start" className="py-0 pl-0">
-                      <Select value={method} onValueChange={(v) => setMethod(v as HttpMethod)}>
+                      <Select
+                        value={activeTab.method}
+                        onValueChange={v => updateActiveTab({ method: v as typeof METHODS[number] })}
+                      >
                         <SelectTrigger className={cn(
                           'h-8 py-0 border-0 shadow-none rounded-none rounded-l-lg bg-transparent',
                           'focus-visible:ring-0 focus-visible:ring-offset-0',
                           'min-w-0 w-auto px-2 text-xs font-semibold',
                           'data-[size=sm]:h-8',
-                          METHOD_COLORS[method] ? `text-${METHOD_COLORS[method]}` : '',
+                          METHOD_COLORS[activeTab.method] ? `text-${METHOD_COLORS[activeTab.method]}` : '',
                         )}>
                           <SelectValue />
                         </SelectTrigger>
@@ -184,102 +205,92 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                       </Select>
                     </InputGroupAddon>
                     <InputGroupInput
-                      value={url}
-                      onChange={e => setUrl(e.target.value)}
+                      value={activeTab.url}
+                      onChange={e => updateActiveTab({ url: e.target.value })}
                       className="text-xs font-mono"
                       placeholder="https://api.example.com/v1/endpoint"
                     />
                   </InputGroup>
-                  {selectedId && (
-                    <Button onClick={handleSave} variant="outline" size="sm">
+                  {activeTab.linkedNodeId && (
+                    <Button
+                      onClick={() => {
+                        if (!activeTab.linkedNodeId) return
+                        updateRequest(activeTab.linkedNodeId, {
+                          method: activeTab.method,
+                          url: activeTab.url,
+                          params: activeTab.params.filter(p => p.key.trim()),
+                          headers: activeTab.headers.filter(h => h.key.trim()),
+                          cookies: activeTab.cookies.filter(c => c.key.trim()),
+                          bodyType: activeTab.bodyType,
+                          body: activeTab.body,
+                        })
+                      }}
+                      variant="outline"
+                      size="sm"
+                    >
                       {t('settings.save')}
                     </Button>
                   )}
-                  <Button onClick={handleSend} disabled={sending || !url.trim()} size="sm">
+                  <Button onClick={handleSend} disabled={activeTab.sending || !activeTab.url.trim()} size="sm">
                     <SendIcon className="size-3.5" />
-                    {sending ? '...' : t('sendRequest.send')}
+                    {activeTab.sending ? '...' : t('sendRequest.send')}
                   </Button>
                 </div>
-                <RequestEditor
-                  params={params}
-                  headers={headers}
-                  cookies={cookies}
-                  body={body}
-                  bodyType={bodyType}
-                  onParamsChange={setParams}
-                  onHeadersChange={setHeaders}
-                  onCookiesChange={setCookies}
-                  onBodyChange={setBody}
-                  onBodyTypeChange={setBodyType}
-                />
-                {error && (
-                  <Alert variant="destructive" className="shrink-0 mx-4 mb-2">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
+
+                {activeEntry ? (
+                  /* 有响应 → 上下分栏 */
+                  <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="flex-1 min-h-0">
+                    <ResizablePanel id="editor" defaultSize="45%" minSize="15%" maxSize="75%">
+                      <div className="flex flex-col min-h-0 h-full overflow-hidden">
+                        <RequestEditor
+                          params={activeTab.params}
+                          headers={activeTab.headers}
+                          cookies={activeTab.cookies}
+                          body={activeTab.body}
+                          bodyType={activeTab.bodyType}
+                          onParamsChange={v => updateActiveTab({ params: v })}
+                          onHeadersChange={v => updateActiveTab({ headers: v })}
+                          onCookiesChange={v => updateActiveTab({ cookies: v })}
+                          onBodyChange={v => updateActiveTab({ body: v })}
+                          onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
+                        />
+                        {activeTab.error && (
+                          <Alert variant="destructive" className="shrink-0 mx-4 mb-2">
+                            <AlertDescription>{activeTab.error}</AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel id="response" defaultSize="55%" minSize="25%">
+                      <div className="h-full min-h-0">
+                        <DetailPanel entry={activeEntry} showRequest={false} />
+                      </div>
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
+                ) : (
+                  /* 无响应 → 仅编辑器 */
+                  <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
+                    <RequestEditor
+                      params={activeTab.params}
+                      headers={activeTab.headers}
+                      cookies={activeTab.cookies}
+                      body={activeTab.body}
+                      bodyType={activeTab.bodyType}
+                      onParamsChange={v => updateActiveTab({ params: v })}
+                      onHeadersChange={v => updateActiveTab({ headers: v })}
+                      onCookiesChange={v => updateActiveTab({ cookies: v })}
+                      onBodyChange={v => updateActiveTab({ body: v })}
+                      onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
+                    />
+                    {activeTab.error && (
+                      <Alert variant="destructive" className="shrink-0 mx-4 mb-2">
+                        <AlertDescription>{activeTab.error}</AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
                 )}
               </div>
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel id="response" defaultSize="55%" minSize="25%">
-              <div className="h-full min-h-0">
-                <DetailPanel entry={activeEntry} showRequest={false} />
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        ) : (
-          <div className="flex flex-col min-h-0 h-full">
-            <div className="flex shrink-0 items-center gap-2 px-4 py-2 border-b border-border bg-surface-base/50">
-              <InputGroup className="flex-1">
-                <InputGroupAddon align="inline-start" className="py-0 pl-0">
-                  <Select value={method} onValueChange={(v) => setMethod(v as HttpMethod)}>
-                    <SelectTrigger className={cn(
-                      'h-full py-0 border-0 shadow-none rounded-none rounded-l-lg bg-transparent',
-                      'focus-visible:ring-0 focus-visible:ring-offset-0',
-                      'min-w-0 w-auto px-2.5 text-xs font-semibold',
-                      METHOD_COLORS[method] ? `text-${METHOD_COLORS[method]}` : '',
-                    )}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent align="start" alignItemWithTrigger={false} className="max-h-36 overflow-y-auto [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-xs">
-                      {METHODS.map(m => (
-                        <SelectItem key={m} value={m}>{m}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </InputGroupAddon>
-                <InputGroupInput
-                  value={url}
-                  onChange={e => setUrl(e.target.value)}
-                  className="text-xs font-mono"
-                  placeholder="https://api.example.com/v1/endpoint"
-                />
-              </InputGroup>
-              {selectedId && (
-                <Button onClick={handleSave} variant="outline" size="sm">
-                  {t('settings.save')}
-                </Button>
-              )}
-              <Button onClick={handleSend} disabled={sending || !url.trim()} size="sm">
-                <SendIcon className="size-3.5" />
-                {sending ? '...' : t('sendRequest.send')}
-              </Button>
-            </div>
-            <RequestEditor
-              params={params}
-              headers={headers}
-              cookies={cookies}
-              body={body}
-              bodyType={bodyType}
-              onParamsChange={setParams}
-              onHeadersChange={setHeaders}
-              onCookiesChange={setCookies}
-              onBodyChange={setBody}
-              onBodyTypeChange={setBodyType}
-            />
-            {error && (
-              <Alert variant="destructive" className="shrink-0 mx-4 mb-2">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
             )}
           </div>
         )}
