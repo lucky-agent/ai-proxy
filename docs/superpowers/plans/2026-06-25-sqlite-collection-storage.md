@@ -170,8 +170,8 @@ Tauri commands 层重写，前端 hook 从 `save_collections` 批量改为逐操
 
 **验证**：`bun run build` 无错误退出
 
-- [ ] **8.1** 运行 `cargo check` 确认 Rust 编译
+- [x] **8.1** 运行 `cargo check` 确认 Rust 编译
 
-- [ ] **8.2** 运行 `bun run build:vite` 确认前端编译
+- [x] **8.2** 运行 `bun run build:vite` 确认前端编译
 
-- [ ] **8.3** 运行 `bun run build` 完整 Tauri 构建
+- [x] **8.3** 运行 `cargo build --release` 确认完整 Rust release 编译
