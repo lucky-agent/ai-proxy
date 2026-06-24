@@ -38,3 +38,19 @@ export interface ApiRequestNode {
 }
 
 export type ApiTreeNode = ApiFolderNode | ApiRequestNode
+
+export interface RequestTab {
+  id: string
+  name: string
+  linkedNodeId: string | null
+  method: HttpMethod
+  url: string
+  params: KeyValuePair[]
+  headers: KeyValuePair[]
+  cookies: KeyValuePair[]
+  bodyType: BodyType
+  body: string
+  responseEntryId: string | null
+  sending: boolean
+  error: string
+}
