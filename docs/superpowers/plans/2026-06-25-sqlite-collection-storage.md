@@ -134,9 +134,9 @@ Tauri commands 层重写，前端 hook 从 `save_collections` 批量改为逐操
 
 **验证**：`bun run build:vite` 通过
 
-- [ ] **6.1** `ApiRequestNode` 新增 `authType?: string`、`authData?: string`
+- [x] **6.1** `ApiRequestNode` 新增 `authType?: string`、`authData?: string`
 
-- [ ] **6.2** `RequestTab` 新增 `authType: string`、`authData: string`
+- [x] **6.2** `RequestTab` 新增 `authType: string`、`authData: string`
 
 ### Task 7 — 前端 hook 适配
 
@@ -144,25 +144,25 @@ Tauri commands 层重写，前端 hook 从 `save_collections` 批量改为逐操
 
 **验证**：`bun run build` 通过
 
-- [ ] **7.1** 改写 `useCollections`：加载仍用 `get_collections`，各操作方法改为细粒度 invoke
+- [x] **7.1** 改写 `useCollections`：加载仍用 `get_collections`，各操作方法改为细粒度 invoke
 
-- [ ] **7.2** `addFolder` → `invoke('create_folder', { parentId, name })`
+- [x] **7.2** `addFolder` → `invoke('create_folder', { parentId, name })`
 
-- [ ] **7.3** `addRequest` → `invoke('create_request', { parentId, name })`
+- [x] **7.3** `addRequest` → `invoke('create_request', { parentId, name })`
 
-- [ ] **7.4** `removeNode` → `invoke('delete_node', { nodeId })`
+- [x] **7.4** `removeNode` → `invoke('delete_node', { nodeId })`
 
-- [ ] **7.5** `renameNode` → `invoke('rename_node', { nodeId, newName })`
+- [x] **7.5** `renameNode` → `invoke('rename_node', { nodeId, newName })`
 
-- [ ] **7.6** `updateRequest` → `invoke('save_request', { ... })`（debounce 300ms 保留）
+- [x] **7.6** `updateRequest` → `invoke('save_request', { ... })`（debounce 300ms 保留）
 
-- [ ] **7.7** `duplicateRequest` → `invoke('duplicate_request', { nodeId })`
+- [x] **7.7** `duplicateRequest` → `invoke('duplicate_request', { nodeId })`
 
-- [ ] **7.8** `renameCollection` → `invoke('rename_node', { nodeId, newName })`
+- [x] **7.8** `renameCollection` → `invoke('rename_node', { nodeId, newName })`
 
-- [ ] **7.9** 移除 debounced `save_collections` 逻辑
+- [x] **7.9** 移除 debounced `save_collections` 逻辑
 
-- [ ] **7.10** 更新 `useRequestTabs` sync 逻辑适配
+- [x] **7.10** 更新 `useRequestTabs` sync 逻辑适配
 
 ### Task 8 — 构建验证
 
