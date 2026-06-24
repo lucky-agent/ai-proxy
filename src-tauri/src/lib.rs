@@ -5,7 +5,6 @@ mod proxy;
 mod script;
 mod tray;
 pub mod utils;
-use crate::collection::*;
 use proxy::state::AppState;
 use tauri::{Emitter, Manager, RunEvent};
 
@@ -13,7 +12,8 @@ use crate::commands::load_traffic_history;
 use crate::commands::resend_request;
 use crate::commands::{
     get_collections, get_locale, get_script_config, get_settings, get_ssl_config, get_status,
-    get_theme, save_collections, save_script_config, save_settings, save_ssl_config, set_locale,
+    get_theme, create_collection, create_folder, create_request, delete_node, rename_node,
+    move_node, save_request, duplicate_request, save_script_config, save_settings, save_ssl_config, set_locale,
     set_theme, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
 };
 use crate::config::{Settings, Store};
@@ -115,7 +115,14 @@ pub fn run() {
             load_traffic_history,
             resend_request,
             get_collections,
-            save_collections,
+            create_collection,
+            create_folder,
+            create_request,
+            delete_node,
+            rename_node,
+            move_node,
+            save_request,
+            duplicate_request,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

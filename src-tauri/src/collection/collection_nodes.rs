@@ -321,6 +321,7 @@ fn assemble_tree(
                         let v = req.map_or(String::new(), |r| r.auth_data.clone());
                         if v.is_empty() { None } else { Some(v) }
                     },
+                    request_id: request_id.as_deref().unwrap_or_default().to_string(),
                 }
             }
             _ => unreachable!("unknown node_type: {}", node_type),
