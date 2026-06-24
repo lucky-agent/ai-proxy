@@ -42,10 +42,6 @@ impl Store {
         self.db.clone()
     }
 
-    pub fn collections_path(&self) -> PathBuf {
-        self.data_dir().join("collections.json")
-    }
-
     pub fn build_log_plugin(log: &LogConfig) -> tauri_plugin_log::Builder {
         let log_dir = PathBuf::from(log.dir.clone().unwrap_or_else(|| "logs".to_string()));
         let mut targets = vec![Target::new(TargetKind::Folder {
