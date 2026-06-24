@@ -1,5 +1,5 @@
 workflow: hotfix
-phase: build
+phase: verify
 context_compression: off
 build_mode: direct
 build_pause: null
@@ -13,7 +13,7 @@ base_ref: 08cb71aab1761e003d03707d563ad98d9b198281
 design_doc: null
 plan: null
 verify_result: pending
-verification_report: null
+verification_report: docs/superpowers/reports/2026-06-24-fix-response-panel-min-size-verify.md
 branch_status: pending
 created_at: 2026-06-24
 verified_at: null

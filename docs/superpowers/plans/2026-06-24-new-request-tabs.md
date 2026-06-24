@@ -2,6 +2,7 @@
 change: new-request-tabs
 design-doc: docs/superpowers/specs/2026-06-24-new-request-tabs-design.md
 base-ref: 2fa96821b190496dbe459b8a720ce3570180796e
+archived-with: 2026-06-24-new-request-tabs
 ---
 
 # NewRequestView 多 Tab 请求编辑器 实现计划
@@ -14,6 +15,7 @@ base-ref: 2fa96821b190496dbe459b8a720ce3570180796e
 
 **技术栈：** React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui + react-i18next
 
+archived-with: 2026-06-24-new-request-tabs
 ---
 
 ## 文件结构
@@ -28,6 +30,7 @@ base-ref: 2fa96821b190496dbe459b8a720ce3570180796e
 | `src/locales/en.json` | 修改 | 新增 tab 相关翻译 key |
 | `src/locales/zh.json` | 修改 | 新增 tab 相关翻译 key |
 
+archived-with: 2026-06-24-new-request-tabs
 ---
 
 ### 任务 1：新增 i18n 翻译 key
@@ -89,6 +92,7 @@ git add src/locales/en.json src/locales/zh.json
 git commit -m "feat(i18n): add tab-related translation keys for new-request-tabs"
 ```
 
+archived-with: 2026-06-24-new-request-tabs
 ---
 
 ### 任务 2：新增 RequestTab interface
@@ -140,6 +144,7 @@ git add src/types/collection.ts
 git commit -m "feat(types): add RequestTab interface for multi-tab architecture"
 ```
 
+archived-with: 2026-06-24-new-request-tabs
 ---
 
 ### 任务 3：实现 useRequestTabs hook
@@ -344,6 +349,7 @@ git add src/features/new-request/useRequestTabs.ts
 git commit -m "feat(new-request): add useRequestTabs hook for multi-tab state management"
 ```
 
+archived-with: 2026-06-24-new-request-tabs
 ---
 
 ### 任务 4：实现 RequestTabBar 组件
@@ -565,6 +571,7 @@ git add src/features/new-request/RequestTabBar.tsx
 git commit -m "feat(new-request): add RequestTabBar component with overflow menu"
 ```
 
+archived-with: 2026-06-24-new-request-tabs
 ---
 
 ### 任务 5：重构 NewRequestView 为 tab 容器
@@ -906,6 +913,7 @@ git add src/features/new-request/NewRequestView.tsx
 git commit -m "feat(new-request): refactor NewRequestView to use multi-tab architecture"
 ```
 
+archived-with: 2026-06-24-new-request-tabs
 ---
 
 ### 任务 6：整体验证与收尾
@@ -959,6 +967,7 @@ git add -A
 git commit -m "chore: finalize new-request-tabs implementation"
 ```
 
+archived-with: 2026-06-24-new-request-tabs
 ---
 
 ## 自检
