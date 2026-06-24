@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use rama::http::HeaderMap;
@@ -42,21 +42,18 @@ pub(crate) struct ChunkRecord {
 pub(crate) struct Db {
     conn: Option<sqlite::Connection>,
     db_path: Option<String>,
-    retention_days: u32,
     cleanup_done: AtomicBool,
 }
 
 impl Db {
-    pub(crate) fn open(path: &Path, retention_days: u32) -> Result<Self, sqlite::Error> {
+    pub(crate) fn open(path: &PathBuf) -> Result<Self, sqlite::Error> {
+        let db_path = path.to_string_lossy().to_string();
         let conn = sqlite::open(path)?;
-        let db_path = Some(path.to_string_lossy().to_string());
         let db = Self {
             conn: Some(conn),
-            db_path,
-            retention_days,
+            db_path: Some(db_path),
             cleanup_done: AtomicBool::new(false),
         };
-        db.migrate()?;
         Ok(db)
     }
 
@@ -64,7 +61,6 @@ impl Db {
         Self {
             conn: None,
             db_path: None,
-            retention_days: 0,
             cleanup_done: AtomicBool::new(false),
         }
     }
@@ -74,7 +70,6 @@ impl Db {
         Self {
             conn: Some(conn),
             db_path: None,
-            retention_days: 0,
             cleanup_done: AtomicBool::new(false),
         }
     }
@@ -258,29 +253,30 @@ impl Db {
         query_json: &str,
         body: Option<&str>,
         edited: bool,
+        retention_days: u32,
     ) {
         let path = match self.db_path {
             Some(ref p) => p.clone(),
             None => return,
         };
         // Trigger async cleanup once per session.
-        if self.retention_days > 0 && !self.cleanup_done.swap(true, Ordering::SeqCst) {
+        if retention_days > 0 && !self.cleanup_done.swap(true, Ordering::SeqCst) {
             let cleanup_path = path.clone();
-            let retention = self.retention_days;
+            let retention = retention_days;
             std::thread::spawn(move || {
                 if let Ok(conn) = sqlite::open(&cleanup_path) {
-                    let cutoff = chrono::Utc::now().timestamp_millis()
-                        - (retention as i64) * 86_400_000;
+                    let cutoff =
+                        chrono::Utc::now().timestamp_millis() - (retention as i64) * 86_400_000;
                     // Delete chunks older than cutoff, then requests.
-                    if let Ok(mut stmt) = conn.prepare(
-                        "DELETE FROM response_chunks WHERE created_at < ?",
-                    ) {
+                    if let Ok(mut stmt) =
+                        conn.prepare("DELETE FROM response_chunks WHERE created_at < ?")
+                    {
                         stmt.bind((1_usize, cutoff)).ok();
                         stmt.next().ok();
                     }
-                    if let Ok(mut stmt) = conn.prepare(
-                        "DELETE FROM requests WHERE request_timestamp < ?",
-                    ) {
+                    if let Ok(mut stmt) =
+                        conn.prepare("DELETE FROM requests WHERE request_timestamp < ?")
+                    {
                         stmt.bind((1_usize, cutoff)).ok();
                         stmt.next().ok();
                     }
@@ -467,9 +463,8 @@ impl Db {
             Some(ref conn) => conn,
             None => return Ok(Vec::new()),
         };
-        let mut stmt = conn.prepare(
-            "SELECT chunk FROM response_chunks WHERE request_id = ? ORDER BY seq",
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT chunk FROM response_chunks WHERE request_id = ? ORDER BY seq")?;
         stmt.bind((1_usize, request_id))?;
         let mut chunks = Vec::new();
         while let sqlite::State::Row = stmt.next()? {
@@ -494,7 +489,13 @@ impl Db {
 
 /// Spawn a background thread to insert a response chunk (free-function variant).
 /// Usable when a Db instance is not available (e.g. from the body stream map closure).
-pub(crate) fn spawn_insert_chunk(path: &str, request_id: &str, chunk: &str, seq: i64, created_at: i64) {
+pub(crate) fn spawn_insert_chunk(
+    path: &str,
+    request_id: &str,
+    chunk: &str,
+    seq: i64,
+    created_at: i64,
+) {
     let p = path.to_string();
     let rid = request_id.to_string();
     let c = chunk.to_string();

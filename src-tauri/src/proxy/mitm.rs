@@ -15,6 +15,7 @@ use rama::http::server::HttpServer;
 use rama::io::Io;
 use rama::layer::AddInputExtensionLayer;
 use rama::layer::ConsumeErrLayer;
+use rama::layer::timeout::TimeoutLayer;
 use rama::net::proxy::IoForwardService;
 use rama::net::tls::server::peek_client_hello_from_input;
 use rama::service::service_fn;
@@ -24,8 +25,6 @@ use rama::tls::rustls::server::TlsAcceptorLayer;
 use super::client::http_mitm_proxy;
 use super::events::ProxyEvent;
 use super::state::{State, ViaConnectTunnel};
-use crate::AppState;
-use tauri::Manager;
 
 pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infallible> {
     let state =
@@ -47,10 +46,31 @@ pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infalli
         .as_ref()
         .and_then(|ch| ch.ext_server_name().map(|s| s.to_string()));
 
-    // 默认走隧道模式；仅白名单中的域名走 MITM 解密
+    // 从运行时配置读取 SSL 白名单
     let should_mitm = if let Some(ref host) = sni {
-        let whitelist = state.mitm_whitelist.read().await;
-        whitelist.contains_host(host)
+        let settings = state.settings();
+        if !settings.ssl.enabled {
+            false
+        } else {
+            let host_lower = host.to_lowercase();
+            settings
+                .ssl
+                .whitelist
+                .iter()
+                .any(|item| {
+                    if !item.enabled {
+                        return false;
+                    }
+                    let p = item.domain.to_lowercase();
+                    if p == "*" {
+                        return true;
+                    }
+                    if let Some(suffix) = p.strip_prefix("*.") {
+                        return host_lower.ends_with(suffix) && host_lower != suffix;
+                    }
+                    p == host_lower
+                })
+        }
     } else {
         false
     };
@@ -102,10 +122,7 @@ where
 {
     let request_id = uuid::Uuid::new_v4().to_string();
     let start = std::time::Instant::now();
-    let event_channel = {
-        let app_state = state.app_handle().state::<AppState>();
-        app_state.event_channel()
-    };
+    let event_channel = state.event_channel();
     let scheme = if is_tls { "https" } else { "http" };
     let uri = format!("{scheme}://{host}:{port}");
 
@@ -129,8 +146,12 @@ where
     }
 
     let executor = state.exec().clone();
-    let tunnel_svc = IoToProxyBridgeIoLayer::extension_proxy_target(executor.clone())
-        .into_layer(IoForwardService::new(executor));
+    let tunnel_svc = (
+        TimeoutLayer::new(std::time::Duration::from_secs(30)),
+    ).into_layer(
+        IoToProxyBridgeIoLayer::extension_proxy_target(executor.clone())
+            .into_layer(IoForwardService::new(executor)),
+    );
 
     let tunnel_result = tunnel_svc.serve(prefixed).await;
     let duration_ms = start.elapsed().as_millis() as u64;

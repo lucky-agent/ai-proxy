@@ -7,15 +7,14 @@ pub mod utils;
 use proxy::state::AppState;
 use tauri::{Emitter, Manager, RunEvent};
 
-use crate::commands::resend_request;
 use crate::commands::load_traffic_history;
+use crate::commands::resend_request;
 use crate::commands::{
-    get_collections, get_locale, get_settings, get_status, get_theme, save_collections, save_settings, set_locale, set_theme,
-    start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
-    get_ssl_config, save_ssl_config,
-    get_script_config, save_script_config,
+    get_collections, get_locale, get_script_config, get_settings, get_ssl_config, get_status,
+    get_theme, save_collections, save_script_config, save_settings, save_ssl_config, set_locale,
+    set_theme, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
 };
-use crate::config::{Settings, Store, UiConfig};
+use crate::config::{Settings, Store};
 
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -42,7 +41,23 @@ pub(crate) fn open_settings_from_tray(app: &tauri::AppHandle) {
     }
 }
 
-fn app_setup(app: &mut tauri::App, ui: &UiConfig) -> Result<(), Box<dyn std::error::Error>> {
+fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .expect("Failed to get app data directory");
+
+    let store = Store::new(data_dir);
+
+    let mut settings =
+        Settings::load_from_path(&store.data_dir()).expect("Failed to load configuration");
+    settings.script.scripts_dir = Some(store.scripts_dir().clone());
+    let ui = settings.ui.clone();
+    let _ = app
+        .handle()
+        .plugin(Store::build_log_plugin(&settings.log).build());
+    app.manage(AppState::new(store, settings));
+
     if let Some(window) = app.get_webview_window("main") {
         let tauri_theme = match ui.theme.as_str() {
             "dark" => Some(tauri::Theme::Dark),
@@ -75,20 +90,9 @@ fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
 
 pub fn run() {
     log::info!("Starting AI Proxy");
-    let store = Store::new();
-    let settings =
-        Settings::load_from_path(&store.data_dir()).expect("Failed to load configuration");
-    let ui = settings.ui.clone();
-    let db = if settings.persistence.unwrap_or(false) {
-        crate::config::db::Db::open(&store.db_path(), settings.retention_days).expect("Failed to open database")
-    } else {
-        crate::config::db::Db::noop()
-    };
 
     let app = tauri::Builder::default()
-        .plugin(Store::build_log_plugin(&settings.log).build())
-        .manage(AppState::new(store, settings, db))
-        .setup(move |app| app_setup(app, &ui))
+        .setup(app_setup)
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
             start_proxy,

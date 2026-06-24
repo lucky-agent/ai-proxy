@@ -12,10 +12,11 @@ use rama::service::service_fn;
 use rama::tcp::server::TcpListener;
 use rama::{graceful::Shutdown, rt::Executor};
 use tauri::AppHandle;
+use tauri::Manager;
 use tokio::sync::oneshot;
 
 use crate::config::ProxyConfig;
-use crate::config::SslConfig;
+use crate::proxy::state::AppState;
 
 use mitm::{http_connect_proxy, new_http_mitm_proxy};
 use state::State;
@@ -32,8 +33,6 @@ pub struct ProxyServer {
     app_handle: AppHandle,
     shutdown_rx: oneshot::Receiver<()>,
     data_dir: std::path::PathBuf,
-    scripts: Vec<String>,
-    ssl_config: SslConfig,
 }
 
 impl ProxyServer {
@@ -42,16 +41,12 @@ impl ProxyServer {
         app_handle: AppHandle,
         shutdown_rx: oneshot::Receiver<()>,
         data_dir: std::path::PathBuf,
-        scripts: Vec<String>,
-        ssl_config: SslConfig,
     ) -> Self {
         Self {
             config,
             app_handle,
             shutdown_rx,
             data_dir,
-            scripts,
-            ssl_config,
         }
     }
 
@@ -60,7 +55,6 @@ impl ProxyServer {
             cert::MitmCertProvider::try_new(&self.data_dir).context("MITM cert provider")?;
         let mitm_tls_service_data = provider.into_tls_acceptor_data();
 
-        let scripts = self.scripts.clone();
         let listen_addr = format!("{}:{}", &self.config.listen_host, &self.config.listen_port);
 
         let app_handle = self.app_handle.clone();
@@ -79,27 +73,17 @@ impl ProxyServer {
 
         log::info!("MITM Proxy server listening on http://{}", listen_addr);
 
-        let mitm_whitelist = {
-            let mut whitelist = state::MitmWhitelist::default();
-            if self.ssl_config.enabled {
-                for item in &self.ssl_config.whitelist {
-                    if item.enabled {
-                        whitelist.hosts.insert(item.domain.clone());
-                    }
-                }
-            }
-            whitelist
-        };
+        let app_state = app_handle.state::<AppState>();
+        let settings = app_state.settings_arc();
+        let event_channel = app_state.event_channel_arc();
 
         graceful.spawn_task_fn({
             move |_guard| async move {
                 let state = State::new(
                     mitm_tls_service_data,
                     exec.clone(),
-                    app_handle,
-                    self.config.upstream_proxy,
-                    scripts,
-                    mitm_whitelist,
+                    settings,
+                    event_channel,
                 );
 
                 let http_service = HttpServer::auto(exec.clone()).service(std::sync::Arc::new(
@@ -132,7 +116,6 @@ impl ProxyServer {
             .shutdown_with_limit(Duration::from_secs(30))
             .await
             .context("graceful shutdown")?;
-
         Ok(())
     }
 }

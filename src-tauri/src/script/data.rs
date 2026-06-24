@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use bytes::BytesMut;
-use rama::http::{header, Body, Method, Request, Response, StatusCode, Uri};
 use rama::futures::StreamExt;
+use rama::http::{Body, Method, Request, Response, StatusCode, Uri, header};
 use serde::{Deserialize, Serialize};
 
 use super::engine;
@@ -76,10 +76,10 @@ pub async fn collect_body_str(body: Body) -> String {
     String::from_utf8_lossy(&buf).into_owned()
 }
 
-/// Run onRequest hooks across all scripts in sequence.
-/// Returns `None` if any script blocks the request.
-pub fn run_request_hooks(scripts: &[String], data: &RequestData) -> Option<RequestData> {
-    let mut current = data.clone();
+/// 按顺序运行所有脚本的 onRequest 钩子，如果有脚本返回 None 则表示阻止请求，
+/// 最终返回修改后的 RequestData 或 None。
+pub fn run_request_hooks(scripts: &[String], data: RequestData) -> Option<RequestData> {
+    let mut current = data;
     for script in scripts {
         match engine::exec_request_hook(script, &current) {
             Ok(Some(modified)) => current = modified,
@@ -91,7 +91,7 @@ pub fn run_request_hooks(scripts: &[String], data: &RequestData) -> Option<Reque
 }
 
 /// Run onResponse hooks across all scripts in sequence.
-pub fn run_response_hooks(scripts: &[String], data: &ResponseData) -> ResponseData {
+pub fn run_response_hooks(scripts: &[String], data: ResponseData) -> ResponseData {
     let mut current = data.clone();
     for script in scripts {
         match engine::exec_response_hook(script, &current) {

@@ -1,14 +1,18 @@
 # ide
 /.idea
 /.vscode
-/.claude
 /.cursor
-/.agents
-/.codex
-/.superpowers
 *.swp
 *.swo
 *~
+
+# agent
+.claude/
+.agents/
+.codex/
+.superpowers/
+.comet/
+
 
 # os
 .DS_Store

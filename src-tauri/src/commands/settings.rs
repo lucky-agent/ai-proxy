@@ -1,5 +1,6 @@
 use crate::AppState;
 use crate::config::{ProxyConfig, ScriptConfig, Settings, SslConfig};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 #[tauri::command]
 pub fn get_settings(state: tauri::State<'_, AppState>) -> Result<Settings, String> {
@@ -7,14 +8,13 @@ pub fn get_settings(state: tauri::State<'_, AppState>) -> Result<Settings, Strin
 }
 
 #[tauri::command]
-pub fn save_settings(
-    state: tauri::State<'_, AppState>,
-    proxy: ProxyConfig,
-) -> Result<(), String> {
+pub fn save_settings(state: tauri::State<'_, AppState>, proxy: ProxyConfig) -> Result<(), String> {
     let data_dir = state.store().data_dir();
     let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
     settings.proxy = proxy;
-    settings.save_to_path(&data_dir).map_err(|e| e.to_string())?;
+    settings
+        .save_to_path(&data_dir)
+        .map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 
@@ -34,11 +34,31 @@ pub fn save_script_config(
 ) -> Result<(), String> {
     let data_dir = state.store().data_dir();
     let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
-    settings.script = script;
-    settings.save_to_path(&data_dir).map_err(|e| e.to_string())?;
 
+    // validate and generate file_name for each enabled script
+    for item in &script.scripts {
+        if item.enabled && item.name.trim().is_empty() {
+            return Err("Script name is required when enabled".into());
+        }
+    }
+
+    let mut validated = script;
+    for item in &mut validated.scripts {
+        if item.enabled {
+            let raw = format!("{}.js", item.name);
+            let mut hasher = DefaultHasher::new();
+            raw.hash(&mut hasher);
+            item.file_name = format!("{:016x}", hasher.finish());
+        } else {
+            item.file_name.clear();
+        }
+    }
+
+    settings.script = validated;
+    settings
+        .save_to_path(&data_dir)
+        .map_err(|e| e.to_string())?;
     state.set_settings(settings);
-
     Ok(())
 }
 
@@ -49,14 +69,13 @@ pub fn get_ssl_config(state: tauri::State<'_, AppState>) -> Result<SslConfig, St
 }
 
 #[tauri::command]
-pub fn save_ssl_config(
-    state: tauri::State<'_, AppState>,
-    ssl: SslConfig,
-) -> Result<(), String> {
+pub fn save_ssl_config(state: tauri::State<'_, AppState>, ssl: SslConfig) -> Result<(), String> {
     let data_dir = state.store().data_dir();
     let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
     settings.ssl = ssl;
-    settings.save_to_path(&data_dir).map_err(|e| e.to_string())?;
+    settings
+        .save_to_path(&data_dir)
+        .map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 

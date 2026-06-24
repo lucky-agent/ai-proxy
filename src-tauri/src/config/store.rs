@@ -1,48 +1,45 @@
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
-use dirs::home_dir;
 use log::LevelFilter;
+
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
 
-use crate::config::LogConfig;
+use crate::config::{LogConfig, db::Db};
 
 /// 应用数据存储路径管理，默认路径在用户目录的 .ai-proxy 下
 pub struct Store {
-    data_dir: Arc<Mutex<PathBuf>>,
+    data_dir: PathBuf,
+    db: Arc<Mutex<Db>>,
     scripts_dir: PathBuf,
 }
 
 impl Store {
-    pub fn new() -> Self {
-        let data_dir = std::env::var("AI_PROXY_HOME")
-            .map(PathBuf::from)
-            .ok()
-            .or_else(home_dir)
-            .expect("Failed to determine data directory")
-            .join(".ai-proxy");
-        std::fs::create_dir_all(&data_dir).expect("Failed to create .ai-proxy directory");
+    pub fn new(data_dir: PathBuf) -> Self {
+        std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
         let scripts_dir = data_dir.join("scripts");
         std::fs::create_dir_all(&scripts_dir).ok();
+        let db_path = data_dir.join("traffic.db");
+        let db = Db::open(&db_path).expect("Failed to initialize database");
         Self {
-            data_dir: Arc::new(Mutex::new(data_dir)),
+            data_dir,
+            db: Arc::new(Mutex::new(db)),
             scripts_dir,
         }
     }
 
-    pub fn data_dir(&self) -> PathBuf {
-        self.data_dir
-            .lock()
-            .expect("Failed to lock data directory")
-            .clone()
+    pub fn data_dir(&self) -> &PathBuf {
+        &self.data_dir
     }
 
     pub fn scripts_dir(&self) -> &PathBuf {
         &self.scripts_dir
     }
 
-    pub fn db_path(&self) -> PathBuf {
-        self.data_dir().join("traffic.db")
+    pub(crate) fn db(&self) -> Arc<Mutex<Db>> {
+        self.db.clone()
     }
 
     pub fn collections_path(&self) -> PathBuf {

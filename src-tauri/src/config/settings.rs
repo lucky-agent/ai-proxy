@@ -44,6 +44,9 @@ pub struct ScriptItem {
     pub domain: String,
     #[serde(default)]
     pub enabled: bool,
+    /// 脚本文件名（name + ".js" 的 SHA256 前 16 位，后端在保存时自动生成）
+    #[serde(default)]
+    pub file_name: String,
 }
 
 /// 脚本配置
@@ -55,6 +58,9 @@ pub struct ScriptConfig {
     /// 脚本列表，每项可单独开关
     #[serde(default)]
     pub scripts: Vec<ScriptItem>,
+    /// 脚本文件目录，不序列化（后端运行时注入）
+    #[serde(skip)]
+    pub scripts_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for ScriptConfig {
@@ -62,6 +68,7 @@ impl Default for ScriptConfig {
         Self {
             enabled: false,
             scripts: Vec::new(),
+            scripts_dir: None,
         }
     }
 }

@@ -2,12 +2,11 @@ use std::collections::HashMap;
 
 use log::info;
 use rama::futures::StreamExt;
-use rama::http::{Body, Method, Response, StatusCode, Uri};
-use tauri::ipc::Channel;
-use uuid::Uuid;
+use rama::http::{Body, Response, StatusCode, request};
+
+use crate::proxy::state::ProxyCtx;
 
 use super::events::ProxyEvent;
-use crate::config::db::{spawn_insert_chunk, spawn_update_response_body};
 
 /// 简易 URL 百分号解码
 fn url_decode(input: &str) -> String {
@@ -34,16 +33,11 @@ fn url_decode(input: &str) -> String {
     result
 }
 
-/// Log request and emit via channel. Returns (modified request, method, uri, request_id).
-pub(crate) fn log_request(
-    parts: &rama::http::request::Parts,
-    body_str: &str,
-    event_channel: &Option<Channel<ProxyEvent>>,
-) -> (Method, Uri, String) {
-    let method = parts.method.clone();
-    let uri = parts.uri.clone();
-    let request_id = Uuid::new_v4().to_string();
-    let query_params: HashMap<String, String> = uri
+/// Accepts body as raw bytes to avoid unnecessary UTF-8 allocation;
+/// only converts lossily when emitting the RequestChunk event.
+pub(crate) fn log_request(ctx: &ProxyCtx, parts: &rama::http::request::Parts, body: &[u8]) {
+    let query_params: HashMap<String, String> = ctx
+        .uri()
         .query()
         .map(|q| {
             q.split('&')
@@ -57,7 +51,7 @@ pub(crate) fn log_request(
                 })
                 .collect()
         })
-    .unwrap_or_default();
+        .unwrap_or_default();
 
     let req_headers: HashMap<String, String> = parts
         .headers
@@ -78,67 +72,51 @@ pub(crate) fn log_request(
             acc
         });
 
-    let req_content_type = parts.headers.get("content-type")
+    let req_content_type = parts
+        .headers
+        .get("content-type")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
-    let req_content_length = parts.headers.get("content-length")
+    let req_content_length = parts
+        .headers
+        .get("content-length")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<u64>().ok());
 
-    if let Some(ch) = event_channel {
-       ch.send(ProxyEvent::Request {
-           id: request_id.clone(),
-           method: method.to_string(),
-           uri: uri.to_string(),
-           timestamp: chrono::Utc::now().timestamp_millis(),
-           headers: req_headers,
-           query_params,
-            decrypted: true,
-            content_type: req_content_type,
-            content_length: req_content_length,
-       })
-        .ok();
-        if !body_str.is_empty() {
-            ch.send(ProxyEvent::RequestChunk {
-                id: request_id.clone(),
-                chunk: body_str.to_string(),
-            })
-            .ok();
-        }
+    ctx.send(ProxyEvent::Request {
+        id: ctx.request_id().to_string(),
+        method: ctx.method().to_string(),
+        uri: ctx.uri().to_string(),
+        timestamp: chrono::Utc::now().timestamp_millis(),
+        headers: req_headers,
+        query_params,
+        decrypted: true,
+        content_type: req_content_type,
+        content_length: req_content_length,
+    });
+    if !body.is_empty() {
+        ctx.send(ProxyEvent::RequestChunk {
+            id: ctx.request_id().to_string(),
+            chunk: String::from_utf8_lossy(body).into_owned(),
+        });
     }
-
-    (method, uri, request_id)
 }
 
 /// Handle direct (non-tunnel) requests to the proxy itself.
-/// Returns a 200 OK response with a success JSON body, and logs it as a response event.
-pub(crate) fn direct_response(
-    method: Method,
-    uri: Uri,
-    request_id: &str,
-    event_channel: &Option<Channel<ProxyEvent>>,
-) -> Response {
-    info!("Direct request to proxy: {}, returning directly", uri);
-    let resp = Response::builder()
+/// Constructs a Response directly from the request parts and body.
+pub(crate) fn direct_response(ctx: &ProxyCtx, req: request::Parts, body: Body) -> Response {
+    let mut resp = Response::builder()
         .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(Body::from(r#"{"code":0,"msg":"success"}"#))
+        .body(body)
         .expect("valid status code and body for direct response");
-    log_response(resp, method, uri, request_id, 0, event_channel, None)
+    *resp.headers_mut() = req.headers.clone();
+    log_response(ctx, resp)
 }
 
 /// Log response and emit via channel.
-pub(crate) fn log_response(
-    resp: Response,
-    method: Method,
-    uri: Uri,
-    request_id: &str,
-    duration_ms: u64,
-    event_channel: &Option<Channel<ProxyEvent>>,
-    db_path: Option<String>,
-) -> Response {
+pub(crate) fn log_response(ctx: &ProxyCtx, resp: Response) -> Response {
     let status = resp.status();
-    info!("Response [{} {}] {}", method, uri, status);
+    info!("Response [{} {}] {}", ctx.method(), ctx.uri(), status);
 
     let (parts, body) = resp.into_parts();
 
@@ -168,97 +146,54 @@ pub(crate) fn log_response(
             acc
         });
 
-    if let Some(ch) = event_channel {
-        let resp_content_type = parts.headers.get("content-type")
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s.to_string());
-        let resp_content_length = parts.headers.get("content-length")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.parse::<u64>().ok());
+    let resp_content_type = parts
+        .headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let resp_content_length = parts
+        .headers
+        .get("content-length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok());
 
-        ch.send(ProxyEvent::Response {
-            id: request_id.to_string(),
-            status: status.as_u16(),
-            timestamp: chrono::Utc::now().timestamp_millis(),
-            duration_ms,
-            headers: resp_headers,
-            content_type: resp_content_type,
-            content_length: resp_content_length,
-        })
-        .ok();
-    }
+    ctx.send(ProxyEvent::Response {
+        id: ctx.request_id().to_string(),
+        status: status.as_u16(),
+        timestamp: chrono::Utc::now().timestamp_millis(),
+        duration_ms: ctx.duration_ms(),
+        headers: resp_headers,
+        content_type: resp_content_type,
+        content_length: resp_content_length,
+    });
 
-    let logged_body = log_body_chunks(
-        body,
-        "Response".into(),
-        method,
-        uri,
-        request_id.into(),
-        event_channel.clone(),
-        db_path,
-    );
+    let logged_body = log_body_chunks(body, ctx);
 
     Response::from_parts(parts, logged_body)
 }
 
-/// Accumulates response body chunks and writes the full body to DB on drop.
-struct ChunkAccumulator {
-    db_path: Option<String>,
-    request_id: String,
-    body: String,
-}
-
-impl Drop for ChunkAccumulator {
-    fn drop(&mut self) {
-        if let Some(ref path) = self.db_path {
-            if !self.body.is_empty() {
-                spawn_update_response_body(path, &self.request_id, &self.body);
-            }
-        }
-    }
-}
-
-fn log_body_chunks(
-    body: Body,
-    label: String,
-    method: Method,
-    uri: Uri,
-    request_id: String,
-    event_channel: Option<Channel<ProxyEvent>>,
-    db_path: Option<String>,
-) -> Body {
-    let mut acc = ChunkAccumulator {
-        db_path: db_path.clone(),
-        request_id: request_id.clone(),
-        body: String::new(),
-    };
-    let mut seq: i64 = 0;
-
+fn log_body_chunks(body: Body, ctx: &ProxyCtx) -> Body {
+    let request_id = ctx.request_id().to_string();
+    let sender = ctx.sender().clone();
     Body::from_stream(body.into_data_stream().map(move |result| {
         if let Ok(ref bytes) = result {
             let chunk_str = String::from_utf8_lossy(bytes).into_owned();
-            info!("{label} chunk [{} {}]: {chunk_str}", method, uri);
-            if let Some(ref ch) = event_channel {
-                let event = ProxyEvent::ResponseChunk {
+            info!("Response chunk: {chunk_str}");
+            if let Some(ref ch) = sender {
+                let _ = ch.send(ProxyEvent::ResponseChunk {
                     id: request_id.clone(),
                     chunk: chunk_str.clone(),
-                };
-                ch.send(event).ok();
-            }
-            seq += 1;
-            acc.body.push_str(&chunk_str);
-            if let Some(ref path) = db_path {
-                spawn_insert_chunk(path, &request_id, &chunk_str, seq, chrono::Utc::now().timestamp_millis());
+                });
             }
         }
         result
     }))
 }
 
-/// Build an error response for proxy forwarding failures.
-pub(crate) fn error_response() -> Response {
+/// Build a generic error response returned directly to the client.
+pub(crate) fn error_response(status: StatusCode, body: impl Into<Body>) -> Response {
     Response::builder()
-        .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .body(Body::empty())
-        .expect("valid status code and empty body for error response")
+        .status(status)
+        .body(body.into())
+        .expect("valid status code and body for error response")
 }

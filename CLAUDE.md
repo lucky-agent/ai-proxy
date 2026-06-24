@@ -136,6 +136,7 @@ import { TitleBar } from '@/features/title-bar'
 **关键框架**：
 
 - 后端：rama（https://github.com/plabayo/rama）—— HTTP 服务端/客户端、TLS、代理
+- rama 源码路径 E:\project\rust\rama
 - 前端：React 19 + Vite 8 + Tailwind CSS 4 + shadcn/ui
 - 桌面：Tauri 2
 

@@ -171,6 +171,11 @@
     "ai": "AI",
     "aiComingSoon": "AI 功能即将推出"
   },
+  "aiSidebar": {
+    "title": "AI 对话",
+    "newChat": "新建对话",
+    "empty": "暂无对话记录"
+  },
   "requestEditor": {
     "params": "Params",
     "body": "Body",

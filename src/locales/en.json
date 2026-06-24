@@ -171,6 +171,11 @@
     "ai": "AI",
     "aiComingSoon": "AI features coming soon"
   },
+  "aiSidebar": {
+    "title": "AI Chat",
+    "newChat": "New chat",
+    "empty": "No conversations yet"
+  },
   "requestEditor": {
     "params": "Params",
     "body": "Body",
