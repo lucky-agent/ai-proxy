@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { SendIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ import RequestTabBar from './RequestTabBar'
 import { useRequestTabs } from './useRequestTabs'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { usePanelRef } from 'react-resizable-panels'
 import type { ApiRequestNode, KeyValuePair } from '@/types/collection'
 import type { TrafficEntry } from '@/types/proxy'
 
@@ -68,7 +69,9 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     if (activeTab.sending) return
     if (!activeTab.url.trim()) return
 
-    updateActiveTab({ sending: true, error: '' })
+    const sendingTabId = activeTab.id
+
+    updateActiveTab({ sending: true, error: '' }, sendingTabId)
 
     const headerMap: Record<string, string> = {}
     for (const { key, value } of activeTab.headers) {
@@ -97,10 +100,10 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
         headers: headerMap,
         body: activeTab.body || null,
       })
-      updateActiveTab({ responseEntryId: entryId, sending: false })
+      updateActiveTab({ responseEntryId: entryId, sending: false }, sendingTabId)
       onSendSuccess(entryId)
     } catch (err) {
-      updateActiveTab({ sending: false, error: String(err) })
+      updateActiveTab({ sending: false, error: String(err) }, sendingTabId)
     }
   }, [activeTab, updateActiveTab, onSendSuccess])
 
@@ -114,6 +117,22 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
   const activeEntry = activeTab?.responseEntryId
     ? entries.find(e => e.id === activeTab.responseEntryId)
     : undefined
+
+  // 控制 response panel collapse/expand
+  const responsePanelRef = usePanelRef()
+  const prevHadEntryRef = useRef(!!activeEntry)
+  useEffect(() => {
+    const hadEntry = prevHadEntryRef.current
+    const hasEntry = !!activeEntry
+    prevHadEntryRef.current = hasEntry
+
+    // expand when entry appears; collapse when it goes away
+    if (hasEntry && !hadEntry) {
+      responsePanelRef.current?.expand()
+    } else if (!hasEntry && hadEntry) {
+      responsePanelRef.current?.collapse()
+    }
+  }, [activeEntry, responsePanelRef])
 
   if (loading) {
     return (
@@ -237,59 +256,43 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                   </Button>
                 </div>
 
-                {activeEntry ? (
-                  /* 有响应 → 上下分栏 */
-                  <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="flex-1 min-h-0">
-                    <ResizablePanel id="editor" defaultSize="45%" minSize="15%" maxSize="75%">
-                      <div className="flex flex-col min-h-0 h-full overflow-hidden">
-                        <RequestEditor
-                          params={activeTab.params}
-                          headers={activeTab.headers}
-                          cookies={activeTab.cookies}
-                          body={activeTab.body}
-                          bodyType={activeTab.bodyType}
-                          onParamsChange={v => updateActiveTab({ params: v })}
-                          onHeadersChange={v => updateActiveTab({ headers: v })}
-                          onCookiesChange={v => updateActiveTab({ cookies: v })}
-                          onBodyChange={v => updateActiveTab({ body: v })}
-                          onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
-                        />
-                        {activeTab.error && (
-                          <Alert variant="destructive" className="shrink-0 mx-4 mb-2">
-                            <AlertDescription>{activeTab.error}</AlertDescription>
-                          </Alert>
-                        )}
-                      </div>
-                    </ResizablePanel>
-                    <ResizableHandle withHandle />
-                    <ResizablePanel id="response" defaultSize="55%" minSize="25%">
-                      <div className="h-full min-h-0">
-                        <DetailPanel entry={activeEntry} showRequest={false} />
-                      </div>
-                    </ResizablePanel>
-                  </ResizablePanelGroup>
-                ) : (
-                  /* 无响应 → 仅编辑器 */
-                  <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
-                    <RequestEditor
-                      params={activeTab.params}
-                      headers={activeTab.headers}
-                      cookies={activeTab.cookies}
-                      body={activeTab.body}
-                      bodyType={activeTab.bodyType}
-                      onParamsChange={v => updateActiveTab({ params: v })}
-                      onHeadersChange={v => updateActiveTab({ headers: v })}
-                      onCookiesChange={v => updateActiveTab({ cookies: v })}
-                      onBodyChange={v => updateActiveTab({ body: v })}
-                      onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
-                    />
-                    {activeTab.error && (
-                      <Alert variant="destructive" className="shrink-0 mx-4 mb-2">
-                        <AlertDescription>{activeTab.error}</AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                )}
+                {/* Always render the vertical split; collapse response panel when no entry */}
+                <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="flex-1 min-h-0">
+                  <ResizablePanel id="editor" defaultSize={activeEntry ? 45 : 100} minSize={15} maxSize={activeEntry ? 75 : 100}>
+                    <div className="flex flex-col min-h-0 h-full overflow-hidden">
+                      <RequestEditor
+                        params={activeTab.params}
+                        headers={activeTab.headers}
+                        cookies={activeTab.cookies}
+                        body={activeTab.body}
+                        bodyType={activeTab.bodyType}
+                        onParamsChange={v => updateActiveTab({ params: v })}
+                        onHeadersChange={v => updateActiveTab({ headers: v })}
+                        onCookiesChange={v => updateActiveTab({ cookies: v })}
+                        onBodyChange={v => updateActiveTab({ body: v })}
+                        onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
+                      />
+                      {activeTab.error && (
+                        <Alert variant="destructive" className="shrink-0 mx-4 mb-2">
+                          <AlertDescription>{activeTab.error}</AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  </ResizablePanel>
+                  <ResizableHandle withHandle />
+                  <ResizablePanel
+                    id="response"
+                    defaultSize={55}
+                    minSize={25}
+                    collapsible
+                    collapsedSize={0}
+                    panelRef={responsePanelRef}
+                  >
+                    <div className="h-full min-h-0">
+                      {activeEntry && <DetailPanel entry={activeEntry} showRequest={false} />}
+                    </div>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
               </div>
             )}
           </div>

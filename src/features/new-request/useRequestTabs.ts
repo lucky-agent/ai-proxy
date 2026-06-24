@@ -1,5 +1,5 @@
 // src/features/new-request/useRequestTabs.ts
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { RequestTab, ApiRequestNode } from '@/types/collection'
 
 function makeTabId(): string {
@@ -54,9 +54,22 @@ export function useRequestTabs(
   // --- openTab ---
   const openTab = useCallback((linkedNodeId: string | null, nodeData?: ApiRequestNode) => {
     if (linkedNodeId !== null) {
-      const existing = tabs.find(t => t.linkedNodeId === linkedNodeId)
-      if (existing) {
-        setActiveTabId(existing.id)
+      // use functional updater to avoid stale-closure race on dedup
+      let alreadyOpen = false
+      setTabs(prev => {
+        const existing = prev.find(t => t.linkedNodeId === linkedNodeId)
+        if (existing) {
+          alreadyOpen = true
+        }
+        return prev
+      })
+      if (alreadyOpen) {
+        // re-acquire the tab id from current state to activate it
+        setTabs(prev => {
+          const existing = prev.find(t => t.linkedNodeId === linkedNodeId)
+          if (existing) setActiveTabId(existing.id)
+          return prev
+        })
         return
       }
     }
@@ -67,29 +80,42 @@ export function useRequestTabs(
 
     setTabs(prev => [...prev, tab])
     setActiveTabId(tab.id)
-  }, [tabs])
+  }, [])
 
   // --- closeTab ---
   const closeTab = useCallback((tabId: string) => {
+    // clear any pending debounced sync for the closing tab
+    if (syncTimer.current) {
+      clearTimeout(syncTimer.current)
+      syncTimer.current = null
+    }
+
+    let nextActiveTabId: string | null = null
+
     setTabs(prev => {
       const idx = prev.findIndex(t => t.id === tabId)
       if (idx === -1) return prev
 
       const next = [...prev.slice(0, idx), ...prev.slice(idx + 1)]
 
-      // 如果关闭的是 active tab，激活相邻 tab
+      // 如果关闭的是 active tab，计算需要激活的相邻 tab
       if (tabId === activeTabId) {
         if (next.length === 0) {
-          setActiveTabId(null)
+          nextActiveTabId = null
         } else if (idx < next.length) {
-          setActiveTabId(next[idx].id)  // 优先右侧
+          nextActiveTabId = next[idx].id     // 优先右侧
         } else {
-          setActiveTabId(next[next.length - 1].id) // 左侧
+          nextActiveTabId = next[next.length - 1].id // 左侧
         }
       }
 
       return next
     })
+
+    // sync activeTabId outside the updater
+    if (tabId === activeTabId) {
+      setActiveTabId(nextActiveTabId)
+    }
   }, [activeTabId])
 
   // --- activateTab ---
@@ -98,10 +124,12 @@ export function useRequestTabs(
   }, [])
 
   // --- updateActiveTab ---
-  const updateActiveTab = useCallback((patch: Partial<RequestTab>) => {
+  const updateActiveTab = useCallback((patch: Partial<RequestTab>, tabId?: string) => {
+    const targetId = tabId ?? activeTabId
+
     setTabs(prev => {
       return prev.map(t => {
-        if (t.id !== activeTabId) return t
+        if (t.id !== targetId) return t
         const updated = { ...t, ...patch }
         return updated
       })
@@ -109,19 +137,25 @@ export function useRequestTabs(
 
     // debounced 同步到树：300ms
     setTabs(prev => {
-      const updated = prev.find(t => t.id === activeTabId)
+      const updated = prev.find(t => t.id === targetId)
       if (!updated || updated.linkedNodeId === null) return prev
 
       if (syncTimer.current) clearTimeout(syncTimer.current)
       syncTimer.current = setTimeout(() => {
-        updateRequest(updated.linkedNodeId!, {
-          method: updated.method,
-          url: updated.url,
-          params: updated.params,
-          headers: updated.headers,
-          cookies: updated.cookies,
-          bodyType: updated.bodyType,
-          body: updated.body,
+        // guard: tab still exists and still linked before syncing
+        setTabs(current => {
+          const tab = current.find(t => t.id === targetId)
+          if (!tab || tab.linkedNodeId === null) return current
+          updateRequest(tab.linkedNodeId, {
+            method: tab.method,
+            url: tab.url,
+            params: tab.params,
+            headers: tab.headers,
+            cookies: tab.cookies,
+            bodyType: tab.bodyType,
+            body: tab.body,
+          })
+          return current
         })
       }, 300)
 
@@ -149,6 +183,15 @@ export function useRequestTabs(
           : t,
       ),
     )
+  }, [])
+
+  // 组件卸载时清除 debounced timer
+  useEffect(() => {
+    return () => {
+      if (syncTimer.current) {
+        clearTimeout(syncTimer.current)
+      }
+    }
   }, [])
 
   // Derived

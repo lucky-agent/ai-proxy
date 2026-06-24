@@ -36,17 +36,55 @@ export default function RequestTabBar({
   const containerRef = useRef<HTMLDivElement>(null)
   const [overflowIds, setOverflowIds] = useState<string[]>([])
 
-  // 检测溢出：如果 tabs 数量 > 5，多余的后缀进溢出
+  // 检测溢出：基于实际像素宽度和容器宽度做判断
   const detectOverflow = useCallback(() => {
     const el = containerRef.current
     if (!el) return
 
-    const maxVisible = 5
-    if (tabs.length > maxVisible) {
-      setOverflowIds(tabs.slice(maxVisible).map(t => t.id))
-    } else {
-      setOverflowIds([])
+    const tabList = el.querySelector('[data-tab-list]') as HTMLElement | null
+    if (!tabList) return
+
+    // 右侧操作区宽度（溢出菜单按钮 + 新建按钮）
+    const actionsWidth = 56 // approximate: 2 × icon buttons + spacing
+    const availableWidth = el.clientWidth - actionsWidth
+
+    // 收集所有 tab 元素及其宽度
+    const tabEls = tabList.querySelectorAll<HTMLElement>('button[type="button"]')
+    const tabEntries: { id: string; width: number }[] = []
+    for (const tabEl of tabEls) {
+      const tabId = tabs.find(t => {
+        // match by method + name inside the button
+        const methodSpan = tabEl.querySelector('span.font-semibold')
+        return methodSpan?.textContent === t.method
+      })
+      if (tabId) {
+        tabEntries.push({ id: tabId.id, width: tabEl.offsetWidth })
+      }
     }
+
+    // 如果 tab 元素和 tabs 数量不一致（比如刚 render 完还没同步），用简单策略回退
+    if (tabEntries.length !== tabs.length && tabs.length > 0) {
+      // approximate: each tab ~140px
+      const avgTabWidth = 140
+      const visibleCount = Math.floor(availableWidth / avgTabWidth)
+      if (visibleCount < tabs.length) {
+        setOverflowIds(tabs.slice(Math.max(0, visibleCount - 1)).map(t => t.id))
+      } else {
+        setOverflowIds([])
+      }
+      return
+    }
+
+    // 从右往左累计宽度，超出 availableWidth 的进溢出
+    let cumulative = 0
+    const overflow: string[] = []
+    for (let i = tabEntries.length - 1; i >= 0; i--) {
+      cumulative += tabEntries[i].width
+      if (cumulative > availableWidth) {
+        overflow.push(tabEntries[i].id)
+      }
+    }
+    setOverflowIds(overflow)
   }, [tabs])
 
   useEffect(() => {
