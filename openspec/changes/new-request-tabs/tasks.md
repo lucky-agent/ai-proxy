@@ -1,7 +1,7 @@
 ## 1. 类型定义与 Hook
 
 - [x] 1.1 新增 `RequestTab` interface 到 `src/types/collection.ts`
-- [ ] 1.2 新建 `src/features/new-request/useRequestTabs.ts`：实现 `useRequestTabs` hook（openTab / closeTab / activateTab / updateActiveTab）
+- [x] 1.2 新建 `src/features/new-request/useRequestTabs.ts`：实现 `useRequestTabs` hook（openTab / closeTab / activateTab / updateActiveTab）
 
 ## 2. TabBar 组件
 

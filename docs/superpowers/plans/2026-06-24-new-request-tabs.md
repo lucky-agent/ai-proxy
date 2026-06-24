@@ -149,7 +149,7 @@ git commit -m "feat(types): add RequestTab interface for multi-tab architecture"
 
 实现核心 tab 管理逻辑：openTab（含去重）、closeTab、activateTab、updateActiveTab（含 debounced 树同步）。
 
-- [ ] **步骤 1：创建 useRequestTabs.ts**
+- [x] **步骤 1：创建 useRequestTabs.ts**
 
 创建 `src/features/new-request/useRequestTabs.ts`：
 
@@ -327,7 +327,7 @@ export function useRequestTabs(
 }
 ```
 
-- [ ] **步骤 2：验证 TypeScript 编译**
+- [x] **步骤 2：验证 TypeScript 编译**
 
 运行：
 
@@ -337,7 +337,7 @@ cd "E:\project\rust\ai-proxy" && npx tsc --noEmit --project tsconfig.json 2>&1 |
 
 预期：无 useRequestTabs 相关错误（未导出警告可忽略——后续任务会引用）
 
-- [ ] **步骤 3：Commit**
+- [x] **步骤 3：Commit**
 
 ```bash
 git add src/features/new-request/useRequestTabs.ts
