@@ -120,13 +120,13 @@ Tauri commands 层重写，前端 hook 从 `save_collections` 批量改为逐操
 
 **验证**：`cargo check` 通过
 
-- [ ] **5.1** 更新 `commands/mod.rs` 导出全部新命令，移除 `save_collections` 导出
+- [x] **5.1** 更新 `commands/mod.rs` 导出全部新命令，移除 `save_collections` 导出
 
-- [ ] **5.2** 更新 `lib.rs` invoke_handler 注册全部新命令，移除 `save_collections`
+- [x] **5.2** 更新 `lib.rs` invoke_handler 注册全部新命令，移除 `save_collections`
 
-- [ ] **5.3** 移除 `Store::collections_path()` 方法
+- [x] **5.3** 移除 `Store::collections_path()` 方法
 
-- [ ] **5.4** 清理 `collections.json` 相关引用
+- [x] **5.4** 清理 `collections.json` 相关引用
 
 ### Task 6 — 前端类型更新
 
