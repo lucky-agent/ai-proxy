@@ -1,9 +1,11 @@
 mod commands;
 mod config;
+mod collection;
 mod proxy;
 mod script;
 mod tray;
 pub mod utils;
+use crate::collection::*;
 use proxy::state::AppState;
 use tauri::{Emitter, Manager, RunEvent};
 
