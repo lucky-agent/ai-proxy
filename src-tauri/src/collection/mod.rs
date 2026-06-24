@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+pub(crate) mod collection_nodes;
 pub(crate) mod requests;
 
 /// A key-value pair representing an HTTP header.
