@@ -258,7 +258,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
 
                 {/* Always render the vertical split; collapse response panel when no entry */}
                 <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="flex-1 min-h-0">
-                  <ResizablePanel id="editor" defaultSize={activeEntry ? 45 : 100} minSize={15} maxSize={activeEntry ? 75 : 100}>
+                  <ResizablePanel id="editor" defaultSize={activeEntry ? "60%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
                     <div className="flex flex-col min-h-0 h-full overflow-hidden">
                       <RequestEditor
                         params={activeTab.params}
@@ -282,10 +282,10 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                   <ResizableHandle withHandle />
                   <ResizablePanel
                     id="response"
-                    defaultSize={55}
-                    minSize={10}
+                    defaultSize="40%"
+                    minSize="10%"
                     collapsible
-                    collapsedSize={0}
+                    collapsedSize="0%"
                     panelRef={responsePanelRef}
                   >
                     <div className="h-full min-h-0">
