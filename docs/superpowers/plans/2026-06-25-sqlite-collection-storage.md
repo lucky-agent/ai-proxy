@@ -53,23 +53,23 @@ Tauri commands 层重写，前端 hook 从 `save_collections` 批量改为逐操
 
 **验证**：`cargo check` 通过
 
-- [ ] **2.1** 修改 `config/db.rs` — `migrate()` 中 `requests` 建表语句
+- [x] **2.1** 修改 `config/db.rs` — `migrate()` 扩展建表 + PRAGMA foreign_keys
   - 新增列：`source_type TEXT NOT NULL DEFAULT 'traffic'`, `collection_id TEXT`, `cookies TEXT DEFAULT '[]'`, `body_type TEXT`, `auth_type TEXT`, `auth_data TEXT`
   - 修改默认值：`request_headers` 和 `request_query` 从 `'{}'` 改为 `'[]'`
   - 新增 `collection_nodes` 建表语句
   - 开头执行 `PRAGMA foreign_keys = ON`
 
-- [ ] **2.2** 修改 `config/db.rs` — `headers_to_json()` 输出数组格式 `[{key,value}]`
+- [x] **2.2** 修改 `config/db.rs` — `headers_to_json()` 输出数组格式 `[{key,value}]`
 
-- [ ] **2.3** 修改 `config/db.rs` — `query_to_json()` 输出数组格式 `[{key,value}]`
+- [x] **2.3** 修改 `config/db.rs` — `query_to_json()` 输出数组格式 `[{key,value}]`
 
-- [ ] **2.4** 修改 `config/db.rs` — `upsert_request()` 签名增加新字段参数（`source_type`, `collection_id`, `cookies`, `body_type`, `auth_type`, `auth_data`）
+- [x] **2.4** 修改 `config/db.rs` — `upsert_request()` 签名增加新字段参数（`source_type`, `collection_id`, `cookies`, `body_type`, `auth_type`, `auth_data`）
 
-- [ ] **2.5** 修改 `config/db.rs` — `StoredEntry` 结构体增加新字段
+- [x] **2.5** 修改 `config/db.rs` — `StoredEntry` 结构体增加新字段
 
-- [ ] **2.6** 修改 `config/db.rs` — `load_all()` 读取新列
+- [x] **2.6** 修改 `config/db.rs` — `load_all()` 读取新列
 
-- [ ] **2.7** 创建 `collection/requests.rs`
+- [x] **2.7** 创建 `collection/requests.rs`
   - 定义 `RequestsRepository` trait
   - `impl RequestsRepository for Db`：`insert_collection_request()`、`update_collection_request()`、`duplicate_collection_request()`、`find_requests_by_ids()`
 
