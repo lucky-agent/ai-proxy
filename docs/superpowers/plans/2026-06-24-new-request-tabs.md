@@ -912,7 +912,7 @@ git commit -m "feat(new-request): refactor NewRequestView to use multi-tab archi
 
 **说明：** 确保所有变更一致，没有遗漏的引用或类型错误。
 
-- [ ] **步骤 1：完整 TypeScript 检查**
+- [x] **步骤 1：完整 TypeScript 检查**
 
 ```bash
 cd "E:\project\rust\ai-proxy" && npx tsc --noEmit --project tsconfig.json 2>&1 | tail -30
@@ -920,7 +920,7 @@ cd "E:\project\rust\ai-proxy" && npx tsc --noEmit --project tsconfig.json 2>&1 |
 
 预期：无新增类型错误。如果当前分支已有已知错误，确认错误数量未增加。
 
-- [ ] **步骤 2：完整前端构建**
+- [x] **步骤 2：完整前端构建**
 
 ```bash
 cd "E:\project\rust\ai-proxy" && bun run build:vite 2>&1
@@ -928,7 +928,7 @@ cd "E:\project\rust\ai-proxy" && bun run build:vite 2>&1
 
 预期：构建成功，输出在 `dist/` 目录。
 
-- [ ] **步骤 3：确认所有新文件的 import 路径正确**
+- [x] **步骤 3：确认所有新文件的 import 路径正确**
 
 运行：
 
@@ -938,7 +938,7 @@ cd "E:\project\rust\ai-proxy" && grep -rn "from './" src/features/new-request/us
 
 预期：所有相对导入路径指向已存在的文件。
 
-- [ ] **步骤 4：检查 git diff 概要**
+- [x] **步骤 4：检查 git diff 概要**
 
 ```bash
 cd "E:\project\rust\ai-proxy" && git diff --stat HEAD
@@ -952,7 +952,7 @@ cd "E:\project\rust\ai-proxy" && git diff --stat HEAD
 - `src/features/new-request/RequestTabBar.tsx` — 新文件 ~150 行
 - `src/features/new-request/NewRequestView.tsx` — 重构 ~180 行
 
-- [ ] **步骤 5：Commit 最终收尾变更（如有）**
+- [x] **步骤 5：Commit 最终收尾变更（如有）**
 
 ```bash
 git add -A
