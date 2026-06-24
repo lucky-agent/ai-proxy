@@ -574,7 +574,7 @@ git commit -m "feat(new-request): add RequestTabBar component with overflow menu
 
 这是核心重构任务。将原本的单一 shared state 替换为 tab 驱动的渲染架构。
 
-- [ ] **步骤 1：重写 NewRequestView.tsx**
+- [x] **步骤 1：重写 NewRequestView.tsx**
 
 删除原文件全部内容，替换为：
 
@@ -881,7 +881,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
 }
 ```
 
-- [ ] **步骤 2：验证 TypeScript 编译**
+- [x] **步骤 2：验证 TypeScript 编译**
 
 运行：
 
@@ -891,7 +891,7 @@ cd "E:\project\rust\ai-proxy" && npx tsc --noEmit --project tsconfig.json 2>&1 |
 
 预期：无新增错误。如果 `METHODS` 的类型断言有问题，调整写法：`v as import('@/types/collection').HttpMethod`
 
-- [ ] **步骤 3：运行前端构建验证 Vite 编译**
+- [x] **步骤 3：运行前端构建验证 Vite 编译**
 
 ```bash
 cd "E:\project\rust\ai-proxy" && bun run build:vite 2>&1 | tail -20
@@ -899,7 +899,7 @@ cd "E:\project\rust\ai-proxy" && bun run build:vite 2>&1 | tail -20
 
 预期：构建成功
 
-- [ ] **步骤 4：Commit**
+- [x] **步骤 4：Commit**
 
 ```bash
 git add src/features/new-request/NewRequestView.tsx

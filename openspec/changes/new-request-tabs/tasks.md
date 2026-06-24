@@ -9,9 +9,9 @@
 
 ## 3. NewRequestView 重构
 
-- [ ] 3.1 重构 `NewRequestView.tsx`：用 `useRequestTabs` 替代原有 flat state，将右侧区域改为 tab 容器渲染
-- [ ] 3.2 实现无 tab 空状态占位视图（"点击左侧接口或 [+] 新建请求"）
-- [ ] 3.3 树节点点击 → `openTab(node.id, node)`；树节点删除时将关联 tab 转为临时 tab
+- [x] 3.1 重构 `NewRequestView.tsx`：用 `useRequestTabs` 替代原有 flat state，将右侧区域改为 tab 容器渲染
+- [x] 3.2 实现无 tab 空状态占位视图（"点击左侧接口或 [+] 新建请求"）
+- [x] 3.3 树节点点击 → `openTab(node.id, node)`；树节点删除时将关联 tab 转为临时 tab
 
 ## 4. i18n
 
