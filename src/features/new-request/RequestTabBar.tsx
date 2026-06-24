@@ -128,8 +128,8 @@ export default function RequestTabBar({
               className={cn(
                 'group relative flex shrink-0 items-center gap-1.5 h-8 max-w-[160px] px-3',
                 'text-xs border-r border-border cursor-pointer select-none',
-                'hover:bg-surface-elevated/50 transition-colors',
-                isActive && 'bg-surface-elevated text-accent',
+                'text-muted-foreground hover:text-foreground transition-colors',
+                isActive && 'bg-surface-elevated/50 text-foreground',
                 isActive && 'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-accent',
               )}
             >
