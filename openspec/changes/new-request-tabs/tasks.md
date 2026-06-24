@@ -5,7 +5,7 @@
 
 ## 2. TabBar 组件
 
-- [ ] 2.1 新建 `src/features/new-request/RequestTabBar.tsx`：水平排列 tab 标签 + ✕ 关闭 + [+] 新建 + 溢出滚动
+- [x] 2.1 新建 `src/features/new-request/RequestTabBar.tsx`：水平排列 tab 标签 + ✕ 关闭 + [+] 新建 + 溢出滚动
 
 ## 3. NewRequestView 重构
 

@@ -353,7 +353,7 @@ git commit -m "feat(new-request): add useRequestTabs hook for multi-tab state ma
 
 水平排列 tab 标签条：方法徽标 + 名称 + 关闭按钮，右侧 [+] 和溢出菜单。
 
-- [ ] **步骤 1：创建 RequestTabBar.tsx**
+- [x] **步骤 1：创建 RequestTabBar.tsx**
 
 创建 `src/features/new-request/RequestTabBar.tsx`：
 
@@ -548,7 +548,7 @@ export default function RequestTabBar({
 }
 ```
 
-- [ ] **步骤 2：验证 TypeScript 编译**
+- [x] **步骤 2：验证 TypeScript 编译**
 
 运行：
 
@@ -558,7 +558,7 @@ cd "E:\project\rust\ai-proxy" && npx tsc --noEmit --project tsconfig.json 2>&1 |
 
 预期：无 RequestTabBar 相关错误（未导出警告可忽略）
 
-- [ ] **步骤 3：Commit**
+- [x] **步骤 3：Commit**
 
 ```bash
 git add src/features/new-request/RequestTabBar.tsx
