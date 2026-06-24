@@ -198,5 +198,15 @@
     "bodyFormatText": "Text",
     "bodyFormatUrlencoded": "Form URL-Encoded",
     "bodyFormatMultipart": "Multipart"
+  },
+  "tab": {
+    "untitled": "未命名请求",
+    "closeCurrent": "关闭当前页",
+    "closeOthers": "关闭其他页",
+    "closeAll": "关闭所有页",
+    "emptyTitle": "从左侧接口树选择一个请求",
+    "emptySubtitle": "或点击 [+] 新建空白请求",
+    "newRequest": "新建请求",
+    "openFromCollection": "从集合打开"
   }
 }

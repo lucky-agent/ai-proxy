@@ -198,5 +198,15 @@
     "bodyFormatText": "Text",
     "bodyFormatUrlencoded": "Form URL-Encoded",
     "bodyFormatMultipart": "Multipart"
+  },
+  "tab": {
+    "untitled": "Untitled Request",
+    "closeCurrent": "Close Current",
+    "closeOthers": "Close Others",
+    "closeAll": "Close All",
+    "emptyTitle": "Select a request",
+    "emptySubtitle": "or click [+] to create a new request",
+    "newRequest": "New Request",
+    "openFromCollection": "Open from Collection"
   }
 }
