@@ -48,8 +48,8 @@ pub enum ApiTreeNode {
         auth_type: Option<String>,
         #[serde(rename = "authData")]
         auth_data: Option<String>,
-        /// Internal: the request_id linking to the `requests` table (not serialized).
-        #[serde(skip)]
+        /// The request_id linking to the `requests` table.
+        #[serde(rename = "requestId")]
         request_id: String,
     },
 }

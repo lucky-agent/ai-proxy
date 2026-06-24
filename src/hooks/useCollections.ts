@@ -28,16 +28,6 @@ function normalizeTree(nodes: ApiTreeNode[]): ApiTreeNode[] {
   })
 }
 
-function createDefaultCollection(): ApiCollection {
-  return {
-    id: generateId(),
-    name: '默认集合',
-    children: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  }
-}
-
 /** 递归查找节点并替换（immutable） */
 function updateNodeInTree(
   nodes: ApiTreeNode[],
@@ -87,19 +77,41 @@ function insertNodeInTree(
   })
 }
 
+/** Find the root collection id that contains a given node */
+function findCollectionIdForNode(collections: ApiCollection[], nodeId: string): string | null {
+  for (const col of collections) {
+    if (col.id === nodeId) return col.id
+    if (nodeInTree(col.children, nodeId)) return col.id
+  }
+  return null
+}
+
+function nodeInTree(nodes: ApiTreeNode[], targetId: string): boolean {
+  for (const n of nodes) {
+    if (n.id === targetId) return true
+    if (n.type === 'folder' && nodeInTree(n.children, targetId)) return true
+  }
+  return false
+}
+
+/** Safely cast a node to ApiRequestNode */
+function asRequest(node: ApiTreeNode): ApiRequestNode | null {
+  return node.type === 'request' ? (node as ApiRequestNode) : null
+}
+
 export function useCollections() {
   const [collections, setCollections] = useState<ApiCollection[]>([])
   const [loading, setLoading] = useState(true)
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 7.6: Keep a debounced save timer for updateRequest (keystroke-level debounce)
+  const saveRequestTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 加载
   useEffect(() => {
     invoke<(ApiCollection & { children: ApiTreeNode[] })[]>('get_collections')
       .then(data => {
         if (data.length === 0) {
-          const default_ = createDefaultCollection()
-          setCollections([default_])
-          invoke('save_collections', { collections: [default_] }).catch(console.error)
+          setCollections([])
         } else {
           // Normalize all nodes for backward compatibility
           const normalized: ApiCollection[] = data.map(c => ({
@@ -114,25 +126,18 @@ export function useCollections() {
       .finally(() => setLoading(false))
   }, [])
 
-  // 延迟保存（避免每次操作都 invoke）
-  const debouncedSave = useCallback((data: ApiCollection[]) => {
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      invoke('save_collections', { collections: data }).catch(console.error)
-    }, 300)
+  // 7.1: Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (saveRequestTimer.current) {
+        clearTimeout(saveRequestTimer.current)
+      }
+    }
   }, [])
-
-  const updateCollections = useCallback((updater: (prev: ApiCollection[]) => ApiCollection[]) => {
-    setCollections(prev => {
-      const next = updater(prev)
-      debouncedSave(next)
-      return next
-    })
-  }, [debouncedSave])
 
   // --- 操作方法 ---
 
-  /** 在根 Collection 或某文件夹下添加文件夹 */
+  /** 7.2: Add a folder under a collection or another folder */
   const addFolder = useCallback((parentId: string) => {
     const newFolder: ApiFolderNode = {
       id: generateId(),
@@ -140,7 +145,8 @@ export function useCollections() {
       name: '新建文件夹',
       children: [],
     }
-    updateCollections(prev =>
+    // Optimistic update
+    setCollections(prev =>
       prev.map(col => {
         if (col.id === parentId) {
           return { ...col, children: [...col.children, newFolder], updatedAt: Date.now() }
@@ -152,9 +158,11 @@ export function useCollections() {
         }
       }),
     )
-  }, [updateCollections])
+    // Fire-and-forget backend call
+    invoke('create_folder', { parentId, name: '新建文件夹' }).catch(console.error)
+  }, [])
 
-  /** 在根 Collection 或某文件夹下添加请求 */
+  /** 7.3: Add a request under a parent node (collection or folder) */
   const addRequest = useCallback((parentId: string) => {
     const newRequest: ApiRequestNode = {
       id: generateId(),
@@ -168,8 +176,17 @@ export function useCollections() {
       bodyType: 'json',
       body: '',
     }
-    updateCollections(prev =>
-      prev.map(col => {
+    // Optimistic update
+    setCollections(prev => {
+      // Find the collection id for this parent
+      const collectionId = findCollectionIdForNode(prev, parentId)
+
+      // Fire-and-forget backend call
+      if (collectionId) {
+        invoke('create_request', { parentId, collectionId, name: '新建请求' }).catch(console.error)
+      }
+
+      return prev.map(col => {
         if (col.id === parentId) {
           return { ...col, children: [...col.children, newRequest], updatedAt: Date.now() }
         }
@@ -178,24 +195,28 @@ export function useCollections() {
           children: insertNodeInTree(col.children, parentId, newRequest),
           updatedAt: Date.now(),
         }
-      }),
-    )
-  }, [updateCollections])
+      })
+    })
+  }, [])
 
-  /** 删除节点 */
+  /** 7.4: Delete a node */
   const removeNode = useCallback((nodeId: string) => {
-    updateCollections(prev =>
+    // Optimistic update
+    setCollections(prev =>
       prev.map(col => ({
         ...col,
         children: removeNodeFromTree(col.children, nodeId),
         updatedAt: Date.now(),
       })),
     )
-  }, [updateCollections])
+    // Fire-and-forget backend call
+    invoke('delete_node', { nodeId }).catch(console.error)
+  }, [])
 
-  /** 重命名节点 */
+  /** 7.5: Rename a node */
   const renameNode = useCallback((nodeId: string, newName: string) => {
-    updateCollections(prev =>
+    // Optimistic update
+    setCollections(prev =>
       prev.map(col => ({
         ...col,
         children: updateNodeInTree(col.children, nodeId, node =>
@@ -204,9 +225,11 @@ export function useCollections() {
         updatedAt: Date.now(),
       })),
     )
-  }, [updateCollections])
+    // Fire-and-forget backend call
+    invoke('rename_node', { nodeId, newName }).catch(console.error)
+  }, [])
 
-  /** 更新请求节点配置 */
+  /** 7.6: Update request node data — debounced for keystroke-level writes */
   const updateRequest = useCallback(
     (nodeId: string, data: {
       method?: HttpMethod
@@ -216,8 +239,11 @@ export function useCollections() {
       cookies?: KeyValuePair[]
       bodyType?: BodyType
       body?: string
+      authType?: string
+      authData?: string
     }) => {
-      updateCollections(prev =>
+      // Always update React state immediately (optimistic)
+      setCollections(prev =>
         prev.map(col => ({
           ...col,
           children: updateNodeInTree(col.children, nodeId, node => {
@@ -227,63 +253,69 @@ export function useCollections() {
           updatedAt: Date.now(),
         })),
       )
+
+      // Debounced backend write: we need requestId from the node
+      if (saveRequestTimer.current) clearTimeout(saveRequestTimer.current)
+      saveRequestTimer.current = setTimeout(() => {
+        // Read current collections to find the requestId
+        setCollections(prev => {
+          // Find the node and its requestId across all collections
+          for (const col of prev) {
+            const req = findRequestInNodes(col.children, nodeId)
+            if (req) {
+              invoke('save_request', {
+                id: req.requestId ?? '',
+                method: data.method ?? req.method,
+                url: data.url ?? req.url,
+                headers: data.headers ?? req.headers,
+                params: data.params ?? req.params,
+                body: data.body ?? req.body,
+                bodyType: data.bodyType ?? req.bodyType,
+                cookies: data.cookies ?? req.cookies,
+                authType: data.authType ?? req.authType ?? '',
+                authData: data.authData ?? req.authData ?? '',
+              }).catch(console.error)
+              break
+            }
+          }
+          return prev
+        })
+      }, 300)
     },
-    [updateCollections],
+    [],
   )
 
-  /** 复制请求节点 */
+  /** 7.7: Duplicate a request node */
   const duplicateRequest = useCallback((nodeId: string) => {
-    updateCollections(prev => {
-      const findNode = (nodes: ApiTreeNode[]): ApiRequestNode | null => {
-        for (const n of nodes) {
-          if (n.id === nodeId && n.type === 'request') return n
-          if (n.type === 'folder') {
-            const found = findNode(n.children)
-            if (found) return found
-          }
-        }
-        return null
-      }
+    // Optimistic backend call — backend creates the duplicate and returns new nodeId
+    invoke<string>('duplicate_request', { nodeId })
+      .then(newNodeId => {
+        // After successful backend op, reload collections to get accurate state
+        invoke<(ApiCollection & { children: ApiTreeNode[] })[]>('get_collections')
+          .then(data => {
+            const normalized: ApiCollection[] = data.map(c => ({
+              ...c,
+              children: normalizeTree(c.children),
+              updatedAt: c.updatedAt ?? c.createdAt,
+            }))
+            setCollections(normalized)
+          })
+          .catch(console.error)
+      })
+      .catch(console.error)
+  }, [])
 
-      const insertCopy = (nodes: ApiTreeNode[], copy: ApiRequestNode): ApiTreeNode[] => {
-        if (nodes.some(n => n.id === nodeId)) {
-          const idx = nodes.findIndex(n => n.id === nodeId)
-          return [...nodes.slice(0, idx + 1), copy, ...nodes.slice(idx + 1)]
-        }
-        return nodes.map(n => {
-          if (n.type === 'folder') {
-            return { ...n, children: insertCopy(n.children, copy) }
-          }
-          return n
-        })
-      }
-
-      const orig = prev.flatMap(c => findNode(c.children) ? [findNode(c.children)!] : [])
-      if (orig.length === 0) return prev
-      const o = orig[0]
-
-      const copy: ApiRequestNode = {
-        ...o,
-        id: generateId(),
-        name: o.name + ' (副本)',
-      }
-
-      return prev.map(col => ({
-        ...col,
-        children: insertCopy(col.children, copy),
-        updatedAt: Date.now(),
-      }))
-    })
-  }, [updateCollections])
-
-  /** 重命名 Collection */
+  /** 7.8: Rename a collection (uses rename_node command under the hood) */
   const renameCollection = useCallback((collectionId: string, newName: string) => {
-    updateCollections(prev =>
+    // Optimistic update
+    setCollections(prev =>
       prev.map(col =>
         col.id === collectionId ? { ...col, name: newName, updatedAt: Date.now() } : col,
       ),
     )
-  }, [updateCollections])
+    // Fire-and-forget backend call — collection is also a node in collection_nodes
+    invoke('rename_node', { nodeId: collectionId, newName }).catch(console.error)
+  }, [])
 
   return {
     collections,
@@ -296,4 +328,18 @@ export function useCollections() {
     duplicateRequest,
     renameCollection,
   }
+}
+
+/** Recursively find a request node by nodeId in a tree */
+function findRequestInNodes(nodes: ApiTreeNode[], targetId: string): ApiRequestNode | null {
+  for (const n of nodes) {
+    if (n.type === 'request' && n.id === targetId) {
+      return asRequest(n)
+    }
+    if (n.type === 'folder') {
+      const found = findRequestInNodes(n.children, targetId)
+      if (found) return found
+    }
+  }
+  return null
 }

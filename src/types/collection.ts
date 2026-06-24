@@ -37,6 +37,7 @@ export interface ApiRequestNode {
   body: string
   authType?: string
   authData?: string
+  requestId?: string
 }
 
 export type ApiTreeNode = ApiFolderNode | ApiRequestNode

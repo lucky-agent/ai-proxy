@@ -19,6 +19,8 @@ function createTabFromNode(node: ApiRequestNode): RequestTab {
     cookies: node.cookies ?? [],
     bodyType: node.bodyType ?? 'json',
     body: node.body ?? '',
+    authType: node.authType ?? '',
+    authData: node.authData ?? '',
     responseEntryId: null,
     sending: false,
     error: '',
@@ -38,6 +40,8 @@ function createEmptyTab(): RequestTab {
     cookies: [],
     bodyType: 'json',
     body: '',
+    authType: '',
+    authData: '',
     responseEntryId: null,
     sending: false,
     error: '',
@@ -154,6 +158,8 @@ export function useRequestTabs(
             cookies: tab.cookies,
             bodyType: tab.bodyType,
             body: tab.body,
+            authType: tab.authType,
+            authData: tab.authData,
           })
           return current
         })
