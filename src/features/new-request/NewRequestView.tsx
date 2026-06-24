@@ -283,7 +283,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                   <ResizablePanel
                     id="response"
                     defaultSize={55}
-                    minSize={25}
+                    minSize={10}
                     collapsible
                     collapsedSize={0}
                     panelRef={responsePanelRef}
