@@ -35,6 +35,8 @@ export interface ApiRequestNode {
   cookies: KeyValuePair[]
   bodyType: BodyType
   body: string
+  authType?: string
+  authData?: string
 }
 
 export type ApiTreeNode = ApiFolderNode | ApiRequestNode
@@ -50,6 +52,8 @@ export interface RequestTab {
   cookies: KeyValuePair[]
   bodyType: BodyType
   body: string
+  authType: string
+  authData: string
   responseEntryId: string | null
   sending: boolean
   error: string
