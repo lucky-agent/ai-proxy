@@ -1,6 +1,6 @@
 mod commands;
 mod config;
-mod collection;
+mod storage;
 mod proxy;
 mod script;
 mod tray;

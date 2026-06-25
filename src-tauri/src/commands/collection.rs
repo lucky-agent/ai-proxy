@@ -1,9 +1,9 @@
 use crate::AppState;
-use crate::collection::ApiCollection;
-use crate::collection::ApiTreeNode;
-use crate::collection::HeaderPair;
-use crate::collection::collection_nodes::CollectionNodesRepository;
-use crate::collection::requests::RequestsRepository;
+use crate::storage::ApiCollection;
+use crate::storage::ApiTreeNode;
+use crate::storage::HeaderPair;
+use crate::storage::collection_nodes::CollectionNodesRepository;
+use crate::storage::requests::RequestsRepository;
 
 #[tauri::command]
 pub fn get_collections(state: tauri::State<'_, AppState>) -> Result<Vec<ApiCollection>, String> {

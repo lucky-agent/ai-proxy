@@ -1,7 +1,7 @@
-use crate::collection::requests::RequestsRepository;
-use crate::collection::HeaderPair;
-use crate::collection::ApiCollection;
-use crate::collection::ApiTreeNode;
+use crate::storage::requests::RequestsRepository;
+use crate::storage::HeaderPair;
+use crate::storage::ApiCollection;
+use crate::storage::ApiTreeNode;
 use crate::config::db::Db;
 use sqlite;
 use std::collections::HashMap;
