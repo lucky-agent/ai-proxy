@@ -171,6 +171,28 @@ export function ApiTreeItem({
           </>
         )}
       </ContextMenuContent>
+
+      {/* 递归渲染子节点 */}
+      {isFolder && isExpanded && (
+        <div>
+          {(node as ApiFolderNode).children.map(child => (
+            <ApiTreeItem
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              selectedId={selectedId}
+              onSelectRequest={onSelectRequest}
+              onRemoveNode={onRemoveNode}
+              onRenameNode={onRenameNode}
+              onDuplicateRequest={onDuplicateRequest}
+              onAddFolder={onAddFolder}
+              onAddRequest={onAddRequest}
+              expandedIds={expandedIds}
+              onToggleExpand={onToggleExpand}
+            />
+          ))}
+        </div>
+      )}
     </ContextMenu>
   )
 }
