@@ -100,7 +100,7 @@ function RequestPanelContent({ tab, entry, t }: { tab: PanelTab; entry: TrafficE
 
   if (tab === 'body') {
     return entry.requestBody ? (
-      <BodyView body={entry.requestBody} />
+      <BodyView body={entry.requestBody} contentType={entry.requestContentType} />
     ) : (
       <Empty><EmptyTitle>{t('detail.noRequestBody')}</EmptyTitle></Empty>
     )

@@ -80,7 +80,7 @@ function formatXml(input: string): string {
   return result.trim()
 }
 
-const BodyView = memo(function BodyView({ body }: { body: string }) {
+const BodyView = memo(function BodyView({ body, contentType }: { body: string; contentType?: string }) {
   const [wrapped, setWrapped] = useState(true)
   const [format, setFormat] = useState<'auto' | 'json' | 'xml' | 'html' | 'plaintext'>('auto')
   const [allExpanded, setAllExpanded] = useState(true)
@@ -97,9 +97,22 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
   }, [body])
 
   const { displayBody, displayLang, useTreeView } = useMemo(() => {
+    const inferFromContentType = (ct?: string): { displayLang: string; useTreeView: false } | null => {
+      if (!ct) return null
+      const lower = ct.toLowerCase()
+      if (lower.includes('json')) return { displayLang: 'json', useTreeView: false }
+      if (lower.includes('xml') && !lower.includes('html')) return { displayLang: 'xml', useTreeView: false }
+      if (lower.includes('html')) return { displayLang: 'html', useTreeView: false }
+      return null
+    }
+
     if (format === 'auto') {
       if (isJson) {
         return { displayBody: formatted!.formatted, displayLang: 'json', useTreeView: true as const }
+      }
+      const ctHint = inferFromContentType(contentType)
+      if (ctHint) {
+        return { displayBody: cleaned, displayLang: ctHint.displayLang, useTreeView: ctHint.useTreeView }
       }
       const l = cleaned.startsWith('<') ? 'html' : 'plaintext'
       return { displayBody: cleaned, displayLang: l, useTreeView: false as const }
@@ -114,7 +127,7 @@ const BodyView = memo(function BodyView({ body }: { body: string }) {
     }
     if (format === 'html') { return { displayBody: cleaned, displayLang: 'html', useTreeView: false as const } }
     return { displayBody: cleaned, displayLang: 'plaintext', useTreeView: false as const }
-  }, [format, cleaned, isJson, formatted])
+  }, [format, cleaned, isJson, formatted, contentType])
 
   return (
     <div className="flex flex-col h-full">

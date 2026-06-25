@@ -124,7 +124,7 @@ function ResponsePanelContent({
       return <RawView content={entry.error} />
     }
     return entry.responseBody ? (
-      <BodyView body={entry.responseBody} />
+      <BodyView body={entry.responseBody} contentType={entry.responseContentType} />
     ) : (
       <Empty><EmptyTitle>{t('detail.noBody')}</EmptyTitle></Empty>
     )
