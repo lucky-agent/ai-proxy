@@ -9,7 +9,19 @@ use crate::storage::requests::RequestsRepository;
 pub fn get_collections(state: tauri::State<'_, AppState>) -> Result<Vec<ApiCollection>, String> {
     let db = state.db();
     let repo = db.lock().unwrap();
-    repo.load_all_collections().map_err(|e| e.to_string())
+    let mut collections = repo.load_all_collections().map_err(|e| e.to_string())?;
+
+    // Auto-create a default collection on first launch (SQLite migration from collections.json)
+    if collections.is_empty() {
+        let id = uuid::Uuid::new_v4().to_string();
+        let ts = chrono::Utc::now().timestamp_millis();
+        repo.create_collection(&id, "默认模块", ts)
+            .map_err(|e| e.to_string())?;
+        // Re-read to get the full tree
+        collections = repo.load_all_collections().map_err(|e| e.to_string())?;
+    }
+
+    Ok(collections)
 }
 
 #[tauri::command]
@@ -67,6 +79,14 @@ pub fn delete_node(
 ) -> Result<(), String> {
     let db = state.db();
     let repo = db.lock().unwrap();
+
+    // Prevent deleting the last remaining collection (default module is always present)
+    let collections = repo.load_all_collections().map_err(|e| e.to_string())?;
+    let is_root_collection = collections.iter().any(|c| c.id == node_id);
+    if is_root_collection && collections.len() <= 1 {
+        return Err("cannot delete the last collection".to_string());
+    }
+
     repo.delete_node_subtree(&node_id).map_err(|e| e.to_string())
 }
 

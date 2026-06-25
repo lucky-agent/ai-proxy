@@ -68,6 +68,7 @@ impl Db {
             db_path: Some(db_path),
             cleanup_done: AtomicBool::new(false),
         };
+        db.migrate()?;
         Ok(db)
     }
 
