@@ -49,8 +49,6 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
   const {
     tabs,
     activeTab,
-    activeTabId,
-    setActiveTabId,
     openTab,
     closeTab,
     activateTab,
@@ -126,26 +124,13 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
 
   // 树节点删除 → 关闭关联 tab 并从树中移除
   const handleRemoveNode = useCallback((nodeId: string) => {
-    // 找到关联的 tab 并关闭它
-    setTabs(prev => {
-      const linked = prev.find(t => t.linkedNodeId === nodeId)
-      if (linked) {
-        const idx = prev.findIndex(t => t.id === linked.id)
-        const next = [...prev.slice(0, idx), ...prev.slice(idx + 1)]
-        // 如果关闭的是 active tab，切换到相邻 tab
-        if (linked.id === activeTabId) {
-          let newActive: string | null = null
-          if (next.length > 0) {
-            newActive = next[Math.min(idx, next.length - 1)].id
-          }
-          setActiveTabId(newActive)
-        }
-        return next
-      }
-      return prev
-    })
+    // Close any open tab linked to this node
+    const linkedTab = tabs.find(t => t.linkedNodeId === nodeId)
+    if (linkedTab) {
+      closeTab(linkedTab.id)
+    }
     removeNode(nodeId)
-  }, [removeNode, activeTabId])
+  }, [tabs, removeNode, closeTab])
 
   // 根据 activeTab.responseEntryId 查找 TrafficEntry
   const activeEntry = activeTab?.responseEntryId
