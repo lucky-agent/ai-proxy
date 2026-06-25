@@ -87,6 +87,12 @@ pub async fn resend_request(
 
             let resp_body = String::from_utf8_lossy(&resp_bytes);
 
+            // 发送响应体 chunk 事件，使前端 responseBody 被填充
+            ctx.send(ProxyEvent::ResponseChunk {
+                id: ctx.request_id().to_string(),
+                chunk: resp_body.to_string(),
+            });
+
             // persist response metadata
             if let Ok(db) = state.db().lock() {
                 db.update_response(
