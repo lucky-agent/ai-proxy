@@ -1,11 +1,11 @@
 // src/features/new-request/ApiCollectionPanel.tsx
-import { useCallback } from 'react'
-import { FolderPlusIcon, PlusIcon } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { RefreshCwIcon } from 'lucide-react'
 import { useLocale } from '@/hooks/useLocale'
+import { cn } from '@/lib/utils'
 import type { ApiCollection, ApiRequestNode } from '@/types/collection'
 import { ApiTreeView } from './ApiTreeView'
 import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface ApiCollectionPanelProps {
   collections: ApiCollection[]
@@ -17,6 +17,7 @@ interface ApiCollectionPanelProps {
   renameNode: (nodeId: string, newName: string) => void
   duplicateRequest: (nodeId: string) => void
   renameCollection: (collectionId: string, newName: string) => void
+  onRefresh: () => void
 }
 
 export function ApiCollectionPanel({
@@ -29,21 +30,30 @@ export function ApiCollectionPanel({
   renameNode,
   duplicateRequest,
   renameCollection,
+  onRefresh,
 }: ApiCollectionPanelProps) {
   const { t } = useLocale()
+  const [spinning, setSpinning] = useState(false)
 
-  // 默认添加到第一个 Collection 的根层
-  const defaultCollectionId = collections[0]?.id ?? ''
-  const handleAddFolder = useCallback(() => addFolder(defaultCollectionId), [addFolder, defaultCollectionId])
-  const handleAddRequest = useCallback(() => addRequest(defaultCollectionId), [addRequest, defaultCollectionId])
+  const handleRefresh = useCallback(() => {
+    setSpinning(true)
+    onRefresh()
+    setTimeout(() => setSpinning(false), 600)
+  }, [onRefresh])
 
   return (
     <div className="flex h-full flex-col bg-surface-base/30">
       {/* 标题栏 */}
       <div className="flex items-center px-3 py-2">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex-1">
           {t('collection.title')}
         </span>
+        <button
+          onClick={handleRefresh}
+          className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        >
+          <RefreshCwIcon className={cn('size-3.5', spinning && 'animate-spin')} />
+        </button>
       </div>
 
       <Separator />
@@ -60,26 +70,6 @@ export function ApiCollectionPanel({
         onAddRequest={addRequest}
         onRenameCollection={renameCollection}
       />
-
-      <Separator />
-
-      {/* 操作按钮 */}
-      <div className="flex items-center gap-1 px-3 py-2">
-        <button
-          onClick={handleAddFolder}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <FolderPlusIcon className="size-3.5" />
-          {t('collection.newFolder')}
-        </button>
-        <button
-          onClick={handleAddRequest}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <PlusIcon className="size-3.5" />
-          {t('collection.newRequest')}
-        </button>
-      </div>
     </div>
   )
 }

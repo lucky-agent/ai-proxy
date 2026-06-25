@@ -98,6 +98,7 @@
   --badge-redirect: oklch(0.6 0.2 85);
   --badge-client-err: oklch(0.53 0.24 25);
   --badge-server-err: oklch(0.5 0.25 25);
+  --badge-error: oklch(0.5 0.25 25);
   --scrollbar-thumb: oklch(0.717 0 0);
   --scrollbar-thumb-hover: oklch(0.595 0 0);
   --scrollbar-track: transparent;
@@ -152,6 +153,7 @@
   --badge-redirect: oklch(0.75 0.2 85);
   --badge-client-err: oklch(0.65 0.24 25);
   --badge-server-err: oklch(0.62 0.25 25);
+  --badge-error: oklch(0.62 0.25 25);
   --scrollbar-thumb: oklch(0.269 0 0);
   --scrollbar-thumb-hover: oklch(0.338 0 0);
   --scrollbar-track: transparent;

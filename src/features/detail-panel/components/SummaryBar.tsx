@@ -23,14 +23,14 @@ export default function SummaryBar({ entry, onClose }: { entry: TrafficEntry; on
       <Badge
         className="shrink-0 rounded font-semibold"
         style={{
-          color: `var(--badge-${statusCategory(entry.status ?? 0)})`,
+          color: entry.error ? 'var(--badge-error)' : `var(--badge-${statusCategory(entry.status ?? 0)})`,
         }}>
-        {entry.status != null && (
+        {entry.error != null && (
           <span
             className="inline-block size-1.5 rounded-full bg-current"
           />
         )}
-        {entry.status ?? t('detail.pending')}
+        {entry.error != null ? t('detail.errorStatus') : (entry.status ?? t('detail.pending'))}
       </Badge>
       <span className="min-w-0 flex-1 truncate text-primary" title={entry.uri}>
         {entry.uri}

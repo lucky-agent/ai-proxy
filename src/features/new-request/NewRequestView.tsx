@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react'
+import { useCallback, useRef, useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { SendIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -14,8 +14,8 @@ import RequestEditor from './RequestEditor'
 import RequestTabBar from './RequestTabBar'
 import { useRequestTabs } from './useRequestTabs'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { usePanelRef } from 'react-resizable-panels'
+import { SaveToCollectionDialog } from './SaveToCollectionDialog'
 import type { ApiRequestNode, KeyValuePair } from '@/types/collection'
 import type { TrafficEntry } from '@/types/proxy'
 
@@ -44,6 +44,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     updateRequest,
     duplicateRequest,
     renameCollection,
+    loadCollections,
   } = useCollections()
 
   const {
@@ -55,9 +56,9 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     updateActiveTab,
     closeOthers,
     closeAll,
-    unlinkNode,
+    linkTabToNode,
     syncNodeRename,
-  } = useRequestTabs(updateRequest)
+  } = useRequestTabs()
 
   // 左侧树点击 request → 打开 tab
   const handleSelectRequest = useCallback((node: ApiRequestNode) => {
@@ -102,19 +103,117 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
       finalUrl = finalUrl + sep + qs
     }
 
+    // Check if cancelled before invoke
+    const controller = new AbortController()
+    cancelRef.current = controller
+
     try {
+      // Tauri invoke doesn't natively support AbortSignal, but we simulate
+      // cancellation: if aborted before invoke returns, we ignore the result
       const entryId = await invoke<string>('resend_request', {
         method: activeTab.method,
         url: finalUrl,
         headers: headerMap,
         body: activeTab.body || null,
       })
-      updateActiveTab({ responseEntryId: entryId, sending: false }, sendingTabId)
+      // Ignore result if cancelled
+      if (cancelRef.current?.signal.aborted) return
+      updateActiveTab({ responseEntryId: entryId, sending: false, error: '' }, sendingTabId)
       onSendSuccess(entryId)
     } catch (err) {
+      if (cancelRef.current?.signal.aborted) return
       updateActiveTab({ sending: false, error: String(err) }, sendingTabId)
+    } finally {
+      if (cancelRef.current === controller) {
+        cancelRef.current = null
+      }
     }
   }, [activeTab, updateActiveTab, onSendSuccess])
+
+  // Save-to-collection dialog state (for unlinked tabs)
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+
+  // 保存到集合（已关联 → 直接保存；未关联 → 弹窗选父节点）
+  const handleSave = useCallback(() => {
+    if (!activeTab) return
+    if (activeTab.linkedNodeId) {
+      updateRequest(activeTab.linkedNodeId, {
+        method: activeTab.method,
+        url: activeTab.url,
+        params: activeTab.params.filter(p => p.key.trim()),
+        headers: activeTab.headers.filter(h => h.key.trim()),
+        cookies: activeTab.cookies.filter(c => c.key.trim()),
+        bodyType: activeTab.bodyType,
+        body: activeTab.body,
+      })
+    } else {
+      setSaveDialogOpen(true)
+    }
+  }, [activeTab, updateRequest])
+
+  // Async wrapper for addFolder — returns nodeId (not optimistic local id)
+  const addFolderAsync = useCallback(
+    (parentId: string, name: string): Promise<string | null> =>
+      invoke<string>('create_folder', { parentId, name }).then(id => {
+        loadCollections()
+        return id
+      }).catch(err => { console.error(err); return null }),
+    [loadCollections],
+  )
+
+  // 弹窗确认：创建树节点 + 保存数据 + link tab
+  const handleSaveToCollection = useCallback(async (parentId: string, collectionId: string, requestName: string) => {
+    if (!activeTab) return
+    const tabId = activeTab.id
+
+    try {
+      const nodeId = await invoke<string>('create_request', {
+        parentId,
+        collectionId,
+        name: requestName || activeTab.name || '未命名请求',
+      })
+
+      // Build the new ApiRequestNode matching what the tree expects
+      const newNode: ApiRequestNode = {
+        id: nodeId,
+        type: 'request',
+        name: requestName || activeTab.name || '未命名请求',
+        method: activeTab.method,
+        url: activeTab.url,
+        params: activeTab.params,
+        headers: activeTab.headers,
+        cookies: activeTab.cookies,
+        bodyType: activeTab.bodyType,
+        body: activeTab.body,
+        authType: activeTab.authType,
+        authData: activeTab.authData,
+      }
+
+      // Reload collections to show the new node in tree
+      await invoke('get_collections').then(() => {}).catch(console.error)
+      // Trigger re-render by reloading collections
+      loadCollections()
+
+      // Link the tab and save the request data
+      linkTabToNode(tabId, newNode)
+      const headers = activeTab.headers.filter(h => h.key.trim())
+      const params = activeTab.params.filter(p => p.key.trim())
+      const cookies = activeTab.cookies.filter(c => c.key.trim())
+      updateRequest(nodeId, {
+        method: activeTab.method,
+        url: activeTab.url,
+        params,
+        headers,
+        cookies,
+        bodyType: activeTab.bodyType,
+        body: activeTab.body,
+        authType: activeTab.authType,
+        authData: activeTab.authData,
+      })
+    } catch (err) {
+      console.error(err)
+    }
+  }, [activeTab, linkTabToNode, updateRequest, loadCollections])
 
   // 树节点重命名 → 同步到已打开的 tab 名称
   const handleRenameNode = useCallback((nodeId: string, newName: string) => {
@@ -153,6 +252,14 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     }
   }, [activeEntry, responsePanelRef])
 
+  // Abort controller for cancelling in-flight request
+  const cancelRef = useRef<AbortController | null>(null)
+  const handleCancel = useCallback(() => {
+    cancelRef.current?.abort()
+    cancelRef.current = null
+    updateActiveTab({ sending: false })
+  }, [updateActiveTab])
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-surface-deep text-muted-foreground text-xs">
@@ -162,7 +269,8 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
   }
 
   return (
-    <ResizablePanelGroup orientation="horizontal" id="new-request" className="h-full bg-surface-deep">
+    <>
+      <ResizablePanelGroup orientation="horizontal" id="new-request" className="h-full bg-surface-deep">
       {/* Left: API collection panel */}
       <ResizablePanel id="collection" defaultSize="22%" minSize="15%" maxSize="40%" collapsible collapsedSize={0}>
         <div className="h-full overflow-hidden">
@@ -176,6 +284,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
             renameNode={handleRenameNode}
             duplicateRequest={duplicateRequest}
             renameCollection={renameCollection}
+            onRefresh={loadCollections}
           />
         </div>
       </ResizablePanel>
@@ -219,12 +328,13 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
             {/* 活跃 tab 内容（仅挂载 active tab） */}
             {activeTab && (
               <div className="flex flex-col min-h-0 h-full overflow-hidden">
-                <div className="flex shrink-0 items-center gap-2 px-4 py-2 border-b border-border bg-surface-base/50">
+                <div className="relative flex shrink-0 items-center gap-2 px-4 py-2 border-b border-border bg-surface-base/50">
                   <InputGroup className="flex-1">
                     <InputGroupAddon align="inline-start" className="py-0 pl-0">
                       <Select
                         value={activeTab.method}
                         onValueChange={v => updateActiveTab({ method: v as typeof METHODS[number] })}
+                        disabled={activeTab.sending}
                       >
                         <SelectTrigger className={cn(
                           'h-8 py-0 border-0 shadow-none rounded-none rounded-l-lg bg-transparent',
@@ -247,28 +357,12 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                       onChange={e => updateActiveTab({ url: e.target.value })}
                       className="text-xs font-mono"
                       placeholder="https://api.example.com/v1/endpoint"
+                      disabled={activeTab.sending}
                     />
                   </InputGroup>
-                  {activeTab.linkedNodeId && (
-                    <Button
-                      onClick={() => {
-                        if (!activeTab.linkedNodeId) return
-                        updateRequest(activeTab.linkedNodeId, {
-                          method: activeTab.method,
-                          url: activeTab.url,
-                          params: activeTab.params.filter(p => p.key.trim()),
-                          headers: activeTab.headers.filter(h => h.key.trim()),
-                          cookies: activeTab.cookies.filter(c => c.key.trim()),
-                          bodyType: activeTab.bodyType,
-                          body: activeTab.body,
-                        })
-                      }}
-                      variant="outline"
-                      size="sm"
-                    >
-                      {t('settings.save')}
-                    </Button>
-                  )}
+                  <Button onClick={handleSave} variant="outline" size="sm" disabled={activeTab.sending}>
+                    {t('settings.save')}
+                  </Button>
                   <Button onClick={handleSend} disabled={activeTab.sending || !activeTab.url.trim()} size="sm">
                     <SendIcon className="size-3.5" />
                     {activeTab.sending ? '...' : t('sendRequest.send')}
@@ -276,47 +370,70 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                 </div>
 
                 {/* Always render the vertical split; collapse response panel when no entry */}
-                <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="flex-1 min-h-0">
-                  <ResizablePanel id="editor" defaultSize={activeEntry ? "60%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
-                    <div className="flex flex-col min-h-0 h-full overflow-hidden">
-                      <RequestEditor
-                        params={activeTab.params}
-                        headers={activeTab.headers}
-                        cookies={activeTab.cookies}
-                        body={activeTab.body}
-                        bodyType={activeTab.bodyType}
-                        onParamsChange={v => updateActiveTab({ params: v })}
-                        onHeadersChange={v => updateActiveTab({ headers: v })}
-                        onCookiesChange={v => updateActiveTab({ cookies: v })}
-                        onBodyChange={v => updateActiveTab({ body: v })}
-                        onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
-                      />
-                      {activeTab.error && (
-                        <Alert variant="destructive" className="shrink-0 mx-4 mb-2">
-                          <AlertDescription>{activeTab.error}</AlertDescription>
-                        </Alert>
-                      )}
+                <div className="relative flex flex-col min-h-0 h-full overflow-hidden">
+                  <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="flex-1 min-h-0">
+                    <ResizablePanel id="editor" defaultSize={activeEntry ? "60%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
+                      <div className="flex flex-col min-h-0 h-full overflow-hidden">
+                        <RequestEditor
+                          params={activeTab.params}
+                          headers={activeTab.headers}
+                          cookies={activeTab.cookies}
+                          body={activeTab.body}
+                          bodyType={activeTab.bodyType}
+                          onParamsChange={v => updateActiveTab({ params: v })}
+                          onHeadersChange={v => updateActiveTab({ headers: v })}
+                          onCookiesChange={v => updateActiveTab({ cookies: v })}
+                          onBodyChange={v => updateActiveTab({ body: v })}
+                          onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
+                        />
+                      </div>
+                    </ResizablePanel>
+                    <ResizableHandle withHandle />
+                    <ResizablePanel
+                      id="response"
+                      defaultSize="40%"
+                      minSize="10%"
+                      collapsible
+                      collapsedSize="0%"
+                      panelRef={responsePanelRef}
+                    >
+                      <div className="h-full min-h-0">
+                        {activeEntry && <DetailPanel entry={activeEntry} showRequest={false} />}
+                      </div>
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
+
+                  {/* 发送中遮罩层 */}
+                  {activeTab.sending && (
+                    <div className="absolute inset-0 z-50">
+                      <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px]" />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                        <svg className="size-7 animate-spin text-foreground/40" viewBox="0 0 24 24" fill="none">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="52" strokeDashoffset="16" strokeLinecap="round" />
+                        </svg>
+                        <Button variant="ghost" size="sm" onClick={handleCancel} className="text-xs text-destructive">
+                          {t('sendRequest.cancel')}
+                        </Button>
+                      </div>
                     </div>
-                  </ResizablePanel>
-                  <ResizableHandle withHandle />
-                  <ResizablePanel
-                    id="response"
-                    defaultSize="40%"
-                    minSize="10%"
-                    collapsible
-                    collapsedSize="0%"
-                    panelRef={responsePanelRef}
-                  >
-                    <div className="h-full min-h-0">
-                      {activeEntry && <DetailPanel entry={activeEntry} showRequest={false} />}
-                    </div>
-                  </ResizablePanel>
-                </ResizablePanelGroup>
+                  )}
+                </div>
               </div>
             )}
           </div>
         )}
       </ResizablePanel>
     </ResizablePanelGroup>
+
+    {/* Save-to-collection dialog for unlinked tabs */}
+    <SaveToCollectionDialog
+      open={saveDialogOpen}
+      onOpenChange={setSaveDialogOpen}
+      collections={collections}
+      initialRequestName={activeTab?.name || activeTab?.url || ''}
+      addFolder={addFolderAsync}
+      onConfirm={handleSaveToCollection}
+    />
+    </>
   )
 }

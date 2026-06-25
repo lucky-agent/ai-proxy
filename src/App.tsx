@@ -160,7 +160,6 @@ function App() {
         onOpenAbout={() => setAboutOpen(true)}
         onOpenSslConfig={() => setSslConfigOpen(true)}
         onOpenScriptConfig={() => setScriptConfigOpen(true)}
-        onOpenSendRequest={() => setSendRequestOpen(true)}
         running={running}
         onStartProxy={startProxy}
         onStopProxy={stopProxy}

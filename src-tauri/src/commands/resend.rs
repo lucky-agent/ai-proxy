@@ -132,14 +132,17 @@ pub async fn resend_request(
             Ok(ctx.request_id().to_string())
         }
         Err(err) => {
+            // 用 Display 格式（简洁描述），而非 Debug（内部类型名+字段）
+            let msg = format!("{err}");
             ctx.send(ProxyEvent::Error {
                 id: ctx.request_id().to_string(),
-                error: format!("{err:?}"),
+                error: msg.clone(),
             });
             if let Ok(db) = state.db().lock() {
-                db.set_error(ctx.request_id(), &format!("{err:?}")).ok();
+                db.set_error(ctx.request_id(), &msg).ok();
             }
-            Err(format!("resend failed: {err:?}"))
+            // 仍返回 request_id，让前端将错误当作响应展示
+            Ok(ctx.request_id().to_string())
         }
     }
 }

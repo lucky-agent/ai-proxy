@@ -107,7 +107,7 @@ export function useCollections() {
   const saveRequestTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 加载
-  useEffect(() => {
+  const loadCollections = useCallback(() => {
     invoke<(ApiCollection & { children: ApiTreeNode[] })[]>('get_collections')
       .then(data => {
         if (data.length === 0) {
@@ -125,6 +125,11 @@ export function useCollections() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    setLoading(true)
+    loadCollections()
+  }, [loadCollections])
 
   // 7.1: Clean up on unmount
   useEffect(() => {
@@ -327,6 +332,7 @@ export function useCollections() {
     updateRequest,
     duplicateRequest,
     renameCollection,
+    loadCollections,
   }
 }
 

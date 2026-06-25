@@ -76,7 +76,8 @@
     "noSseEvents": "暂无 SSE 事件",
     "streamMerged": "合并消息",
     "mergeFormat": "格式",
-    "mergeFormatOpenai": "OpenAI"
+    "mergeFormatOpenai": "OpenAI",
+    "errorStatus": "错误"
   },
   "settings": {
     "title": "设置",
@@ -110,7 +111,8 @@
     "title": "新建请求",
     "description": "编写并发送一个新的 HTTP 请求。",
     "addHeader": "添加请求头",
-    "send": "发送"
+    "send": "发送",
+    "cancel": "取消"
   },
   "collection": {
     "title": "接口管理",
@@ -123,7 +125,10 @@
     "deleteConfirm": "确认删除？",
     "renameFolder": "重命名文件夹",
     "renameRequest": "重命名请求",
-    "emptyTree": "暂无接口，点击上方按钮添加。"
+    "emptyTree": "暂无接口，点击上方按钮添加。",
+    "saveToCollection": "保存到集合",
+    "saveToCollectionDesc": "选择父节点保存此请求。仅显示文件夹，可在弹窗中新建。",
+    "requestName": "请求名称"
   },
   "layout": {
     "hostSidebar": "主机侧栏",

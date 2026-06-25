@@ -1,5 +1,5 @@
 // src/features/new-request/useRequestTabs.ts
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import type { RequestTab, ApiRequestNode } from '@/types/collection'
 
 function makeTabId(): string {
@@ -48,12 +48,9 @@ function createEmptyTab(): RequestTab {
   }
 }
 
-export function useRequestTabs(
-  updateRequest: (nodeId: string, data: Partial<ApiRequestNode>) => void,
-) {
+export function useRequestTabs() {
   const [tabs, setTabs] = useState<RequestTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
-  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // --- openTab ---
   const openTab = useCallback((linkedNodeId: string | null, nodeData?: ApiRequestNode) => {
@@ -88,12 +85,6 @@ export function useRequestTabs(
 
   // --- closeTab ---
   const closeTab = useCallback((tabId: string) => {
-    // clear any pending debounced sync for the closing tab
-    if (syncTimer.current) {
-      clearTimeout(syncTimer.current)
-      syncTimer.current = null
-    }
-
     let nextActiveTabId: string | null = null
 
     setTabs(prev => {
@@ -138,36 +129,7 @@ export function useRequestTabs(
         return updated
       })
     })
-
-    // debounced 同步到树：300ms
-    setTabs(prev => {
-      const updated = prev.find(t => t.id === targetId)
-      if (!updated || updated.linkedNodeId === null) return prev
-
-      if (syncTimer.current) clearTimeout(syncTimer.current)
-      syncTimer.current = setTimeout(() => {
-        // guard: tab still exists and still linked before syncing
-        setTabs(current => {
-          const tab = current.find(t => t.id === targetId)
-          if (!tab || tab.linkedNodeId === null) return current
-          updateRequest(tab.linkedNodeId, {
-            method: tab.method,
-            url: tab.url,
-            params: tab.params,
-            headers: tab.headers,
-            cookies: tab.cookies,
-            bodyType: tab.bodyType,
-            body: tab.body,
-            authType: tab.authType,
-            authData: tab.authData,
-          })
-          return current
-        })
-      }, 300)
-
-      return prev
-    })
-  }, [activeTabId, updateRequest])
+  }, [activeTabId])
 
   // --- closeOthers / closeAll ---
   const closeOthers = useCallback(() => {
@@ -191,6 +153,16 @@ export function useRequestTabs(
     )
   }, [])
 
+  // --- 将未关联 tab 链接到树节点 ---
+  const linkTabToNode = useCallback((tabId: string, node: ApiRequestNode) => {
+    setTabs(prev =>
+      prev.map(t => {
+        if (t.id !== tabId) return t
+        return { ...t, linkedNodeId: node.id, name: node.name }
+      }),
+    )
+  }, [])
+
   // --- 同步树节点重命名到已打开的 tab ---
   const syncNodeRename = useCallback((nodeId: string, newName: string) => {
     setTabs(prev =>
@@ -199,15 +171,6 @@ export function useRequestTabs(
         return { ...t, name: newName }
       }),
     )
-  }, [])
-
-  // 组件卸载时清除 debounced timer
-  useEffect(() => {
-    return () => {
-      if (syncTimer.current) {
-        clearTimeout(syncTimer.current)
-      }
-    }
   }, [])
 
   // Derived
@@ -226,6 +189,7 @@ export function useRequestTabs(
     closeOthers,
     closeAll,
     unlinkNode,
+    linkTabToNode,
     syncNodeRename,
   }
 }

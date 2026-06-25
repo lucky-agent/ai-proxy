@@ -120,6 +120,9 @@ function ResponsePanelContent({
   }
 
   if (tab === 'body') {
+    if (entry.error) {
+      return <RawView content={entry.error} />
+    }
     return entry.responseBody ? (
       <BodyView body={entry.responseBody} />
     ) : (
@@ -131,7 +134,7 @@ function ResponsePanelContent({
     return <StreamingViewer entry={entry} onClose={onCloseStream} />
   }
 
-  // raw
-  const content = formatResponseRaw(entry)
+  // raw — when error, show error instead of formatted response
+  const content = entry.error ? entry.error : formatResponseRaw(entry)
   return <RawView content={content} />
 }

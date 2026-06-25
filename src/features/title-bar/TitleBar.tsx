@@ -9,7 +9,6 @@ import {
   SettingsIcon,
   ShieldCheckIcon,
   SquareIcon,
-  SquarePenIcon,
   Trash2Icon,
   XIcon,
   CodeIcon,
@@ -25,7 +24,6 @@ type TitleBarProps = {
   onOpenAbout: () => void
   onOpenSslConfig: () => void
   onOpenScriptConfig: () => void
-  onOpenSendRequest: () => void
   running: boolean
   onStartProxy: () => void
   onStopProxy: () => void
@@ -169,7 +167,7 @@ function WindowButton({
     </button>
   )
 }
-export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig, onOpenSendRequest, running, onStartProxy, onStopProxy, onClearTraffic, activeView, mountedViews, onViewChange, onCloseTab }: TitleBarProps) {
+export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig, running, onStartProxy, onStopProxy, onClearTraffic, activeView, mountedViews, onViewChange, onCloseTab }: TitleBarProps) {
   const { t } = useLocale()
   const appWindow = getCurrentWindow()
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
@@ -302,7 +300,7 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
       {/* Spacer: pushes right-side buttons to the far right */}
       <div className="min-w-0 flex-1" data-tauri-drag-region />
 
-      {/* Far-right group: Delete, Edit, Start/Stop — order from left to right */}
+      {/* Far-right group: Delete, Start/Stop — order from left to right */}
       {!toolbarExpanded && (
         <div className="flex items-center gap-1" data-tauri-drag-region={false}>
           <button
@@ -314,16 +312,6 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
             className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-surface-elevated text-muted-foreground border border-border hover:bg-muted transition-colors"
             title={t('traffic.clear')}>
             <Trash2Icon className="size-3" />
-          </button>
-          <button
-            type="button"
-            data-tauri-drag-region={false}
-            onMouseDown={stopTitleBarDrag}
-            onPointerDown={stopTitleBarDrag}
-            onClick={onOpenSendRequest}
-            className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-surface-elevated text-muted-foreground border border-border hover:bg-muted transition-colors"
-            title={t('sendRequest.title')}>
-            <SquarePenIcon className="size-3" />
           </button>
           {running ? (
             <button

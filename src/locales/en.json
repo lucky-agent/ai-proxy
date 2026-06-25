@@ -76,7 +76,8 @@
     "noSseEvents": "No SSE events",
     "streamMerged": "Merged",
     "mergeFormat": "Format",
-    "mergeFormatOpenai": "OpenAI"
+    "mergeFormatOpenai": "OpenAI",
+    "errorStatus": "Error"
   },
   "settings": {
     "title": "Settings",
@@ -110,7 +111,8 @@
     "title": "New Request",
     "description": "Compose and send a new HTTP request.",
     "addHeader": "Add header",
-    "send": "Send"
+    "send": "Send",
+    "cancel": "Cancel"
   },
   "collection": {
     "title": "Collections",
@@ -123,7 +125,10 @@
     "deleteConfirm": "Confirm delete?",
     "renameFolder": "Rename folder",
     "renameRequest": "Rename request",
-    "emptyTree": "No requests yet. Click the buttons above to add."
+    "emptyTree": "No requests yet. Click the buttons above to add.",
+    "saveToCollection": "Save to collection",
+    "saveToCollectionDesc": "Choose a parent folder for this request.",
+    "requestName": "Request name"
   },
   "layout": {
     "hostSidebar": "Host sidebar",
