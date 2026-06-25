@@ -192,13 +192,12 @@ export function useRequestTabs(
   }, [])
 
   // --- 同步树节点重命名到已打开的 tab ---
-  const syncNodeName = useCallback((nodeId: string, newName: string) => {
+  const syncNodeRename = useCallback((nodeId: string, newName: string) => {
     setTabs(prev =>
-      prev.map(t =>
-        t.linkedNodeId === nodeId
-          ? { ...t, name: newName }
-          : t,
-      ),
+      prev.map(t => {
+        if (t.linkedNodeId !== nodeId) return t
+        return { ...t, name: newName }
+      }),
     )
   }, [])
 
@@ -227,6 +226,6 @@ export function useRequestTabs(
     closeOthers,
     closeAll,
     unlinkNode,
-    syncNodeName,
+    syncNodeRename,
   }
 }

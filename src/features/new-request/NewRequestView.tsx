@@ -58,7 +58,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     closeOthers,
     closeAll,
     unlinkNode,
-    syncNodeName,
+    syncNodeRename,
   } = useRequestTabs(updateRequest)
 
   // 左侧树点击 request → 打开 tab
@@ -121,8 +121,8 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
   // 树节点重命名 → 同步到已打开的 tab 名称
   const handleRenameNode = useCallback((nodeId: string, newName: string) => {
     renameNode(nodeId, newName)
-    syncNodeName(nodeId, newName)
-  }, [renameNode, syncNodeName])
+    syncNodeRename(nodeId, newName)
+  }, [renameNode, syncNodeRename])
 
   // 树节点删除 → 关闭关联 tab 并从树中移除
   const handleRemoveNode = useCallback((nodeId: string) => {
