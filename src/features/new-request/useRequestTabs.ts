@@ -191,6 +191,17 @@ export function useRequestTabs(
     )
   }, [])
 
+  // --- 同步树节点重命名到已打开的 tab ---
+  const syncNodeName = useCallback((nodeId: string, newName: string) => {
+    setTabs(prev =>
+      prev.map(t =>
+        t.linkedNodeId === nodeId
+          ? { ...t, name: newName }
+          : t,
+      ),
+    )
+  }, [])
+
   // 组件卸载时清除 debounced timer
   useEffect(() => {
     return () => {
@@ -216,5 +227,6 @@ export function useRequestTabs(
     closeOthers,
     closeAll,
     unlinkNode,
+    syncNodeName,
   }
 }

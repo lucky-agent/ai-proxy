@@ -56,6 +56,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     closeOthers,
     closeAll,
     unlinkNode,
+    syncNodeName,
   } = useRequestTabs(updateRequest)
 
   // 左侧树点击 request → 打开 tab
@@ -107,6 +108,12 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     }
   }, [activeTab, updateActiveTab, onSendSuccess])
 
+  // 树节点重命名 → 同步到已打开的 tab 名称
+  const handleRenameNode = useCallback((nodeId: string, newName: string) => {
+    renameNode(nodeId, newName)
+    syncNodeName(nodeId, newName)
+  }, [renameNode, syncNodeName])
+
   // 树节点删除 → 取消关联 tab
   const handleRemoveNode = useCallback((nodeId: string) => {
     unlinkNode(nodeId)
@@ -154,7 +161,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
             addFolder={addFolder}
             addRequest={addRequest}
             removeNode={handleRemoveNode}
-            renameNode={renameNode}
+            renameNode={handleRenameNode}
             duplicateRequest={duplicateRequest}
             renameCollection={renameCollection}
           />
