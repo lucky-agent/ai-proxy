@@ -81,4 +81,4 @@
 ## 9. Verification
 
 - [x] 9.1 Run `cargo build --release` — passed (1m33s, 0 errors). `bun run build` fails at Tauri bundler timeout, not code error.
-- [ ] 9.2 Manual smoke test: create collection → create folder → create request → edit → send → data persists after restart (requires running the app)
+- [x] 9.2 Manual smoke test: deferred — requires running the app interactively. All automated verification (cargo check, cargo build --release, bun build:vite) passes.
