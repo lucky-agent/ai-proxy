@@ -66,6 +66,14 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     openTab(node.id, node)
   }, [openTab])
 
+  // 新建请求（从树） → 增加节点并立即打开 tab
+  const handleAddRequest = useCallback((parentId: string) => {
+    const newNode = addRequest(parentId)
+    if (newNode) {
+      openTab(newNode.id, newNode)
+    }
+  }, [addRequest, openTab])
+
   // 发送请求
   const handleSend = useCallback(async () => {
     if (!activeTab) return
@@ -178,7 +186,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
             selectedId={activeTab?.linkedNodeId ?? null}
             onSelectRequest={handleSelectRequest}
             addFolder={addFolder}
-            addRequest={addRequest}
+            addRequest={handleAddRequest}
             removeNode={handleRemoveNode}
             renameNode={handleRenameNode}
             duplicateRequest={duplicateRequest}
