@@ -242,3 +242,60 @@
 .shiki-root .shiki .line::after {
   content: none;
 }
+
+/* CodeMirror syntax highlight - classHighlighter tokens */
+.tok-propertyName { color: #8250df }
+.tok-string { color: #0a3069 }
+.tok-number { color: #0550ae }
+.tok-bool { color: #0550ae }
+.tok-null { color: #0550ae }
+.tok-separator { color: #6e7781 }
+.tok-brace { color: #6e7781 }
+.tok-bracket { color: #6e7781 }
+.tok-punctuation { color: #6e7781 }
+.tok-keyword { color: #cf222e }
+.tok-comment { color: #6e7781 }
+.tok-variableName { color: #953800 }
+.tok-typeName { color: #0550ae }
+.tok-operator { color: #0550ae }
+.tok-atom { color: #0550ae }
+.tok-literal { color: #0550ae }
+.tok-string2 { color: #0a3069 }
+.tok-macroName { color: #8250df }
+.tok-namespace { color: #0550ae }
+.tok-className { color: #0550ae }
+.tok-labelName { color: #953800 }
+.tok-meta { color: #6e7781 }
+.tok-invalid { color: #f00 }
+.tok-link { text-decoration: underline }
+.tok-heading { font-weight: bold }
+.tok-emphasis { font-style: italic }
+.tok-strong { font-weight: bold }
+.tok-strikethrough { text-decoration: line-through }
+.tok-inserted { color: #0a3069 }
+.tok-deleted { color: #cf222e }
+
+.dark .tok-propertyName { color: #e06c75 }
+.dark .tok-string { color: #98c379 }
+.dark .tok-number { color: #d19a66 }
+.dark .tok-bool { color: #d19a66 }
+.dark .tok-null { color: #d19a66 }
+.dark .tok-separator { color: #abb2bf }
+.dark .tok-brace { color: #abb2bf }
+.dark .tok-bracket { color: #abb2bf }
+.dark .tok-punctuation { color: #abb2bf }
+.dark .tok-keyword { color: #c678dd }
+.dark .tok-comment { color: #5c6370 }
+.dark .tok-variableName { color: #e06c75 }
+.dark .tok-typeName { color: #e5c07b }
+.dark .tok-operator { color: #56b6c2 }
+.dark .tok-atom { color: #d19a66 }
+.dark .tok-literal { color: #d19a66 }
+.dark .tok-string2 { color: #98c379 }
+.dark .tok-macroName { color: #61afef }
+.dark .tok-namespace { color: #e5c07b }
+.dark .tok-className { color: #e5c07b }
+.dark .tok-labelName { color: #e06c75 }
+.dark .tok-meta { color: #5c6370 }
+.dark .tok-inserted { color: #98c379 }
+.dark .tok-deleted { color: #e06c75 }

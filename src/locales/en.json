@@ -212,6 +212,17 @@
     "emptyTitle": "Select a request",
     "emptySubtitle": "or click [+] to create a new request",
     "newRequest": "New Request",
-    "openFromCollection": "Open from Collection"
+    "openFromCollection": "Open from Collection",
+    "unsavedTitle": "Unsaved Changes",
+    "unsavedDesc": "You have unsaved changes in this request. Save before closing?",
+    "saveClose": "Save & Close",
+    "discardClose": "Don't Save",
+    "envProduction": "Production",
+    "envTest": "Test",
+    "envManagement": "Environment Management",
+    "envName": "Name",
+    "envUrlPrefix": "URL Prefix",
+    "envAdd": "Add Environment",
+    "envDelete": "Delete"
   }
 }

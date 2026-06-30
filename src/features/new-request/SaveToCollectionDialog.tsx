@@ -15,16 +15,16 @@ interface SaveToCollectionDialogProps {
   collections: ApiCollection[]
   /** The initial request name, pre-filled from the tab */
   initialRequestName: string
-  addFolder: (parentId: string, name: string) => Promise<string | null>
-  onConfirm: (parentId: string, collectionId: string, requestName: string) => void
+  addFolder: (parentId: number, name: string) => Promise<number | null>
+  onConfirm: (parentId: number, collectionId: number, requestName: string) => void
 }
 
 /** Collect all folder nodes (collections + sub-folders) in a flat list for selection. */
 interface FlatFolder {
-  id: string
+  id: number
   name: string
   depth: number
-  collectionId: string
+  collectionId: number
 }
 
 function collectFolders(collections: ApiCollection[]): FlatFolder[] {
@@ -35,7 +35,7 @@ function collectFolders(collections: ApiCollection[]): FlatFolder[] {
   }
   return result
 
-  function walkNodes(nodes: ApiTreeNode[], depth: number, collectionId: string) {
+  function walkNodes(nodes: ApiTreeNode[], depth: number, collectionId: number) {
     for (const n of nodes) {
       if (n.type === 'folder') {
         result.push({ id: n.id, name: n.name, depth, collectionId })
@@ -54,11 +54,11 @@ export function SaveToCollectionDialog({
   onConfirm,
 }: SaveToCollectionDialogProps) {
   const { t } = useLocale()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
   const [requestName, setRequestName] = useState(initialRequestName)
 
   // --- inline new-folder state ---
-  const [addingToId, setAddingToId] = useState<string | null>(null) // which folder we're adding under
+  const [addingToId, setAddingToId] = useState<number | null>(null) // which folder we're adding under
   const [newFolderName, setNewFolderName] = useState('')
   const newFolderInputRef = useRef<HTMLInputElement>(null)
 
@@ -77,7 +77,7 @@ export function SaveToCollectionDialog({
   }, [onOpenChange, initialRequestName])
 
   const handleConfirm = useCallback(() => {
-    if (!selectedId) return
+    if (selectedId == null) return
     const folder = folders.find(f => f.id === selectedId)
     if (folder) {
       onConfirm(folder.id, folder.collectionId, requestName.trim() || initialRequestName)
@@ -86,7 +86,7 @@ export function SaveToCollectionDialog({
   }, [selectedId, folders, requestName, initialRequestName, onConfirm, handleOpenChange])
 
   // --- new folder creation ---
-  const startAddFolder = useCallback((parentId: string, e: React.MouseEvent) => {
+  const startAddFolder = useCallback((parentId: number, e: React.MouseEvent) => {
     e.stopPropagation()
     setAddingToId(parentId)
     setNewFolderName('')
@@ -96,12 +96,12 @@ export function SaveToCollectionDialog({
 
   const commitNewFolder = useCallback(() => {
     const name = newFolderName.trim()
-    if (!name || !addingToId) {
+    if (!name || addingToId == null) {
       setAddingToId(null)
       return
     }
     addFolder(addingToId, name).then(nodeId => {
-      if (nodeId) setSelectedId(nodeId)
+      if (nodeId != null) setSelectedId(nodeId)
     })
     setAddingToId(null)
     setNewFolderName('')
@@ -203,7 +203,7 @@ export function SaveToCollectionDialog({
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             {t('settings.cancel')}
           </Button>
-          <Button onClick={handleConfirm} disabled={!selectedId}>
+          <Button onClick={handleConfirm} disabled={selectedId == null}>
             {t('settings.save')}
           </Button>
         </DialogFooter>

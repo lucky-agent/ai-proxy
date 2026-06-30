@@ -13,13 +13,13 @@ pub struct HeaderPair {
 /// A collection of API requests organized in a tree structure.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ApiCollection {
-    pub id: String,
+    pub id: i64,
     pub name: String,
     pub children: Vec<ApiTreeNode>,
     #[serde(rename = "createdAt")]
-    pub created_at: u64,
+    pub created_at: i64,
     #[serde(rename = "updatedAt")]
-    pub updated_at: u64,
+    pub updated_at: i64,
 }
 
 /// A node in the API collection tree — either a folder or a request.
@@ -28,13 +28,13 @@ pub struct ApiCollection {
 pub enum ApiTreeNode {
     #[serde(rename = "folder")]
     Folder {
-        id: String,
+        id: i64,
         name: String,
         children: Vec<ApiTreeNode>,
     },
     #[serde(rename = "request")]
     Request {
-        id: String,
+        id: i64,
         name: String,
         method: String,
         url: String,
@@ -50,6 +50,6 @@ pub enum ApiTreeNode {
         auth_data: Option<String>,
         /// The request_id linking to the `requests` table.
         #[serde(rename = "requestId")]
-        request_id: String,
+        request_id: i64,
     },
 }

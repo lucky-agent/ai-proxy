@@ -1,5 +1,5 @@
 import { useLocale } from '@/hooks/useLocale'
-import { Textarea } from '@/components/ui/textarea'
+import CodeEditor from '@/components/code-editor/CodeEditor'
 import type { BodyType } from '@/types/collection'
 
 interface BodyTabProps {
@@ -21,38 +21,22 @@ export default function BodyTab({ body, bodyType, onBodyChange, onBodyTypeChange
   const { t } = useLocale()
 
   return (
-    <div className="p-4 space-y-1 min-h-0 flex flex-col flex-1">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {t('detail.body')}
-        </span>
-        <select
-          value={bodyType}
-          onChange={e => onBodyTypeChange(e.target.value as BodyType)}
-          className="rounded border border-input bg-background px-2 py-1 text-[11px] text-foreground outline-none focus:ring-1 focus:ring-primary"
-          title={t('requestEditor.bodyFormat')}
-        >
-          {BODY_FORMATS.map(fmt => (
-            <option key={fmt.value} value={fmt.value}>{t(fmt.labelKey)}</option>
-          ))}
-        </select>
+    <div className="p-4 min-h-0 flex flex-col flex-1">
+      <div className="flex-1 min-h-[180px] border rounded-md overflow-hidden relative group/body">
+        <div className="absolute top-1.5 right-1.5 z-10 opacity-0 group-hover/body:opacity-100 transition-all">
+          <select
+            value={bodyType}
+            onChange={e => onBodyTypeChange(e.target.value as BodyType)}
+            className="appearance-none rounded bg-surface-elevated/30 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors cursor-pointer outline-none border border-surface-elevated/30"
+            title={t('requestEditor.bodyFormat')}
+          >
+            {BODY_FORMATS.map(fmt => (
+              <option key={fmt.value} value={fmt.value}>{t(fmt.labelKey)}</option>
+            ))}
+          </select>
+        </div>
+        <CodeEditor value={body} language={bodyType} onChange={onBodyChange} />
       </div>
-      <Textarea
-        value={body}
-        onChange={e => onBodyChange(e.target.value)}
-        className="flex-1 min-h-[180px] text-xs font-mono resize-y"
-        placeholder={
-          bodyType === 'json'
-            ? '{ "key": "value" }'
-            : bodyType === 'xml'
-            ? '<root>\n  <key>value</key>\n</root>'
-            : bodyType === 'urlencoded'
-            ? 'key1=value1&key2=value2'
-            : bodyType === 'multipart'
-            ? '--boundary'
-            : 'body content'
-        }
-      />
     </div>
   )
 }

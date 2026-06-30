@@ -13,9 +13,8 @@ pub fn get_collections(state: tauri::State<'_, AppState>) -> Result<Vec<ApiColle
 
     // Auto-create a default collection on first launch (SQLite migration from collections.json)
     if collections.is_empty() {
-        let id = uuid::Uuid::new_v4().to_string();
         let ts = chrono::Utc::now().timestamp_millis();
-        repo.create_collection(&id, "默认模块", ts)
+        repo.create_collection("默认模块", ts)
             .map_err(|e| e.to_string())?;
         // Re-read to get the full tree
         collections = repo.load_all_collections().map_err(|e| e.to_string())?;
@@ -31,51 +30,49 @@ pub fn create_collection(
 ) -> Result<String, String> {
     let db = state.db();
     let repo = db.lock().unwrap();
-    let id = uuid::Uuid::new_v4().to_string();
     let ts = chrono::Utc::now().timestamp_millis();
-    repo.create_collection(&id, &name, ts)
+    let id = repo.create_collection(&name, ts)
         .map_err(|e| e.to_string())?;
-    Ok(id)
+    Ok(id.to_string())
 }
 
 #[tauri::command]
 pub fn create_folder(
     state: tauri::State<'_, AppState>,
-    parent_id: String,
+    parent_id: i64,
     name: String,
 ) -> Result<String, String> {
     let db = state.db();
     let repo = db.lock().unwrap();
-    let id = uuid::Uuid::new_v4().to_string();
     let ts = chrono::Utc::now().timestamp_millis();
-    repo.create_folder(&id, &parent_id, &name, ts)
+    let id = repo.create_folder(parent_id, &name, ts)
         .map_err(|e| e.to_string())?;
-    Ok(id)
+    Ok(id.to_string())
 }
 
 #[tauri::command]
 pub fn create_request(
     state: tauri::State<'_, AppState>,
-    parent_id: String,
-    collection_id: String,
+    parent_id: i64,
+    collection_id: i64,
     name: String,
 ) -> Result<String, String> {
     let db = state.db();
     let repo = db.lock().unwrap();
-    let node_id = uuid::Uuid::new_v4().to_string();
-    let request_id = uuid::Uuid::new_v4().to_string();
     let ts = chrono::Utc::now().timestamp_millis();
-    repo.create_request_node(&node_id, &parent_id, &name, &request_id, ts)
+    // Insert into requests table first to get the request_id
+    let request_id = repo.insert_collection_request(collection_id, &name, "GET", "", ts)
         .map_err(|e| e.to_string())?;
-    repo.insert_collection_request(&request_id, &collection_id, &name, "GET", "", ts)
+    // Then create the node referencing it
+    let node_id = repo.create_request_node(parent_id, &name, request_id, ts)
         .map_err(|e| e.to_string())?;
-    Ok(node_id)
+    Ok(node_id.to_string())
 }
 
 #[tauri::command]
 pub fn delete_node(
     state: tauri::State<'_, AppState>,
-    node_id: String,
+    node_id: i64,
 ) -> Result<(), String> {
     let db = state.db();
     let repo = db.lock().unwrap();
@@ -87,39 +84,39 @@ pub fn delete_node(
         return Err("cannot delete the last collection".to_string());
     }
 
-    repo.delete_node_subtree(&node_id).map_err(|e| e.to_string())
+    repo.delete_node_subtree(node_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn rename_node(
     state: tauri::State<'_, AppState>,
-    node_id: String,
+    node_id: i64,
     new_name: String,
 ) -> Result<(), String> {
     let db = state.db();
     let repo = db.lock().unwrap();
     let ts = chrono::Utc::now().timestamp_millis();
-    repo.rename_node(&node_id, &new_name, ts)
+    repo.rename_node(node_id, &new_name, ts)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn move_node(
     state: tauri::State<'_, AppState>,
-    node_id: String,
-    new_parent_id: String,
+    node_id: i64,
+    new_parent_id: i64,
 ) -> Result<(), String> {
     let db = state.db();
     let repo = db.lock().unwrap();
     let ts = chrono::Utc::now().timestamp_millis();
-    repo.move_node(&node_id, &new_parent_id, ts)
+    repo.move_node(node_id, new_parent_id, ts)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn save_request(
     state: tauri::State<'_, AppState>,
-    id: String,
+    id: i64,
     method: String,
     url: String,
     headers: Option<Vec<HeaderPair>>,
@@ -139,7 +136,7 @@ pub fn save_request(
     let cookies_json =
         serde_json::to_string(&cookies.unwrap_or_default()).unwrap_or_default();
     repo.update_collection_request(
-        &id,
+        id,
         &method,
         &url,
         &headers_json,
@@ -156,7 +153,7 @@ pub fn save_request(
 #[tauri::command]
 pub fn duplicate_request(
     state: tauri::State<'_, AppState>,
-    node_id: String,
+    node_id: i64,
 ) -> Result<String, String> {
     let db = state.db();
     let repo = db.lock().unwrap();
@@ -164,49 +161,49 @@ pub fn duplicate_request(
     // Load all collections to find the original node's parent_id, name, and request_id
     let collections = repo.load_all_collections().map_err(|e| e.to_string())?;
     let (parent_id, name, request_id) =
-        find_request_node(&collections, &node_id).ok_or_else(|| format!("node not found: {}", node_id))?;
+        find_request_node(&collections, node_id).ok_or_else(|| format!("node not found: {}", node_id))?;
 
-    let new_node_id = uuid::Uuid::new_v4().to_string();
-    let new_request_id = uuid::Uuid::new_v4().to_string();
     let ts = chrono::Utc::now().timestamp_millis();
 
-    repo.create_request_node(&new_node_id, &parent_id, &format!("{} (副本)", name), &new_request_id, ts)
+    // Duplicate the request row to get a new request_id
+    let new_request_id = repo.duplicate_collection_request(request_id, ts)
         .map_err(|e| e.to_string())?;
-    repo.duplicate_collection_request(&request_id, &new_request_id, ts)
+    // Create a new collection node referencing the duplicated request
+    let new_node_id = repo.create_request_node(parent_id, &format!("{} (副本)", name), new_request_id, ts)
         .map_err(|e| e.to_string())?;
 
-    Ok(new_node_id)
+    Ok(new_node_id.to_string())
 }
 
 /// Recursively search collections for a request node matching `target_id`.
 /// Returns (parent_id, name, request_id) on success.
-fn find_request_node(collections: &[ApiCollection], target_id: &str) -> Option<(String, String, String)> {
+fn find_request_node(collections: &[ApiCollection], target_id: i64) -> Option<(i64, String, i64)> {
     for col in collections {
-        if let Some(result) = find_in_nodes(&col.children, target_id, &col.id) {
+        if let Some(result) = find_in_nodes(&col.children, target_id, col.id) {
             return Some(result);
         }
-        // Also check collection root itself (collection nodes can be at root level)
+        // Also check collection root itself
         if col.id == target_id {
-            return Some((String::from("0"), col.name.clone(), String::new()));
+            return Some((0, col.name.clone(), 0));
         }
     }
     None
 }
 
-fn find_in_nodes(nodes: &[ApiTreeNode], target_id: &str, parent_id: &str) -> Option<(String, String, String)> {
+fn find_in_nodes(nodes: &[ApiTreeNode], target_id: i64, parent_id: i64) -> Option<(i64, String, i64)> {
     for node in nodes {
         match node {
             ApiTreeNode::Folder { id, name, children } => {
-                if id == target_id {
-                    return Some((parent_id.to_string(), name.clone(), String::new()));
+                if *id == target_id {
+                    return Some((parent_id, name.clone(), 0));
                 }
-                if let Some(result) = find_in_nodes(children, target_id, id) {
+                if let Some(result) = find_in_nodes(children, target_id, *id) {
                     return Some(result);
                 }
             }
             ApiTreeNode::Request { id, name, request_id, .. } => {
-                if id == target_id {
-                    return Some((parent_id.to_string(), name.clone(), request_id.clone()));
+                if *id == target_id {
+                    return Some((parent_id, name.clone(), *request_id));
                 }
             }
         }

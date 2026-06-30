@@ -1,7 +1,9 @@
+// src/features/new-request/NewRequestView.tsx
 import { useCallback, useRef, useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { SendIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useLocale } from '@/hooks/useLocale'
@@ -12,6 +14,7 @@ import { ApiCollectionPanel } from './ApiCollectionPanel'
 import { DetailPanel } from '@/features/detail-panel'
 import RequestEditor from './RequestEditor'
 import RequestTabBar from './RequestTabBar'
+import type { EnvItem } from './RequestTabBar'
 import { useRequestTabs } from './useRequestTabs'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { usePanelRef } from 'react-resizable-panels'
@@ -58,6 +61,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     closeAll,
     linkTabToNode,
     syncNodeRename,
+    markTabClean,
   } = useRequestTabs()
 
   // 左侧树点击 request → 打开 tab
@@ -65,13 +69,41 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     openTab(node.id, node)
   }, [openTab])
 
-  // 新建请求（从树） → 增加节点并立即打开 tab
-  const handleAddRequest = useCallback((parentId: string) => {
-    const newNode = addRequest(parentId)
-    if (newNode) {
-      openTab(newNode.id, newNode)
-    }
+  // 新建节点（从树右键） → 立即创建并进入重命名
+  const [renamingId, setRenamingId] = useState<number | null>(null)
+  const [envs, setEnvs] = useState<EnvItem[]>([
+    { id: 'production', name: '', urlPrefix: '' },
+    { id: 'test', name: '', urlPrefix: '' },
+  ])
+  const [env, setEnv] = useState<string>('production')
+  const handleAddRequest = useCallback((parentId: number) => {
+    addRequest(parentId).then(newNodeId => {
+      if (newNodeId != null) {
+        setRenamingId(newNodeId)
+        // Auto-open the new request tab
+        const newNode: ApiRequestNode = {
+          id: newNodeId,
+          type: 'request',
+          name: 'New Request',
+          method: 'GET',
+          url: '',
+          params: [],
+          headers: [],
+          cookies: [],
+          bodyType: 'json',
+          body: '',
+        }
+        openTab(newNodeId, newNode)
+      }
+    })
   }, [addRequest, openTab])
+  const handleAddFolder = useCallback((parentId: number) => {
+    addFolder(parentId).then(newNodeId => {
+      if (newNodeId != null) {
+        setRenamingId(newNodeId)
+      }
+    })
+  }, [addFolder])
 
   // 发送请求
   const handleSend = useCallback(async () => {
@@ -108,8 +140,6 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     cancelRef.current = controller
 
     try {
-      // Tauri invoke doesn't natively support AbortSignal, but we simulate
-      // cancellation: if aborted before invoke returns, we ignore the result
       const entryId = await invoke<string>('resend_request', {
         method: activeTab.method,
         url: finalUrl,
@@ -132,11 +162,37 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
 
   // Save-to-collection dialog state (for unlinked tabs)
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  // Brief "saved" feedback for the save button
+  const [saveFeedback, setSaveFeedback] = useState(false)
+  const saveFeedbackTimer = useRef<ReturnType<typeof setTimeout>>(null)
+
+  // Close confirmation dialog for dirty tabs
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
+  const pendingCloseRef = useRef<{ tabId: string }>({ tabId: '' })
+
+  // Intercept tab close — check dirty before closing (skip if tab is empty)
+  const handleRequestClose = useCallback((tabId: string) => {
+    const tab = tabs.find(t => t.id === tabId)
+    if (tab?.dirty) {
+      // Check if tab has any meaningful content
+      const hasUrl = tab.url.trim().length > 0
+      const hasBody = tab.body.trim().length > 0
+      const hasParams = tab.params.some(p => p.key.trim() || p.value.trim())
+      const hasHeaders = tab.headers.some(h => h.key.trim() || h.value.trim())
+      const hasCookies = tab.cookies.some(c => c.key.trim() || c.value.trim())
+      if (hasUrl || hasBody || hasParams || hasHeaders || hasCookies) {
+        pendingCloseRef.current = { tabId }
+        setCloseConfirmOpen(true)
+        return
+      }
+    }
+    closeTab(tabId)
+  }, [tabs, closeTab])
 
   // 保存到集合（已关联 → 直接保存；未关联 → 弹窗选父节点）
   const handleSave = useCallback(() => {
     if (!activeTab) return
-    if (activeTab.linkedNodeId) {
+    if (activeTab.linkedNodeId != null) {
       updateRequest(activeTab.linkedNodeId, {
         method: activeTab.method,
         url: activeTab.url,
@@ -146,32 +202,52 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
         bodyType: activeTab.bodyType,
         body: activeTab.body,
       })
+      // Brief visual feedback
+      setSaveFeedback(true)
+      if (saveFeedbackTimer.current) clearTimeout(saveFeedbackTimer.current)
+      saveFeedbackTimer.current = setTimeout(() => setSaveFeedback(false), 1200)
+      // Clear dirty flag
+      markTabClean(activeTab.id)
     } else {
       setSaveDialogOpen(true)
     }
-  }, [activeTab, updateRequest])
+  }, [activeTab, updateRequest, markTabClean])
+
+  // Save-and-close from confirmation dialog
+  const handleSaveAndClose = useCallback(() => {
+    handleSave()
+    closeTab(pendingCloseRef.current.tabId)
+    setCloseConfirmOpen(false)
+  }, [handleSave, closeTab])
+
+  // Discard-and-close from confirmation dialog
+  const handleDiscardAndClose = useCallback(() => {
+    closeTab(pendingCloseRef.current.tabId)
+    setCloseConfirmOpen(false)
+  }, [closeTab])
 
   // Async wrapper for addFolder — returns nodeId (not optimistic local id)
   const addFolderAsync = useCallback(
-    (parentId: string, name: string): Promise<string | null> =>
+    (parentId: number, name: string): Promise<number | null> =>
       invoke<string>('create_folder', { parentId, name }).then(id => {
         loadCollections()
-        return id
+        return Number(id)
       }).catch(err => { console.error(err); return null }),
     [loadCollections],
   )
 
   // 弹窗确认：创建树节点 + 保存数据 + link tab
-  const handleSaveToCollection = useCallback(async (parentId: string, collectionId: string, requestName: string) => {
+  const handleSaveToCollection = useCallback(async (parentId: number, collectionId: number, requestName: string) => {
     if (!activeTab) return
     const tabId = activeTab.id
 
     try {
-      const nodeId = await invoke<string>('create_request', {
+      const nodeIdStr = await invoke<string>('create_request', {
         parentId,
         collectionId,
         name: requestName || activeTab.name || '未命名请求',
       })
+      const nodeId = Number(nodeIdStr)
 
       // Build the new ApiRequestNode matching what the tree expects
       const newNode: ApiRequestNode = {
@@ -189,12 +265,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
         authData: activeTab.authData,
       }
 
-      // Reload collections to show the new node in tree
-      await invoke('get_collections').then(() => {}).catch(console.error)
-      // Trigger re-render by reloading collections
       loadCollections()
-
-      // Link the tab and save the request data
       linkTabToNode(tabId, newNode)
       const headers = activeTab.headers.filter(h => h.key.trim())
       const params = activeTab.params.filter(p => p.key.trim())
@@ -216,13 +287,13 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
   }, [activeTab, linkTabToNode, updateRequest, loadCollections])
 
   // 树节点重命名 → 同步到已打开的 tab 名称
-  const handleRenameNode = useCallback((nodeId: string, newName: string) => {
+  const handleRenameNode = useCallback((nodeId: number, newName: string) => {
     renameNode(nodeId, newName)
     syncNodeRename(nodeId, newName)
   }, [renameNode, syncNodeRename])
 
   // 树节点删除 → 关闭关联 tab 并从树中移除
-  const handleRemoveNode = useCallback((nodeId: string) => {
+  const handleRemoveNode = useCallback((nodeId: number) => {
     // Close any open tab linked to this node
     const linkedTab = tabs.find(t => t.linkedNodeId === nodeId)
     if (linkedTab) {
@@ -260,6 +331,13 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     updateActiveTab({ sending: false })
   }, [updateActiveTab])
 
+  // Clean up save feedback timer
+  useEffect(() => {
+    return () => {
+      if (saveFeedbackTimer.current) clearTimeout(saveFeedbackTimer.current)
+    }
+  }, [])
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-surface-deep text-muted-foreground text-xs">
@@ -277,8 +355,10 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
           <ApiCollectionPanel
             collections={collections}
             selectedId={activeTab?.linkedNodeId ?? null}
+            renamingId={renamingId}
+            onClearRenamingId={() => setRenamingId(null)}
             onSelectRequest={handleSelectRequest}
-            addFolder={addFolder}
+            addFolder={handleAddFolder}
             addRequest={handleAddRequest}
             removeNode={handleRemoveNode}
             renameNode={handleRenameNode}
@@ -300,7 +380,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
             <p className="text-sm font-medium">{t('tab.emptyTitle')}</p>
             <p className="text-xs">{t('tab.emptySubtitle')}</p>
             <div className="flex gap-2 mt-2">
-              <Button variant="outline" size="sm" onClick={() => openTab(null)}>
+              <Button variant="outline" size="sm" onClick={() => openTab()}>
                 + {t('tab.newRequest')}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => {
@@ -318,9 +398,13 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
             <RequestTabBar
               tabs={tabs}
               activeTabId={activeTab?.id ?? null}
+              env={env}
+              envs={envs}
+              onEnvChange={setEnv}
+              onEnvsChange={setEnvs}
               onActivate={activateTab}
-              onClose={closeTab}
-              onNew={() => openTab(null)}
+              onClose={handleRequestClose}
+              onNew={() => openTab()}
               onCloseOthers={closeOthers}
               onCloseAll={closeAll}
             />
@@ -360,8 +444,18 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                       disabled={activeTab.sending}
                     />
                   </InputGroup>
-                  <Button onClick={handleSave} variant="outline" size="sm" disabled={activeTab.sending}>
+                  <Button
+                    onClick={handleSave}
+                    variant="outline"
+                    size="sm"
+                    disabled={activeTab.sending}
+                  >
                     {t('settings.save')}
+                    {saveFeedback && (
+                      <svg className="size-3 animate-spin ml-1" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="52" strokeDashoffset="16" strokeLinecap="round" />
+                      </svg>
+                    )}
                   </Button>
                   <Button onClick={handleSend} disabled={activeTab.sending || !activeTab.url.trim()} size="sm">
                     <SendIcon className="size-3.5" />
@@ -434,6 +528,27 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
       addFolder={addFolderAsync}
       onConfirm={handleSaveToCollection}
     />
+
+    {/* Close confirmation dialog for dirty tabs */}
+    <Dialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+      <DialogContent className="sm:max-w-[340px]">
+        <DialogHeader>
+          <DialogTitle>{t('tab.unsavedTitle')}</DialogTitle>
+          <DialogDescription>{t('tab.unsavedDesc')}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCloseConfirmOpen(false)}>
+            {t('settings.cancel')}
+          </Button>
+          <Button variant="ghost" onClick={handleDiscardAndClose}>
+            {t('tab.discardClose')}
+          </Button>
+          <Button onClick={handleSaveAndClose}>
+            {t('tab.saveClose')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   )
 }

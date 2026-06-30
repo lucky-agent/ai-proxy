@@ -9,20 +9,24 @@ import { Separator } from '@/components/ui/separator'
 
 interface ApiCollectionPanelProps {
   collections: ApiCollection[]
-  selectedId: string | null
+  selectedId: number | null
+  renamingId: number | null
+  onClearRenamingId: () => void
   onSelectRequest: (node: ApiRequestNode) => void
-  addFolder: (parentId: string) => void
-  addRequest: (parentId: string) => void
-  removeNode: (nodeId: string) => void
-  renameNode: (nodeId: string, newName: string) => void
-  duplicateRequest: (nodeId: string) => void
-  renameCollection: (collectionId: string, newName: string) => void
+  addFolder: (parentId: number) => void
+  addRequest: (parentId: number) => void
+  removeNode: (nodeId: number) => void
+  renameNode: (nodeId: number, newName: string) => void
+  duplicateRequest: (nodeId: number) => void
+  renameCollection: (collectionId: number, newName: string) => void
   onRefresh: () => void
 }
 
 export function ApiCollectionPanel({
   collections,
   selectedId,
+  renamingId,
+  onClearRenamingId,
   onSelectRequest,
   addFolder,
   addRequest,
@@ -62,6 +66,8 @@ export function ApiCollectionPanel({
       <ApiTreeView
         collections={collections}
         selectedId={selectedId}
+        renamingId={renamingId}
+        onClearRenamingId={onClearRenamingId}
         onSelectRequest={onSelectRequest}
         onRemoveNode={removeNode}
         onRenameNode={renameNode}

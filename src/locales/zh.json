@@ -212,6 +212,17 @@
     "emptyTitle": "从左侧接口树选择一个请求",
     "emptySubtitle": "或点击 [+] 新建空白请求",
     "newRequest": "新建请求",
-    "openFromCollection": "从集合打开"
+    "openFromCollection": "从集合打开",
+    "unsavedTitle": "未保存的更改",
+    "unsavedDesc": "此请求中有未保存的更改。是否要保存后再关闭？",
+    "saveClose": "保存并关闭",
+    "discardClose": "不保存",
+    "envProduction": "正式环境",
+    "envTest": "测试环境",
+    "envManagement": "环境管理",
+    "envName": "名称",
+    "envUrlPrefix": "URL 前缀",
+    "envAdd": "添加环境",
+    "envDelete": "删除"
   }
 }

@@ -10,7 +10,7 @@ export interface KeyValuePair {
 }
 
 export interface ApiCollection {
-  id: string
+  id: number
   name: string
   children: ApiTreeNode[]
   createdAt: number
@@ -18,14 +18,14 @@ export interface ApiCollection {
 }
 
 export interface ApiFolderNode {
-  id: string
+  id: number
   type: 'folder'
   name: string
   children: ApiTreeNode[]
 }
 
 export interface ApiRequestNode {
-  id: string
+  id: number
   type: 'request'
   name: string
   method: HttpMethod
@@ -37,15 +37,31 @@ export interface ApiRequestNode {
   body: string
   authType?: string
   authData?: string
-  requestId?: string
+  requestId?: number
 }
 
 export type ApiTreeNode = ApiFolderNode | ApiRequestNode
 
+/** Subset of RequestTab fields that constitute saved request data */
+export interface RequestTabSavedData {
+  method: HttpMethod
+  url: string
+  params: KeyValuePair[]
+  headers: KeyValuePair[]
+  cookies: KeyValuePair[]
+  bodyType: BodyType
+  body: string
+  authType: string
+  authData: string
+}
+
 export interface RequestTab {
   id: string
   name: string
-  linkedNodeId: string | null
+  linkedNodeId: number | null
+  dirty: boolean
+  /** Last saved data snapshot — dirty=false when current fields match this; null for unlinked tabs */
+  savedData: RequestTabSavedData | null
   method: HttpMethod
   url: string
   params: KeyValuePair[]

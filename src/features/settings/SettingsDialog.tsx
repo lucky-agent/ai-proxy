@@ -106,9 +106,9 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
               </span>
               <ToggleGroup
                 type="single"
-                value={theme}
+                value={[theme]}
                 onValueChange={(value) => {
-                  if (value) onThemeChange(value as Theme)
+                  if (value && value.length > 0) onThemeChange(value[0] as Theme)
                 }}
                 variant="outline"
                 size="sm"

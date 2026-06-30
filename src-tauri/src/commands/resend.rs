@@ -21,7 +21,7 @@ pub async fn resend_request(
     let full_uri: Uri = url.parse().map_err(|_| "invalid url")?;
     let ctx = ProxyCtx::new(method.clone(), full_uri.clone(), state.event_channel());
 
-    // 1. 用 Body::empty() 获取 Parts（不做无意义的 into_parts → from_parts 拆装）
+    // 1. 用 Body::empty() 获取 Parts
     let mut req_builder = Request::builder()
         .method(method.clone())
         .uri(full_uri.clone());
@@ -37,29 +37,32 @@ pub async fn resend_request(
         .map_err(|e| format!("build: {e:?}"))?;
     let (parts, _empty_body) = req.into_parts();
 
-    // 2. DB 持久化 — 直接 borrow 原始 String，避免 String → Bytes → String 往返
-    if let Ok(db) = state.db().lock() {
+    // 2. DB 持久化 — 获取自增 ID
+    let db = state.db();
+    let db_id: i64 = {
+        let guard = db.lock().map_err(|e| format!("db lock: {e}"))?;
         let q: HashMap<String, String> = HashMap::new();
-        db.upsert_request(
-            &ctx.request_id(),
-            &method.to_string(),
-            &full_uri.to_string(),
-            chrono::Utc::now().timestamp_millis(),
-            &serde_json::to_string(&headers).unwrap_or_default(),
-            &serde_json::to_string(&q).unwrap_or_default(),
-            body.as_deref(),
-            true,
-            "traffic",
-            None,
-            "[]",
-            "",
-            "",
-            "",
-        )
-        .ok();
-    }
+        guard
+            .upsert_request(
+                &method.to_string(),
+                &full_uri.to_string(),
+                chrono::Utc::now().timestamp_millis(),
+                &serde_json::to_string(&headers).unwrap_or_default(),
+                &serde_json::to_string(&q).unwrap_or_default(),
+                body.as_deref(),
+                true,
+                "traffic",
+                None,
+                "[]",
+                "",
+                "",
+                "",
+            )
+            .map_err(|e| format!("db upsert: {e}"))?
+    };
+    let db_id_str = db_id.to_string();
 
-    // 3. body → Bytes（移动语义，之后 body 不可再使用）
+    // 3. body → Bytes
     let body_bytes: Bytes = body
         .map(|s| Bytes::from(s.into_bytes()))
         .unwrap_or_default();
@@ -75,10 +78,7 @@ pub async fn resend_request(
     let svc = client::build_upstream_service(rama::rt::Executor::default(), up, false);
     match svc.serve(req).await {
         Ok(resp) => {
-            // 收集完整响应体，同时触发 chunk 事件
             let (parts, body) = resp.into_parts();
-
-            // 复用 Db::headers_to_json 序列化响应头
             let headers_json = crate::config::db::Db::headers_to_json(&parts.headers);
 
             let resp_bytes = crate::utils::buf_pool::collect_body(body)
@@ -87,28 +87,28 @@ pub async fn resend_request(
 
             let resp_body = String::from_utf8_lossy(&resp_bytes);
 
-            // 发送响应体 chunk 事件，使前端 responseBody 被填充
+            // 发送响应体 chunk 事件
             ctx.send(ProxyEvent::ResponseChunk {
-                id: ctx.request_id().to_string(),
+                id: db_id_str.clone(),
                 chunk: resp_body.to_string(),
             });
 
             // persist response metadata
             if let Ok(db) = state.db().lock() {
                 db.update_response(
-                    ctx.request_id(),
+                    db_id,
                     parts.status.as_u16(),
                     chrono::Utc::now().timestamp_millis(),
                     ctx.duration_ms(),
                     &headers_json,
                 )
                 .ok();
-                db.update_response_body(ctx.request_id(), &resp_body).ok();
+                db.update_response_body(db_id, &resp_body).ok();
             }
 
             // 发送响应事件
             ctx.send(ProxyEvent::Response {
-                id: ctx.request_id().to_string(),
+                id: db_id_str.clone(),
                 status: parts.status.as_u16(),
                 timestamp: chrono::Utc::now().timestamp_millis(),
                 duration_ms: ctx.duration_ms(),
@@ -129,20 +129,18 @@ pub async fn resend_request(
                     .and_then(|s| s.parse::<u64>().ok()),
             });
 
-            Ok(ctx.request_id().to_string())
+            Ok(db_id_str)
         }
         Err(err) => {
-            // 用 Display 格式（简洁描述），而非 Debug（内部类型名+字段）
             let msg = format!("{err}");
             ctx.send(ProxyEvent::Error {
-                id: ctx.request_id().to_string(),
+                id: db_id_str.clone(),
                 error: msg.clone(),
             });
             if let Ok(db) = state.db().lock() {
-                db.set_error(ctx.request_id(), &msg).ok();
+                db.set_error(db_id, &msg).ok();
             }
-            // 仍返回 request_id，让前端将错误当作响应展示
-            Ok(ctx.request_id().to_string())
+            Ok(db_id_str)
         }
     }
 }

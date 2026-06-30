@@ -1,3 +1,4 @@
+// src/features/new-request/ApiTreeItem.tsx
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { ChevronRightIcon, FolderIcon, Trash2Icon, CopyIcon, PencilIcon, FileIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -16,21 +17,25 @@ import { useLocale } from '@/hooks/useLocale'
 interface ApiTreeItemProps {
   node: ApiTreeNode
   depth: number
-  selectedId: string | null
+  selectedId: number | null
+  renamingId: number | null
+  onClearRenamingId: () => void
   onSelectRequest: (node: ApiRequestNode) => void
-  onRemoveNode: (nodeId: string) => void
-  onRenameNode: (nodeId: string, newName: string) => void
-  onDuplicateRequest: (nodeId: string) => void
-  onAddFolder: (parentId: string) => void
-  onAddRequest: (parentId: string) => void
-  expandedIds: Set<string>
-  onToggleExpand: (nodeId: string) => void
+  onRemoveNode: (nodeId: number) => void
+  onRenameNode: (nodeId: number, newName: string) => void
+  onDuplicateRequest: (nodeId: number) => void
+  onAddFolder: (parentId: number) => void
+  onAddRequest: (parentId: number) => void
+  expandedIds: Set<number>
+  onToggleExpand: (nodeId: number) => void
 }
 
 export function ApiTreeItem({
   node,
   depth,
   selectedId,
+  renamingId,
+  onClearRenamingId,
   onSelectRequest,
   onRemoveNode,
   onRenameNode,
@@ -57,6 +62,15 @@ export function ApiTreeItem({
       renameInputRef.current.select()
     }
   }, [renaming])
+
+  // 新创建的节点自动进入重命名
+  useEffect(() => {
+    if (renamingId != null && renamingId === node.id) {
+      setRenaming(true)
+      setRenameValue(node.name)
+      onClearRenamingId()
+    }
+  }, [renamingId, node.id, node.name, onClearRenamingId])
 
   const handleRenameSubmit = useCallback(() => {
     const trimmed = renameValue.trim()
@@ -181,6 +195,8 @@ export function ApiTreeItem({
               node={child}
               depth={depth + 1}
               selectedId={selectedId}
+              renamingId={renamingId}
+              onClearRenamingId={onClearRenamingId}
               onSelectRequest={onSelectRequest}
               onRemoveNode={onRemoveNode}
               onRenameNode={onRenameNode}

@@ -1,17 +1,55 @@
 // src/features/new-request/useRequestTabs.ts
-import { useState, useCallback } from 'react'
-import type { RequestTab, ApiRequestNode } from '@/types/collection'
+import { useState, useCallback, useRef } from 'react'
+import type { RequestTab, RequestTabSavedData, ApiRequestNode } from '@/types/collection'
 
-function makeTabId(): string {
-  return crypto.randomUUID()
+/** Extract saved data snapshot from a tab (or node) */
+function snapshot(tab: RequestTab): RequestTabSavedData {
+  return {
+    method: tab.method,
+    url: tab.url,
+    params: tab.params,
+    headers: tab.headers,
+    cookies: tab.cookies,
+    bodyType: tab.bodyType,
+    body: tab.body,
+    authType: tab.authType,
+    authData: tab.authData,
+  }
 }
 
-/** 从 ApiRequestNode 创建 RequestTab */
+/** Deep-compare two KeyValuePair arrays */
+function kvEqual(a: { key: string; value: string }[], b: { key: string; value: string }[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].key !== b[i].key || a[i].value !== b[i].value) return false
+  }
+  return true
+}
+
+/** Compare tab current data against savedData — returns true if identical */
+function isClean(tab: RequestTab): boolean {
+  const s = tab.savedData
+  if (!s) return false
+  return (
+    tab.method === s.method &&
+    tab.url === s.url &&
+    kvEqual(tab.params, s.params) &&
+    kvEqual(tab.headers, s.headers) &&
+    kvEqual(tab.cookies, s.cookies) &&
+    tab.bodyType === s.bodyType &&
+    tab.body === s.body &&
+    tab.authType === s.authType &&
+    tab.authData === s.authData
+  )
+}
+
 function createTabFromNode(node: ApiRequestNode): RequestTab {
-  return {
-    id: makeTabId(),
+  const tab: RequestTab = {
+    id: crypto.randomUUID(),
     name: node.name,
     linkedNodeId: node.id,
+    dirty: false,
+    savedData: null,
     method: node.method,
     url: node.url,
     params: node.params ?? [],
@@ -25,14 +63,18 @@ function createTabFromNode(node: ApiRequestNode): RequestTab {
     sending: false,
     error: '',
   }
+  tab.savedData = snapshot(tab)
+  return tab
 }
 
 /** 创建空白临时 tab */
 function createEmptyTab(): RequestTab {
-  return {
-    id: makeTabId(),
+  const tab: RequestTab = {
+    id: crypto.randomUUID(),
     name: '',
     linkedNodeId: null,
+    dirty: false,
+    savedData: null,
     method: 'GET',
     url: '',
     params: [],
@@ -46,36 +88,30 @@ function createEmptyTab(): RequestTab {
     sending: false,
     error: '',
   }
+  // Capture initial empty state so isClean() can detect when user clears all fields
+  tab.savedData = snapshot(tab)
+  return tab
 }
 
 export function useRequestTabs() {
   const [tabs, setTabs] = useState<RequestTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
+  // ref 确保 openTab 的 useCallback([]) 闭包里始终读到最新 tabs
+  const tabsRef = useRef(tabs)
+  tabsRef.current = tabs
 
   // --- openTab ---
-  const openTab = useCallback((linkedNodeId: string | null, nodeData?: ApiRequestNode) => {
-    if (linkedNodeId !== null) {
-      // use functional updater to avoid stale-closure race on dedup
-      let alreadyOpen = false
-      setTabs(prev => {
-        const existing = prev.find(t => t.linkedNodeId === linkedNodeId)
-        if (existing) {
-          alreadyOpen = true
-        }
-        return prev
-      })
-      if (alreadyOpen) {
-        // re-acquire the tab id from current state to activate it
-        setTabs(prev => {
-          const existing = prev.find(t => t.linkedNodeId === linkedNodeId)
-          if (existing) setActiveTabId(existing.id)
-          return prev
-        })
+  const openTab = useCallback((linkedNodeId?: number | null, nodeData?: ApiRequestNode) => {
+    if (linkedNodeId != null) {
+      // 用 ref 读取最新 tabs，避免 setState 回调异步导致 dedup 失效
+      const existing = tabsRef.current.find(t => t.linkedNodeId === linkedNodeId)
+      if (existing) {
+        setActiveTabId(existing.id)
         return
       }
     }
 
-    const tab: RequestTab = linkedNodeId !== null && nodeData
+    const tab: RequestTab = linkedNodeId != null && nodeData
       ? createTabFromNode(nodeData)
       : createEmptyTab()
 
@@ -98,17 +134,15 @@ export function useRequestTabs() {
         if (next.length === 0) {
           nextActiveTabId = null
         } else if (idx < next.length) {
-          nextActiveTabId = next[idx].id     // 优先右侧
+          nextActiveTabId = next[idx].id
         } else {
-          nextActiveTabId = next[next.length - 1].id // 左侧
+          nextActiveTabId = next[next.length - 1].id
         }
       }
-
       return next
     })
 
-    // sync activeTabId outside the updater
-    if (tabId === activeTabId) {
+    if (nextActiveTabId !== null) {
       setActiveTabId(nextActiveTabId)
     }
   }, [activeTabId])
@@ -119,68 +153,77 @@ export function useRequestTabs() {
   }, [])
 
   // --- updateActiveTab ---
-  const updateActiveTab = useCallback((patch: Partial<RequestTab>, tabId?: string) => {
-    const targetId = tabId ?? activeTabId
+  const updateActiveTab = useCallback(
+    (patch: Partial<RequestTab>, tabId?: string) => {
+      const targetId = tabId ?? activeTabId
+      if (!targetId) return
 
-    setTabs(prev => {
-      return prev.map(t => {
-        if (t.id !== targetId) return t
-        const updated = { ...t, ...patch }
-        return updated
-      })
-    })
-  }, [activeTabId])
+      const DATA_KEYS = ['method', 'url', 'params', 'headers', 'cookies', 'bodyType', 'body', 'authType', 'authData'] as const
+      const hasDataChange = Object.keys(patch).some(k => (DATA_KEYS as readonly string[]).includes(k))
 
-  // --- closeOthers / closeAll ---
+      setTabs(prev =>
+        prev.map(t => {
+          if (t.id !== targetId) return t
+          const updated = { ...t, ...patch }
+          if (hasDataChange) {
+            updated.dirty = !isClean(updated)
+          }
+          return updated
+        }),
+      )
+    },
+    [activeTabId],
+  )
+
+  // --- closeOthers ---
   const closeOthers = useCallback(() => {
     if (!activeTabId) return
     setTabs(prev => prev.filter(t => t.id === activeTabId))
   }, [activeTabId])
 
+  // --- closeAll ---
   const closeAll = useCallback(() => {
     setTabs([])
     setActiveTabId(null)
   }, [])
 
-  // --- 取消链接（树节点被删除时外部调用） ---
-  const unlinkNode = useCallback((nodeId: string) => {
-    setTabs(prev =>
-      prev.map(t =>
-        t.linkedNodeId === nodeId
-          ? { ...t, linkedNodeId: null }
-          : t,
-      ),
-    )
-  }, [])
+  const activeTab = activeTabId
+    ? tabs.find(t => t.id === activeTabId) ?? null
+    : null
 
-  // --- 将未关联 tab 链接到树节点 ---
+  // --- linkTabToNode ---
   const linkTabToNode = useCallback((tabId: string, node: ApiRequestNode) => {
     setTabs(prev =>
       prev.map(t => {
         if (t.id !== tabId) return t
-        return { ...t, linkedNodeId: node.id, name: node.name }
+        const updated = { ...t, linkedNodeId: node.id, name: node.name, dirty: false }
+        updated.savedData = snapshot(updated)
+        return updated
       }),
     )
   }, [])
 
-  // --- 同步树节点重命名到已打开的 tab ---
-  const syncNodeRename = useCallback((nodeId: string, newName: string) => {
+  // --- markTabClean ---
+  const markTabClean = useCallback((tabId: string) => {
     setTabs(prev =>
       prev.map(t => {
-        if (t.linkedNodeId !== nodeId) return t
-        return { ...t, name: newName }
+        if (t.id !== tabId) return t
+        return { ...t, dirty: false, savedData: snapshot(t) }
       }),
     )
   }, [])
 
-  // Derived
-  const activeTab = activeTabId
-    ? (tabs.find(t => t.id === activeTabId) ?? null)
-    : null
+  // --- syncNodeRename ---
+  const syncNodeRename = useCallback((nodeId: number, newName: string) => {
+    setTabs(prev =>
+      prev.map(t =>
+        t.linkedNodeId === nodeId ? { ...t, name: newName } : t,
+      ),
+    )
+  }, [])
 
   return {
     tabs,
-    activeTabId,
     activeTab,
     openTab,
     closeTab,
@@ -188,8 +231,8 @@ export function useRequestTabs() {
     updateActiveTab,
     closeOthers,
     closeAll,
-    unlinkNode,
     linkTabToNode,
     syncNodeRename,
+    markTabClean,
   }
 }

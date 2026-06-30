@@ -3,10 +3,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { ApiCollection, ApiTreeNode, ApiFolderNode, ApiRequestNode, HttpMethod, BodyType, KeyValuePair } from '@/types/collection'
 
-function generateId(): string {
-  return crypto.randomUUID()
-}
-
 /** Normalize a request node with defaults for backward compatibility */
 function normalizeRequest(node: ApiRequestNode): ApiRequestNode {
   return {
@@ -31,7 +27,7 @@ function normalizeTree(nodes: ApiTreeNode[]): ApiTreeNode[] {
 /** 递归查找节点并替换（immutable） */
 function updateNodeInTree(
   nodes: ApiTreeNode[],
-  nodeId: string,
+  nodeId: number,
   updater: (node: ApiTreeNode) => ApiTreeNode,
 ): ApiTreeNode[] {
   return nodes.map(node => {
@@ -49,7 +45,7 @@ function updateNodeInTree(
 }
 
 /** 递归查找节点并删除（immutable） */
-function removeNodeFromTree(nodes: ApiTreeNode[], nodeId: string): ApiTreeNode[] {
+function removeNodeFromTree(nodes: ApiTreeNode[], nodeId: number): ApiTreeNode[] {
   return nodes
     .filter(node => node.id !== nodeId)
     .map(node => {
@@ -63,7 +59,7 @@ function removeNodeFromTree(nodes: ApiTreeNode[], nodeId: string): ApiTreeNode[]
 /** 递归在文件夹下插入节点（immutable） */
 function insertNodeInTree(
   nodes: ApiTreeNode[],
-  parentId: string,
+  parentId: number,
   newNode: ApiTreeNode,
 ): ApiTreeNode[] {
   return nodes.map(node => {
@@ -78,7 +74,7 @@ function insertNodeInTree(
 }
 
 /** Find the root collection id that contains a given node */
-function findCollectionIdForNode(collections: ApiCollection[], nodeId: string): string | null {
+function findCollectionIdForNode(collections: ApiCollection[], nodeId: number): number | null {
   for (const col of collections) {
     if (col.id === nodeId) return col.id
     if (nodeInTree(col.children, nodeId)) return col.id
@@ -86,7 +82,7 @@ function findCollectionIdForNode(collections: ApiCollection[], nodeId: string): 
   return null
 }
 
-function nodeInTree(nodes: ApiTreeNode[], targetId: string): boolean {
+function nodeInTree(nodes: ApiTreeNode[], targetId: number): boolean {
   for (const n of nodes) {
     if (n.id === targetId) return true
     if (n.type === 'folder' && nodeInTree(n.children, targetId)) return true
@@ -142,70 +138,84 @@ export function useCollections() {
 
   // --- 操作方法 ---
 
-  /** 7.2: Add a folder under a collection or another folder */
-  const addFolder = useCallback((parentId: string) => {
-    const newFolder: ApiFolderNode = {
-      id: generateId(),
-      type: 'folder',
-      name: '新建文件夹',
-      children: [],
-    }
-    // Optimistic update
-    setCollections(prev =>
-      prev.map(col => {
-        if (col.id === parentId) {
-          return { ...col, children: [...col.children, newFolder], updatedAt: Date.now() }
+  /** 7.2: Add a folder under a collection or another folder. Returns the new node id. */
+  const addFolder = useCallback((parentId: number): Promise<number | null> => {
+    return invoke<string>('create_folder', { parentId, name: 'New Folder' })
+      .then(backendIdStr => {
+        const backendId = Number(backendIdStr)
+        // Insert with the real backend ID; no optimistic update needed
+        const newFolder: ApiFolderNode = {
+          id: backendId,
+          type: 'folder',
+          name: 'New Folder',
+          children: [],
         }
-        return {
-          ...col,
-          children: insertNodeInTree(col.children, parentId, newFolder),
-          updatedAt: Date.now(),
-        }
-      }),
-    )
-    // Fire-and-forget backend call
-    invoke('create_folder', { parentId, name: '新建文件夹' }).catch(console.error)
+        setCollections(prev =>
+          prev.map(col => {
+            if (col.id === parentId) {
+              return { ...col, children: [...col.children, newFolder], updatedAt: Date.now() }
+            }
+            return {
+              ...col,
+              children: insertNodeInTree(col.children, parentId, newFolder),
+              updatedAt: Date.now(),
+            }
+          }),
+        )
+        return backendId
+      })
+      .catch(err => {
+        console.error(err)
+        return null
+      })
   }, [])
 
-  /** 7.3: Add a request under a parent node (collection or folder) */
-  const addRequest = useCallback((parentId: string) => {
-    const newRequest: ApiRequestNode = {
-      id: generateId(),
-      type: 'request',
-      name: '新建请求',
-      method: 'GET',
-      url: '',
-      params: [],
-      headers: [],
-      cookies: [],
-      bodyType: 'json',
-      body: '',
-    }
-    // Optimistic update
+  /** 7.3: Add a request under a parent node (collection or folder). Returns the new node id. */
+  const addRequest = useCallback((parentId: number): Promise<number | null> => {
+    // Find the collection id for this parent synchronously
+    let collectionId: number | null = null
     setCollections(prev => {
-      // Find the collection id for this parent
-      const collectionId = findCollectionIdForNode(prev, parentId)
-
-      // Fire-and-forget backend call
-      if (collectionId) {
-        invoke('create_request', { parentId, collectionId, name: '新建请求' }).catch(console.error)
-      }
-
-      return prev.map(col => {
-        if (col.id === parentId) {
-          return { ...col, children: [...col.children, newRequest], updatedAt: Date.now() }
-        }
-        return {
-          ...col,
-          children: insertNodeInTree(col.children, parentId, newRequest),
-          updatedAt: Date.now(),
-        }
-      })
+      collectionId = findCollectionIdForNode(prev, parentId)
+      return prev
     })
+
+    return invoke<string>('create_request', { parentId, collectionId, name: 'New Request' })
+      .then(backendIdStr => {
+        const backendId = Number(backendIdStr)
+        const newRequest: ApiRequestNode = {
+          id: backendId,
+          type: 'request',
+          name: 'New Request',
+          method: 'GET',
+          url: '',
+          params: [],
+          headers: [],
+          cookies: [],
+          bodyType: 'json',
+          body: '',
+        }
+        setCollections(prev =>
+          prev.map(col => {
+            if (col.id === parentId) {
+              return { ...col, children: [...col.children, newRequest], updatedAt: Date.now() }
+            }
+            return {
+              ...col,
+              children: insertNodeInTree(col.children, parentId, newRequest),
+              updatedAt: Date.now(),
+            }
+          }),
+        )
+        return backendId
+      })
+      .catch(err => {
+        console.error(err)
+        return null
+      })
   }, [])
 
   /** 7.4: Delete a node */
-  const removeNode = useCallback((nodeId: string) => {
+  const removeNode = useCallback((nodeId: number) => {
     // Optimistic update
     setCollections(prev =>
       prev.map(col => ({
@@ -219,7 +229,7 @@ export function useCollections() {
   }, [])
 
   /** 7.5: Rename a node */
-  const renameNode = useCallback((nodeId: string, newName: string) => {
+  const renameNode = useCallback((nodeId: number, newName: string) => {
     // Optimistic update
     setCollections(prev =>
       prev.map(col => ({
@@ -236,7 +246,7 @@ export function useCollections() {
 
   /** 7.6: Update request node data — debounced for keystroke-level writes */
   const updateRequest = useCallback(
-    (nodeId: string, data: {
+    (nodeId: number, data: {
       method?: HttpMethod
       url?: string
       params?: KeyValuePair[]
@@ -269,7 +279,7 @@ export function useCollections() {
             const req = findRequestInNodes(col.children, nodeId)
             if (req) {
               invoke('save_request', {
-                id: req.requestId ?? '',
+                id: req.requestId ?? 0,
                 method: data.method ?? req.method,
                 url: data.url ?? req.url,
                 headers: data.headers ?? req.headers,
@@ -291,11 +301,11 @@ export function useCollections() {
   )
 
   /** 7.7: Duplicate a request node */
-  const duplicateRequest = useCallback((nodeId: string) => {
+  const duplicateRequest = useCallback((nodeId: number) => {
     // Optimistic backend call — backend creates the duplicate and returns new nodeId
     invoke<string>('duplicate_request', { nodeId })
-      .then(newNodeId => {
-        // After successful backend op, reload collections to get accurate state
+      .then(() => {
+        // Reload collections to get accurate state
         invoke<(ApiCollection & { children: ApiTreeNode[] })[]>('get_collections')
           .then(data => {
             const normalized: ApiCollection[] = data.map(c => ({
@@ -311,7 +321,7 @@ export function useCollections() {
   }, [])
 
   /** 7.8: Rename a collection (uses rename_node command under the hood) */
-  const renameCollection = useCallback((collectionId: string, newName: string) => {
+  const renameCollection = useCallback((collectionId: number, newName: string) => {
     // Optimistic update
     setCollections(prev =>
       prev.map(col =>
@@ -337,7 +347,7 @@ export function useCollections() {
 }
 
 /** Recursively find a request node by nodeId in a tree */
-function findRequestInNodes(nodes: ApiTreeNode[], targetId: string): ApiRequestNode | null {
+function findRequestInNodes(nodes: ApiTreeNode[], targetId: number): ApiRequestNode | null {
   for (const n of nodes) {
     if (n.type === 'request' && n.id === targetId) {
       return asRequest(n)
