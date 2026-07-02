@@ -298,7 +298,7 @@ export default function RequestList({
                   <RefreshCwIcon className="size-3.5" />
                   <span>{t('requestList.repeat')}</span>
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => { copy(formatCurl(entry)) }}>
+                <ContextMenuItem onClick={() => copy(formatCurl({ method: entry.method, url: entry.uri, headers: entry.requestHeaders, body: entry.requestBody }))}>
                   <CopyIcon className="size-3.5" />
                   <span>{t('requestList.copyCurl')}</span>
                 </ContextMenuItem>

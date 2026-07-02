@@ -37,6 +37,7 @@ interface ApiTreeViewProps {
   onDuplicateRequest: (nodeId: number) => void
   onAddFolder: (parentId: number) => void
   onAddRequest: (parentId: number) => void
+  onImportCurl?: (parentId: number) => void
   onRenameCollection: (collectionId: number, newName: string) => void
 }
 
@@ -51,6 +52,7 @@ export function ApiTreeView({
   onDuplicateRequest,
   onAddFolder,
   onAddRequest,
+  onImportCurl,
   onRenameCollection,
 }: ApiTreeViewProps) {
   const { t } = useLocale()
@@ -123,6 +125,7 @@ export function ApiTreeView({
             onDuplicateRequest={onDuplicateRequest}
             onAddFolder={onAddFolder}
             onAddRequest={onAddRequest}
+            onImportCurl={onImportCurl}
             expandedIds={expandedIds}
             onToggleExpand={handleToggleExpand}
           />

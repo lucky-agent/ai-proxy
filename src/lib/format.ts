@@ -120,25 +120,5 @@ export function classifyEntry(entry: {
 // 生成 cURL 命令
 // ---------------------------------------------------------------------------
 
-/**
- * 将 TrafficEntry 转换为可执行的 cURL 命令字符串。
- * 包含 Method、URL、Headers 和 Body（如有）。
- */
-export function formatCurl(entry: {
-  method: string
-  uri: string
-  requestHeaders: Record<string, string>
-  requestBody: string | null
-}): string {
-  // 安全的单引号包裹：将内部的 ' 替换为 '\''
-  const sq = (s: string) => `'${s.replace(/'/g, "'\\''")}'`
-  const lines: string[] = []
-  lines.push(`curl -X ${entry.method} ${sq(entry.uri)}`)
-  for (const [k, v] of Object.entries(entry.requestHeaders)) {
-    lines.push(`  -H ${sq(`${k}: ${v}`)}`)
-  }
-  if (entry.requestBody) {
-    lines.push(`  -d ${sq(entry.requestBody)}`)
-  }
-  return lines.join(' \\\n')
-}
+export { formatCurl } from './curl'
+export type { FormatCurlOptions } from './curl'

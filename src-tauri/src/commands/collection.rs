@@ -66,7 +66,8 @@ pub fn create_request(
     // Then create the node referencing it
     let node_id = repo.create_request_node(parent_id, &name, request_id, ts)
         .map_err(|e| e.to_string())?;
-    Ok(node_id.to_string())
+    // Return both IDs as JSON so frontend can populate requestId for later saves
+    Ok(serde_json::json!({ "nodeId": node_id, "requestId": request_id }).to_string())
 }
 
 #[tauri::command]

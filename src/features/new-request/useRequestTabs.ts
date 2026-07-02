@@ -111,9 +111,16 @@ export function useRequestTabs() {
       }
     }
 
-    const tab: RequestTab = linkedNodeId != null && nodeData
+    const tab: RequestTab = nodeData
       ? createTabFromNode(nodeData)
       : createEmptyTab()
+
+    // cURL 导入：不关联集合节点，标记为 dirty 提示用户手动保存
+    if (linkedNodeId == null && nodeData) {
+      tab.linkedNodeId = null
+      tab.savedData = null
+      tab.dirty = true
+    }
 
     setTabs(prev => [...prev, tab])
     setActiveTabId(tab.id)

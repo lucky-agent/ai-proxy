@@ -18,6 +18,7 @@ interface ApiCollectionPanelProps {
   removeNode: (nodeId: number) => void
   renameNode: (nodeId: number, newName: string) => void
   duplicateRequest: (nodeId: number) => void
+  onImportCurl?: (parentId: number) => void
   renameCollection: (collectionId: number, newName: string) => void
   onRefresh: () => void
 }
@@ -33,6 +34,7 @@ export function ApiCollectionPanel({
   removeNode,
   renameNode,
   duplicateRequest,
+  onImportCurl,
   renameCollection,
   onRefresh,
 }: ApiCollectionPanelProps) {
@@ -74,6 +76,7 @@ export function ApiCollectionPanel({
         onDuplicateRequest={duplicateRequest}
         onAddFolder={addFolder}
         onAddRequest={addRequest}
+        onImportCurl={onImportCurl}
         onRenameCollection={renameCollection}
       />
     </div>

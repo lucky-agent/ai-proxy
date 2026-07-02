@@ -1,7 +1,8 @@
 // src/features/new-request/ApiTreeItem.tsx
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { ChevronRightIcon, FolderIcon, Trash2Icon, CopyIcon, PencilIcon, FileIcon } from 'lucide-react'
+import { ChevronRightIcon, FolderIcon, Trash2Icon, CopyIcon, PencilIcon, FileIcon, ImportIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatCurl } from '@/lib/curl'
 import { Input } from '@/components/ui/input'
 import {
   ContextMenu,
@@ -26,6 +27,7 @@ interface ApiTreeItemProps {
   onDuplicateRequest: (nodeId: number) => void
   onAddFolder: (parentId: number) => void
   onAddRequest: (parentId: number) => void
+  onImportCurl?: (parentId: number) => void
   expandedIds: Set<number>
   onToggleExpand: (nodeId: number) => void
 }
@@ -42,6 +44,7 @@ export function ApiTreeItem({
   onDuplicateRequest,
   onAddFolder,
   onAddRequest,
+  onImportCurl,
   expandedIds,
   onToggleExpand,
 }: ApiTreeItemProps) {
@@ -79,6 +82,25 @@ export function ApiTreeItem({
     }
     setRenaming(false)
   }, [renameValue, node.id, node.name, onRenameNode])
+
+  const handleCopyCurl = useCallback(() => {
+    const req = node as ApiRequestNode
+    console.log('[handleCopyCurl] node:', JSON.stringify({ method: req.method, url: req.url, headers: req.headers, params: req.params, cookies: req.cookies, body: req.body?.substring(0, 50) }))
+    const headerMap: Record<string, string> = {}
+    for (const h of req.headers) {
+      if (h.key.trim()) headerMap[h.key.trim()] = h.value
+    }
+    const curlStr = formatCurl({
+      method: req.method,
+      url: req.url,
+      headers: headerMap,
+      body: req.body || null,
+      params: req.params,
+      cookies: req.cookies,
+    })
+    console.log('[handleCopyCurl] result:', curlStr)
+    navigator.clipboard.writeText(curlStr).catch(() => {})
+  }, [node])
 
   // 点击事件
   const handleClick = useCallback(() => {
@@ -157,6 +179,12 @@ export function ApiTreeItem({
               <FolderIcon className="size-3" />
               <span>{t('collection.newFolder')}</span>
             </ContextMenuItem>
+            {onImportCurl && (
+              <ContextMenuItem onClick={() => onImportCurl(node.id)}>
+                <ImportIcon className="size-3" />
+                <span>{t('collection.importCurl')}</span>
+              </ContextMenuItem>
+            )}
             <ContextMenuSeparator />
             <ContextMenuItem onClick={() => setRenaming(true)}>
               <PencilIcon className="size-3" />
@@ -176,6 +204,10 @@ export function ApiTreeItem({
             <ContextMenuItem onClick={() => onDuplicateRequest(node.id)}>
               <CopyIcon className="size-3" />
               <span>{t('collection.duplicate')}</span>
+            </ContextMenuItem>
+            <ContextMenuItem onClick={handleCopyCurl}>
+              <CopyIcon className="size-3" />
+              <span>{t('collection.copyCurl')}</span>
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem variant="destructive" onClick={() => onRemoveNode(node.id)}>
@@ -203,6 +235,7 @@ export function ApiTreeItem({
               onDuplicateRequest={onDuplicateRequest}
               onAddFolder={onAddFolder}
               onAddRequest={onAddRequest}
+              onImportCurl={onImportCurl}
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
             />

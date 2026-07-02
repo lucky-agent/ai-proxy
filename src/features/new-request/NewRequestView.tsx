@@ -19,6 +19,8 @@ import { useRequestTabs } from './useRequestTabs'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { usePanelRef } from 'react-resizable-panels'
 import { SaveToCollectionDialog } from './SaveToCollectionDialog'
+import { CurlImportDialog } from './CurlImportDialog'
+import type { CurlParsedResultOk } from '@/lib/curl'
 import type { ApiRequestNode, KeyValuePair } from '@/types/collection'
 import type { TrafficEntry } from '@/types/proxy'
 
@@ -162,6 +164,8 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
 
   // Save-to-collection dialog state (for unlinked tabs)
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  // cURL import dialog state
+  const [curlDialogOpen, setCurlDialogOpen] = useState(false)
   // Brief "saved" feedback for the save button
   const [saveFeedback, setSaveFeedback] = useState(false)
   const saveFeedbackTimer = useRef<ReturnType<typeof setTimeout>>(null)
@@ -208,10 +212,12 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
       saveFeedbackTimer.current = setTimeout(() => setSaveFeedback(false), 1200)
       // Clear dirty flag
       markTabClean(activeTab.id)
+      // Reload collections after debounced save to ensure DB durability
+      setTimeout(() => loadCollections(), 500)
     } else {
       setSaveDialogOpen(true)
     }
-  }, [activeTab, updateRequest, markTabClean])
+  }, [activeTab, updateRequest, markTabClean, loadCollections])
 
   // Save-and-close from confirmation dialog
   const handleSaveAndClose = useCallback(() => {
@@ -236,18 +242,52 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     [loadCollections],
   )
 
+  // cURL 导入弹窗确认：创建 dirty tab（不自动保存）
+  const handleImportCurl = useCallback((result: CurlParsedResultOk) => {
+    const headerPairs: KeyValuePair[] = Object.entries(result.headers).map(([k, v]) => ({ key: k, value: v }))
+
+    // 从 URL 中提取 query params
+    const params: KeyValuePair[] = []
+    let cleanUrl = result.url
+    const qIdx = result.url.indexOf('?')
+    if (qIdx > 0) {
+      cleanUrl = result.url.substring(0, qIdx)
+      const qs = result.url.substring(qIdx + 1)
+      for (const pair of qs.split('&')) {
+        const eqIdx = pair.indexOf('=')
+        if (eqIdx > 0) {
+          params.push({ key: decodeURIComponent(pair.substring(0, eqIdx)), value: decodeURIComponent(pair.substring(eqIdx + 1)) })
+        }
+      }
+    }
+
+    // 创建 dirty tab（linkedNodeId=null，用户手动 Save 保存到集合）
+    openTab(null, {
+      id: Date.now(),
+      type: 'request',
+      name: cleanUrl || result.url,
+      method: (result.method as typeof METHODS[number]) || 'GET',
+      url: cleanUrl || result.url,
+      params,
+      headers: headerPairs,
+      cookies: [],
+      bodyType: 'json',
+      body: result.body ?? '',
+    })
+  }, [openTab])
+
   // 弹窗确认：创建树节点 + 保存数据 + link tab
   const handleSaveToCollection = useCallback(async (parentId: number, collectionId: number, requestName: string) => {
     if (!activeTab) return
     const tabId = activeTab.id
 
     try {
-      const nodeIdStr = await invoke<string>('create_request', {
+      const resultJson = await invoke<string>('create_request', {
         parentId,
         collectionId,
         name: requestName || activeTab.name || '未命名请求',
       })
-      const nodeId = Number(nodeIdStr)
+      const { nodeId, requestId: newRequestId } = JSON.parse(resultJson) as { nodeId: number; requestId: number }
 
       // Build the new ApiRequestNode matching what the tree expects
       const newNode: ApiRequestNode = {
@@ -263,28 +303,31 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
         body: activeTab.body,
         authType: activeTab.authType,
         authData: activeTab.authData,
+        requestId: newRequestId,
       }
 
-      loadCollections()
       linkTabToNode(tabId, newNode)
       const headers = activeTab.headers.filter(h => h.key.trim())
       const params = activeTab.params.filter(p => p.key.trim())
       const cookies = activeTab.cookies.filter(c => c.key.trim())
-      updateRequest(nodeId, {
+      // Direct DB write using requestId (not through updateRequest which needs existing tree node)
+      invoke('save_request', {
+        id: newRequestId,
         method: activeTab.method,
         url: activeTab.url,
-        params,
         headers,
+        params,
         cookies,
-        bodyType: activeTab.bodyType,
         body: activeTab.body,
+        bodyType: activeTab.bodyType,
         authType: activeTab.authType,
         authData: activeTab.authData,
-      })
+      }).then(() => loadCollections()).catch(console.error)
+      markTabClean(tabId)
     } catch (err) {
       console.error(err)
     }
-  }, [activeTab, linkTabToNode, updateRequest, loadCollections])
+  }, [activeTab, linkTabToNode, markTabClean, loadCollections])
 
   // 树节点重命名 → 同步到已打开的 tab 名称
   const handleRenameNode = useCallback((nodeId: number, newName: string) => {
@@ -363,6 +406,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
             removeNode={handleRemoveNode}
             renameNode={handleRenameNode}
             duplicateRequest={duplicateRequest}
+            onImportCurl={(_parentId) => setCurlDialogOpen(true)}
             renameCollection={renameCollection}
             onRefresh={loadCollections}
           />
@@ -527,6 +571,13 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
       initialRequestName={activeTab?.name || activeTab?.url || ''}
       addFolder={addFolderAsync}
       onConfirm={handleSaveToCollection}
+    />
+
+    {/* cURL import dialog */}
+    <CurlImportDialog
+      open={curlDialogOpen}
+      onOpenChange={setCurlDialogOpen}
+      onConfirm={handleImportCurl}
     />
 
     {/* Close confirmation dialog for dirty tabs */}

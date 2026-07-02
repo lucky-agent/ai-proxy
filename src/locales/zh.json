@@ -128,7 +128,12 @@
     "emptyTree": "暂无接口，点击上方按钮添加。",
     "saveToCollection": "保存到集合",
     "saveToCollectionDesc": "选择父节点保存此请求。仅显示文件夹，可在弹窗中新建。",
-    "requestName": "请求名称"
+    "requestName": "请求名称",
+    "importCurl": "导入 cURL",
+    "copyCurl": "复制为 cURL",
+    "curlDialogTitle": "导入 cURL",
+    "curlDialogPlaceholder": "在这里粘贴 cURL 命令...",
+    "curlParseError": "无法解析 cURL 命令"
   },
   "layout": {
     "hostSidebar": "主机侧栏",

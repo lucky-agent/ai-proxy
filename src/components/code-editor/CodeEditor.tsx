@@ -89,14 +89,14 @@ export default function CodeEditor({ value, language, onChange }: CodeEditorProp
       ]),
       EditorView.theme(
         {
-          '&': { height: '100%', backgroundColor: '#282c34' },
-          '.cm-gutters': { backgroundColor: '#282c34', color: '#636d83', border: 'none' },
-          '.cm-activeLineGutter': { backgroundColor: '#2c313c' },
-          '.cm-activeLine': { backgroundColor: '#2c313c40' },
+          '&': { height: '100%', backgroundColor: 'transparent' },
+          '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--color-muted-foreground)', border: 'none' },
+          '.cm-activeLineGutter': { backgroundColor: 'var(--color-surface-elevated)' },
+          '.cm-activeLine': { backgroundColor: 'var(--color-surface-elevated)' },
           '.cm-cursor': { borderLeftColor: '#528bff' },
-          '.cm-matchingBracket': { backgroundColor: '#3e4451', outline: '1px solid #636d83' },
+          '.cm-matchingBracket': { backgroundColor: 'var(--color-surface-elevated)', outline: '1px solid var(--color-muted-foreground)' },
           '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-            backgroundColor: '#3e4451',
+            backgroundColor: 'var(--color-surface-elevated)',
           },
           '.cm-scroller': {
             fontFamily: 'var(--font-sans, "Geist Variable", "Menlo", monospace)',

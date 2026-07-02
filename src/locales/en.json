@@ -128,7 +128,12 @@
     "emptyTree": "No requests yet. Click the buttons above to add.",
     "saveToCollection": "Save to collection",
     "saveToCollectionDesc": "Choose a parent folder for this request.",
-    "requestName": "Request name"
+    "requestName": "Request name",
+    "importCurl": "Import cURL",
+    "copyCurl": "Copy as cURL",
+    "curlDialogTitle": "Import cURL",
+    "curlDialogPlaceholder": "Paste cURL command here...",
+    "curlParseError": "Unable to parse cURL command"
   },
   "layout": {
     "hostSidebar": "Host sidebar",

@@ -180,8 +180,11 @@ export function useCollections() {
     })
 
     return invoke<string>('create_request', { parentId, collectionId, name: 'New Request' })
-      .then(backendIdStr => {
-        const backendId = Number(backendIdStr)
+      .then(backendJsonStr => {
+        // Parse JSON { nodeId, requestId } response
+        const parsed = JSON.parse(backendJsonStr) as { nodeId: number; requestId: number }
+        const backendId = parsed.nodeId
+        const requestId = parsed.requestId
         const newRequest: ApiRequestNode = {
           id: backendId,
           type: 'request',
@@ -193,6 +196,7 @@ export function useCollections() {
           cookies: [],
           bodyType: 'json',
           body: '',
+          requestId,
         }
         setCollections(prev =>
           prev.map(col => {

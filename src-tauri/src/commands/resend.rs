@@ -60,7 +60,6 @@ pub async fn resend_request(
             )
             .map_err(|e| format!("db upsert: {e}"))?
     };
-    let db_id_str = db_id.to_string();
 
     // 3. body → Bytes
     let body_bytes: Bytes = body
@@ -87,9 +86,9 @@ pub async fn resend_request(
 
             let resp_body = String::from_utf8_lossy(&resp_bytes);
 
-            // 发送响应体 chunk 事件
+            // 发送响应体 chunk 事件（用 ctx.request_id() 保持 ID 一致）
             ctx.send(ProxyEvent::ResponseChunk {
-                id: db_id_str.clone(),
+                id: ctx.request_id().to_string(),
                 chunk: resp_body.to_string(),
             });
 
@@ -106,9 +105,9 @@ pub async fn resend_request(
                 db.update_response_body(db_id, &resp_body).ok();
             }
 
-            // 发送响应事件
+            // 发送响应事件（用 ctx.request_id() 保持 ID 一致）
             ctx.send(ProxyEvent::Response {
-                id: db_id_str.clone(),
+                id: ctx.request_id().to_string(),
                 status: parts.status.as_u16(),
                 timestamp: chrono::Utc::now().timestamp_millis(),
                 duration_ms: ctx.duration_ms(),
@@ -129,18 +128,18 @@ pub async fn resend_request(
                     .and_then(|s| s.parse::<u64>().ok()),
             });
 
-            Ok(db_id_str)
+            Ok(ctx.request_id().to_string())
         }
         Err(err) => {
             let msg = format!("{err}");
             ctx.send(ProxyEvent::Error {
-                id: db_id_str.clone(),
+                id: ctx.request_id().to_string(),
                 error: msg.clone(),
             });
             if let Ok(db) = state.db().lock() {
                 db.set_error(db_id, &msg).ok();
             }
-            Ok(db_id_str)
+            Ok(ctx.request_id().to_string())
         }
     }
 }
