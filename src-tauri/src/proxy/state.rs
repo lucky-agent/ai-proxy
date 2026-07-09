@@ -2,7 +2,6 @@ use crate::proxy::events::ProxyEvent;
 use crate::utils::domain_match::domain_match;
 use rama::extensions::Extension;
 use rama::http::{Method, Uri};
-use rama::rt::Executor;
 use rama::tls::rustls::server::TlsAcceptorData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -17,7 +16,6 @@ use crate::config::{Settings, Store};
 #[derive(Clone, Extension)]
 pub(crate) struct State {
     mitm_tls_service_data: TlsAcceptorData,
-    exec: Executor,
     read_settings: Arc<RwLock<Settings>>,
     event_channel: Arc<RwLock<Option<Channel<ProxyEvent>>>>,
 }
@@ -26,7 +24,6 @@ impl std::fmt::Debug for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("State")
             .field("mitm_tls_service_data", &self.mitm_tls_service_data)
-            .field("exec", &self.exec)
             .field("settings", &self.read_settings)
             .finish()
     }
@@ -38,13 +35,11 @@ pub(crate) struct ViaConnectTunnel;
 impl State {
     pub(crate) fn new(
         mitm_tls_service_data: TlsAcceptorData,
-        exec: Executor,
         read_settings: Arc<RwLock<Settings>>,
         event_channel: Arc<RwLock<Option<Channel<ProxyEvent>>>>,
     ) -> Self {
         Self {
             mitm_tls_service_data,
-            exec,
             read_settings,
             event_channel,
         }
@@ -52,9 +47,6 @@ impl State {
 
     pub(crate) fn mitm_tls_service_data(&self) -> &TlsAcceptorData {
         &self.mitm_tls_service_data
-    }
-    pub(crate) fn exec(&self) -> &Executor {
-        &self.exec
     }
 
     /// 按域名匹配加载已启用脚本的内容
@@ -165,7 +157,7 @@ impl AppState {
         *self.settings.write().expect("lock") = settings;
     }
 
-    pub(crate) fn db(&self) -> Arc<Mutex<Db>> {
+    pub(crate) fn db(&self) -> Arc<Db> {
         self.store().db()
     }
 

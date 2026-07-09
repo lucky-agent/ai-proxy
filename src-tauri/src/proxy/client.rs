@@ -9,6 +9,7 @@ use rama::http::layer::timeout::TimeoutLayer;
 use rama::http::request::HttpRequestParts;
 use rama::http::{Body, Request, Response, StatusCode, Version};
 use rama::layer::Layer;
+use rama::rt::Executor;
 use rama::service::BoxService;
 use rama::service::Service;
 use rama::tls::rustls::client::TlsConnectorDataBuilder;
@@ -66,7 +67,6 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
 
     // ---- forward to upstream ----
     let client = build_upstream_service(
-        state.exec().clone(),
         state.settings().proxy.upstream_proxy,
         true,
     );
@@ -146,10 +146,21 @@ async fn forward_and_log(
     }
 }
 pub(crate) fn build_upstream_service(
-    executor: rama::rt::Executor,
     upstream_proxy: bool,
     skip_tls_verify: bool,
 ) -> BoxService<Request, Response, rama::error::BoxError> {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+
+    static CACHE: LazyLock<
+        Mutex<HashMap<(bool, bool), BoxService<Request, Response, rama::error::BoxError>>>,
+    > = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    let key = (upstream_proxy, skip_tls_verify);
+    if let Some(svc) = CACHE.lock().unwrap().get(&key) {
+        return svc.clone();
+    }
+
     let tls_builder = TlsConnectorDataBuilder::new()
         .with_alpn_protocols_http_auto()
         .try_with_env_key_logger()
@@ -171,7 +182,7 @@ pub(crate) fn build_upstream_service(
                 Some(tls_config),
                 Version::HTTP_11,
             )
-            .with_default_http_connector(executor)
+            .with_default_http_connector(Executor::default())
             .build_client()
     } else {
         EasyHttpWebClient::connector_builder()
@@ -182,16 +193,19 @@ pub(crate) fn build_upstream_service(
                 Some(tls_config),
                 Version::HTTP_11,
             )
-            .with_default_http_connector(executor)
+            .with_default_http_connector(Executor::default())
             .build_client()
     };
 
-    (
+    let svc = (
         MapResponseBodyLayer::new_boxed_streaming_body(),
         DecompressionLayer::new().with_insert_accept_encoding_header(false),
         // 30-second request timeout to prevent hanging when upstream is unreachable
         TimeoutLayer::with_status_code(StatusCode::GATEWAY_TIMEOUT, Duration::from_secs(30)),
     )
         .into_layer(client)
-        .boxed()
+        .boxed();
+
+    CACHE.lock().unwrap().insert(key, svc.clone());
+    svc
 }

@@ -15,13 +15,13 @@ import type { PanelImperativeHandle } from 'react-resizable-panels'
 
 interface Props {
   entries: TrafficEntry[]
-  showDomainSidebar: boolean
+  showSidebar: boolean
   detailPosition: DetailPosition
   onAutoOpenDetail: () => void
   typeFilter: TypeFilter
 }
 
-export default function TrafficLog({ entries, showDomainSidebar, detailPosition, onAutoOpenDetail, typeFilter }: Props) {
+export default function TrafficLog({ entries, showSidebar, detailPosition, onAutoOpenDetail, typeFilter }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
   const [sortColumn, setSortColumn] = useState<SortColumn>(null)
@@ -37,16 +37,16 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
 
   const domainPanelRef = useRef<PanelImperativeHandle>(null)
 
-  // Sync domain sidebar collapse/expand with showDomainSidebar prop
+  // Sync domain sidebar collapse/expand with showSidebar prop
   useEffect(() => {
     const panel = domainPanelRef.current
     if (!panel) return
-    if (showDomainSidebar) {
+    if (showSidebar) {
       panel.resize("18%")
     } else {
       panel.collapse()
     }
-  }, [showDomainSidebar])
+  }, [showSidebar])
 
   const handleTogglePin = useCallback((domain: string) => {
     setPinnedDomains(prev => {
@@ -247,7 +247,7 @@ export default function TrafficLog({ entries, showDomainSidebar, detailPosition,
       <ResizablePanelGroup orientation="horizontal" id="trafficlog-outer" className="h-full">
         <ResizablePanel
           id="domain-sidebar"
-          defaultSize={showDomainSidebar ? 18 : 0}
+          defaultSize={showSidebar ? 18 : 0}
           minSize="8%"
           maxSize="100%"
           collapsible

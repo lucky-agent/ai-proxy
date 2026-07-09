@@ -8,7 +8,7 @@ import type { DetailPosition } from '@/features/bottom-bar'
 interface ProxyViewProps {
   entries: TrafficEntry[]
   error: string
-  showDomainSidebar: boolean
+  showSidebar: boolean
   detailPosition: DetailPosition
   onAutoOpenDetail: () => void
   typeFilter: TypeFilter
@@ -21,7 +21,7 @@ interface ProxyViewProps {
 export function ProxyView({
   entries,
   error,
-  showDomainSidebar,
+  showSidebar,
   detailPosition,
   onAutoOpenDetail,
   typeFilter,
@@ -46,7 +46,7 @@ export function ProxyView({
       )}
       <TrafficLog
         entries={entries}
-        showDomainSidebar={showDomainSidebar}
+        showSidebar={showSidebar}
         detailPosition={detailPosition}
         onAutoOpenDetail={onAutoOpenDetail}
         typeFilter={typeFilter}

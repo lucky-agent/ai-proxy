@@ -23,10 +23,13 @@ import { CurlImportDialog } from './CurlImportDialog'
 import type { CurlParsedResultOk } from '@/lib/curl'
 import type { ApiRequestNode, KeyValuePair } from '@/types/collection'
 import type { TrafficEntry } from '@/types/proxy'
+import type { DetailPosition } from '@/features/bottom-bar'
 
 interface NewRequestViewProps {
   onSendSuccess: (entryId: string) => void
   entries: TrafficEntry[]
+  showSidebar: boolean
+  detailPosition: DetailPosition
 }
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
@@ -37,7 +40,7 @@ function serializeCookies(cookies: KeyValuePair[]): string | null {
   return filled.map(c => `${c.key.trim()}=${c.value}`).join('; ')
 }
 
-export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) {
+export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosition }: NewRequestViewProps) {
   const { t } = useLocale()
   const {
     collections,
@@ -350,6 +353,18 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     ? entries.find(e => e.id === activeTab.responseEntryId)
     : undefined
 
+  // 控制左侧集合面板的折叠/展开
+  const collectionPanelRef = usePanelRef()
+  useEffect(() => {
+    const panel = collectionPanelRef.current
+    if (!panel) return
+    if (showSidebar) {
+      panel.resize("22%")
+    } else {
+      panel.collapse()
+    }
+  }, [showSidebar])
+
   // 控制 response panel collapse/expand
   const responsePanelRef = usePanelRef()
   const prevHadEntryRef = useRef(!!activeEntry)
@@ -393,7 +408,7 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
     <>
       <ResizablePanelGroup orientation="horizontal" id="new-request" className="h-full bg-surface-deep">
       {/* Left: API collection panel */}
-      <ResizablePanel id="collection" defaultSize="22%" minSize="15%" maxSize="40%" collapsible collapsedSize={0}>
+      <ResizablePanel id="collection" defaultSize="22%" minSize="15%" maxSize="40%" collapsible collapsedSize={0} panelRef={collectionPanelRef}>
         <div className="h-full overflow-hidden">
           <ApiCollectionPanel
             collections={collections}
@@ -507,39 +522,88 @@ export function NewRequestView({ onSendSuccess, entries }: NewRequestViewProps) 
                   </Button>
                 </div>
 
-                {/* Always render the vertical split; collapse response panel when no entry */}
+                {/* Render the editor/response split based on detailPosition */}
                 <div className="relative flex flex-col min-h-0 h-full overflow-hidden">
-                  <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="flex-1 min-h-0">
-                    <ResizablePanel id="editor" defaultSize={activeEntry ? "60%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
-                      <div className="flex flex-col min-h-0 h-full overflow-hidden">
-                        <RequestEditor
-                          params={activeTab.params}
-                          headers={activeTab.headers}
-                          cookies={activeTab.cookies}
-                          body={activeTab.body}
-                          bodyType={activeTab.bodyType}
-                          onParamsChange={v => updateActiveTab({ params: v })}
-                          onHeadersChange={v => updateActiveTab({ headers: v })}
-                          onCookiesChange={v => updateActiveTab({ cookies: v })}
-                          onBodyChange={v => updateActiveTab({ body: v })}
-                          onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
-                        />
-                      </div>
-                    </ResizablePanel>
-                    <ResizableHandle withHandle />
-                    <ResizablePanel
-                      id="response"
-                      defaultSize="40%"
-                      minSize="10%"
-                      collapsible
-                      collapsedSize="0%"
-                      panelRef={responsePanelRef}
-                    >
-                      <div className="h-full min-h-0">
-                        {activeEntry && <DetailPanel entry={activeEntry} showRequest={false} />}
-                      </div>
-                    </ResizablePanel>
-                  </ResizablePanelGroup>
+                  {detailPosition === 'hidden' ? (
+                    <div className="flex flex-col min-h-0 h-full overflow-hidden">
+                      <RequestEditor
+                        params={activeTab.params}
+                        headers={activeTab.headers}
+                        cookies={activeTab.cookies}
+                        body={activeTab.body}
+                        bodyType={activeTab.bodyType}
+                        onParamsChange={v => updateActiveTab({ params: v })}
+                        onHeadersChange={v => updateActiveTab({ headers: v })}
+                        onCookiesChange={v => updateActiveTab({ cookies: v })}
+                        onBodyChange={v => updateActiveTab({ body: v })}
+                        onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
+                      />
+                    </div>
+                  ) : detailPosition === 'bottom' ? (
+                    <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="flex-1 min-h-0">
+                      <ResizablePanel id="editor" defaultSize={activeEntry ? "60%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
+                        <div className="flex flex-col min-h-0 h-full overflow-hidden">
+                          <RequestEditor
+                            params={activeTab.params}
+                            headers={activeTab.headers}
+                            cookies={activeTab.cookies}
+                            body={activeTab.body}
+                            bodyType={activeTab.bodyType}
+                            onParamsChange={v => updateActiveTab({ params: v })}
+                            onHeadersChange={v => updateActiveTab({ headers: v })}
+                            onCookiesChange={v => updateActiveTab({ cookies: v })}
+                            onBodyChange={v => updateActiveTab({ body: v })}
+                            onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
+                          />
+                        </div>
+                      </ResizablePanel>
+                      <ResizableHandle withHandle />
+                      <ResizablePanel
+                        id="response"
+                        defaultSize="40%"
+                        minSize="10%"
+                        collapsible
+                        collapsedSize="0%"
+                        panelRef={responsePanelRef}
+                      >
+                        <div className="h-full min-h-0">
+                          {activeEntry && <DetailPanel entry={activeEntry} showRequest={false} />}
+                        </div>
+                      </ResizablePanel>
+                    </ResizablePanelGroup>
+                  ) : (
+                    <ResizablePanelGroup orientation="horizontal" id="new-request-horizontal" className="flex-1 min-h-0">
+                      <ResizablePanel id="editor" defaultSize={activeEntry ? "60%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
+                        <div className="flex flex-col min-h-0 h-full overflow-hidden">
+                          <RequestEditor
+                            params={activeTab.params}
+                            headers={activeTab.headers}
+                            cookies={activeTab.cookies}
+                            body={activeTab.body}
+                            bodyType={activeTab.bodyType}
+                            onParamsChange={v => updateActiveTab({ params: v })}
+                            onHeadersChange={v => updateActiveTab({ headers: v })}
+                            onCookiesChange={v => updateActiveTab({ cookies: v })}
+                            onBodyChange={v => updateActiveTab({ body: v })}
+                            onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
+                          />
+                        </div>
+                      </ResizablePanel>
+                      <ResizableHandle withHandle />
+                      <ResizablePanel
+                        id="response"
+                        defaultSize="40%"
+                        minSize="10%"
+                        collapsible
+                        collapsedSize="0%"
+                        panelRef={responsePanelRef}
+                      >
+                        <div className="h-full min-h-0 min-w-0">
+                          {activeEntry && <DetailPanel entry={activeEntry} showRequest={false} />}
+                        </div>
+                      </ResizablePanel>
+                    </ResizablePanelGroup>
+                  )}
 
                   {/* 发送中遮罩层 */}
                   {activeTab.sending && (

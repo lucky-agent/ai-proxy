@@ -18,6 +18,7 @@ use rama::layer::ConsumeErrLayer;
 use rama::layer::timeout::TimeoutLayer;
 use rama::net::proxy::IoForwardService;
 use rama::net::tls::server::peek_client_hello_from_input;
+use rama::rt::Executor;
 use rama::service::service_fn;
 use rama::tcp::proxy::IoToProxyBridgeIoLayer;
 use rama::tls::rustls::server::TlsAcceptorLayer;
@@ -53,39 +54,33 @@ pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infalli
             false
         } else {
             let host_lower = host.to_lowercase();
-            settings
-                .ssl
-                .whitelist
-                .iter()
-                .any(|item| {
-                    if !item.enabled {
-                        return false;
-                    }
-                    let p = item.domain.to_lowercase();
-                    if p == "*" {
-                        return true;
-                    }
-                    if let Some(suffix) = p.strip_prefix("*.") {
-                        return host_lower.ends_with(suffix) && host_lower != suffix;
-                    }
-                    p == host_lower
-                })
+            settings.ssl.whitelist.iter().any(|item| {
+                if !item.enabled {
+                    return false;
+                }
+                let p = item.domain.to_lowercase();
+                if p == "*" {
+                    return true;
+                }
+                if let Some(suffix) = p.strip_prefix("*.") {
+                    return host_lower.ends_with(suffix) && host_lower != suffix;
+                }
+                p == host_lower
+            })
         }
     } else {
         false
     };
-
     if should_mitm {
         let host = sni.as_deref().unwrap_or("?");
         log::info!(
             "CONNECT TLS, SNI={}, in MITM whitelist, routing to MITM",
             host
         );
-
-        let executor = state.exec().clone();
+        // 把隧道解密后的流量重新解析成 HTTP 语义
         let http_mitm_service =
             AddInputExtensionLayer::new(ViaConnectTunnel).into_layer(new_http_mitm_proxy());
-        let http_transport = HttpServer::auto(executor).service(http_mitm_service);
+        let http_transport = HttpServer::auto(Executor::default()).service(http_mitm_service);
         let https_service = TlsAcceptorLayer::new(state.mitm_tls_service_data().clone())
             .with_store_client_hello(true)
             .into_layer(http_transport);
@@ -145,10 +140,8 @@ where
         .ok();
     }
 
-    let executor = state.exec().clone();
-    let tunnel_svc = (
-        TimeoutLayer::new(std::time::Duration::from_secs(30)),
-    ).into_layer(
+    let executor = Executor::default();
+    let tunnel_svc = (TimeoutLayer::new(std::time::Duration::from_secs(30)),).into_layer(
         IoToProxyBridgeIoLayer::extension_proxy_target(executor.clone())
             .into_layer(IoForwardService::new(executor)),
     );

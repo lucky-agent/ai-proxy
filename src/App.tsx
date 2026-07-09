@@ -28,7 +28,7 @@ function App() {
   const [sslConfigOpen, setSslConfigOpen] = useState(false)
   const [scriptConfigOpen, setScriptConfigOpen] = useState(false)
   const [sendRequestOpen, setSendRequestOpen] = useState(false)
-  const [showDomainSidebar, setShowDomainSidebar] = useState(true)
+  const [showSidebar, setShowSidebar] = useState(true)
   const [detailPosition, setDetailPosition] = useState<DetailPosition>('bottom')
   const [scriptEnabled, setScriptEnabled] = useState(false)
   const [sslEnabled, setSslEnabled] = useState(false)
@@ -178,7 +178,7 @@ function App() {
             <ProxyView
               entries={entries}
               error={error}
-              showDomainSidebar={showDomainSidebar}
+              showSidebar={showSidebar}
               detailPosition={detailPosition}
               onAutoOpenDetail={() => setDetailPosition('bottom')}
               typeFilter={typeFilter}
@@ -188,14 +188,23 @@ function App() {
               status={status}
             />
           )}
-          {mountedViews.has('new-request') && activeView === 'new-request' && <NewRequestView onSendSuccess={handleNewRequestSuccess} entries={entries} />}
-          {mountedViews.has('ai') && activeView === 'ai' && <AiView />}
+          {mountedViews.has('new-request') && activeView === 'new-request' && (
+              <NewRequestView
+                onSendSuccess={handleNewRequestSuccess}
+                entries={entries}
+                showSidebar={showSidebar}
+                detailPosition={detailPosition}
+              />
+            )}
+            {mountedViews.has('ai') && activeView === 'ai' && (
+              <AiView showSidebar={showSidebar} detailPosition={detailPosition} />
+            )}
         </div>
       </div>
 
       <BottomBar
-        showDomainSidebar={showDomainSidebar}
-        onToggleDomainSidebar={() => setShowDomainSidebar(v => !v)}
+        showSidebar={showSidebar}
+        onToggleSidebar={() => setShowSidebar(v => !v)}
         detailPosition={detailPosition}
         onToggleDetailPosition={setDetailPosition}
         scriptEnabled={scriptEnabled}

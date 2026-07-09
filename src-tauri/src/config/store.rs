@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use log::LevelFilter;
@@ -12,7 +12,7 @@ use crate::config::{LogConfig, db::Db};
 /// 应用数据存储路径管理，默认路径在用户目录的 .ai-proxy 下
 pub struct Store {
     data_dir: PathBuf,
-    db: Arc<Mutex<Db>>,
+    db: Arc<Db>,
     scripts_dir: PathBuf,
 }
 
@@ -25,7 +25,7 @@ impl Store {
         let db = Db::open(&db_path).expect("Failed to initialize database");
         Self {
             data_dir,
-            db: Arc::new(Mutex::new(db)),
+            db: Arc::new(db),
             scripts_dir,
         }
     }
@@ -38,7 +38,7 @@ impl Store {
         &self.scripts_dir
     }
 
-    pub(crate) fn db(&self) -> Arc<Mutex<Db>> {
+    pub(crate) fn db(&self) -> Arc<Db> {
         self.db.clone()
     }
 

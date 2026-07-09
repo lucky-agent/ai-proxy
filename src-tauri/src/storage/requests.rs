@@ -68,22 +68,7 @@ impl RequestsRepository for Db {
         uri: &str,
         timestamp: i64,
     ) -> Result<i64, sqlite::Error> {
-        let conn = match self.conn_ref() {
-            Some(c) => c,
-            None => return Ok(0),
-        };
-        let mut stmt = conn.prepare(
-            "INSERT INTO requests (source_type, collection_id, name, method, uri, request_timestamp, request_headers, request_query, cookies, body_type, auth_type, auth_data, edited) VALUES ('collection', ?, ?, ?, ?, ?, '[]', '[]', '[]', '', '', '', 0)",
-        )?;
-        stmt.bind((1_usize, collection_id as i64))?;
-        stmt.bind((2_usize, name))?;
-        stmt.bind((3_usize, method))?;
-        stmt.bind((4_usize, uri))?;
-        stmt.bind((5_usize, timestamp as i64))?;
-        stmt.next()?;
-        let mut id_stmt = conn.prepare("SELECT last_insert_rowid()")?;
-    id_stmt.next()?;
-    Ok(id_stmt.read::<i64, _>(0)?)
+        self.insert_collection_request_inner(collection_id, name, method, uri, timestamp)
     }
 
     fn update_collection_request(
@@ -99,28 +84,9 @@ impl RequestsRepository for Db {
         auth_type: &str,
         auth_data: &str,
     ) -> Result<(), sqlite::Error> {
-        let conn = match self.conn_ref() {
-            Some(c) => c,
-            None => return Ok(()),
-        };
-        let mut stmt = conn.prepare(
-            "UPDATE requests SET method = ?, uri = ?, request_headers = ?, request_query = ?, request_body = ?, body_type = ?, cookies = ?, auth_type = ?, auth_data = ? WHERE id = ?",
-        )?;
-        stmt.bind((1_usize, method))?;
-        stmt.bind((2_usize, uri))?;
-        stmt.bind((3_usize, headers))?;
-        stmt.bind((4_usize, query))?;
-        match body {
-            Some(b) => stmt.bind((5_usize, b))?,
-            None => stmt.bind((5_usize, sqlite::Value::Null))?,
-        }
-        stmt.bind((6_usize, body_type))?;
-        stmt.bind((7_usize, cookies))?;
-        stmt.bind((8_usize, auth_type))?;
-        stmt.bind((9_usize, auth_data))?;
-        stmt.bind((10_usize, id as i64))?;
-        stmt.next()?;
-        Ok(())
+        self.update_collection_request_inner(
+            id, method, uri, headers, query, body, body_type, cookies, auth_type, auth_data,
+        )
     }
 
     fn duplicate_collection_request(
@@ -128,22 +94,7 @@ impl RequestsRepository for Db {
         id: i64,
         timestamp: i64,
     ) -> Result<i64, sqlite::Error> {
-        let conn = match self.conn_ref() {
-            Some(c) => c,
-            None => return Ok(0),
-        };
-        // Copy all columns except id (use autoincrement) and request_timestamp (use timestamp).
-        let mut stmt = conn.prepare(
-            "INSERT INTO requests (source_type, collection_id, name, method, uri, request_timestamp, request_headers, request_body, body_type, auth_type, auth_data, request_query, cookies, status, response_timestamp, duration_ms, response_headers, response_body, error, edited)
-             SELECT source_type, collection_id, name, method, uri, ?, request_headers, request_body, body_type, auth_type, auth_data, request_query, cookies, NULL, NULL, NULL, NULL, NULL, NULL, 0
-             FROM requests WHERE id = ?",
-        )?;
-        stmt.bind((1_usize, timestamp as i64))?;
-        stmt.bind((2_usize, id as i64))?;
-        stmt.next()?;
-        let mut id_stmt = conn.prepare("SELECT last_insert_rowid()")?;
-    id_stmt.next()?;
-    Ok(id_stmt.read::<i64, _>(0)?)
+        self.duplicate_collection_request_inner(id, timestamp)
     }
 
     fn find_requests_by_ids(
@@ -165,39 +116,24 @@ impl RequestsRepository for Db {
         )>,
         sqlite::Error,
     > {
-        let conn = match self.conn_ref() {
-            Some(c) => c,
-            None => return Ok(Vec::new()),
-        };
-        if ids.is_empty() {
-            return Ok(Vec::new());
-        }
-        // Build IN clause placeholders: "?,?,?..."
-        let placeholders: String = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let sql = format!(
-            "SELECT id, method, uri, request_headers, request_body, request_query, cookies, body_type, auth_type, auth_data, name FROM requests WHERE id IN ({})",
-            placeholders
-        );
-        let mut stmt = conn.prepare(sql)?;
-        for (i, id) in ids.iter().enumerate() {
-            stmt.bind(((i + 1) as usize, *id as i64))?;
-        }
-        let mut results = Vec::new();
-        while let sqlite::State::Row = stmt.next()? {
-            results.push((
-                stmt.read::<i64, _>(0)?,            // id
-                stmt.read::<String, _>(1)?,         // method
-                stmt.read::<String, _>(2)?,         // uri
-                stmt.read::<String, _>(3)?,         // request_headers
-                stmt.read::<Option<String>, _>(4)?, // request_body
-                stmt.read::<String, _>(5)?,         // request_query
-                stmt.read::<String, _>(6)?,         // cookies
-                stmt.read::<String, _>(7)?,         // body_type
-                stmt.read::<String, _>(8)?,         // auth_type
-                stmt.read::<String, _>(9)?,         // auth_data
-                stmt.read::<String, _>(10)?,        // name
-            ));
-        }
-        Ok(results)
+        let rows = self.find_requests_by_ids_inner(ids)?;
+        Ok(rows
+            .into_iter()
+            .map(|r| {
+                (
+                    r.id,
+                    r.method,
+                    r.uri,
+                    r.headers,
+                    r.body,
+                    r.query,
+                    r.cookies,
+                    r.body_type,
+                    r.auth_type,
+                    r.auth_data,
+                    r.name,
+                )
+            })
+            .collect())
     }
 }

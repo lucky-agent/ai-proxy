@@ -81,7 +81,6 @@ impl ProxyServer {
             move |_guard| async move {
                 let state = State::new(
                     mitm_tls_service_data,
-                    exec.clone(),
                     settings,
                     event_channel,
                 );

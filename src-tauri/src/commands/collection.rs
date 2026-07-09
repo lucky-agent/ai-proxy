@@ -8,16 +8,15 @@ use crate::storage::requests::RequestsRepository;
 #[tauri::command]
 pub fn get_collections(state: tauri::State<'_, AppState>) -> Result<Vec<ApiCollection>, String> {
     let db = state.db();
-    let repo = db.lock().unwrap();
-    let mut collections = repo.load_all_collections().map_err(|e| e.to_string())?;
+    let mut collections = db.load_all_collections().map_err(|e| e.to_string())?;
 
     // Auto-create a default collection on first launch (SQLite migration from collections.json)
     if collections.is_empty() {
         let ts = chrono::Utc::now().timestamp_millis();
-        repo.create_collection("默认模块", ts)
+        db.create_collection("默认模块", ts)
             .map_err(|e| e.to_string())?;
         // Re-read to get the full tree
-        collections = repo.load_all_collections().map_err(|e| e.to_string())?;
+        collections = db.load_all_collections().map_err(|e| e.to_string())?;
     }
 
     Ok(collections)
@@ -29,9 +28,8 @@ pub fn create_collection(
     name: String,
 ) -> Result<String, String> {
     let db = state.db();
-    let repo = db.lock().unwrap();
     let ts = chrono::Utc::now().timestamp_millis();
-    let id = repo.create_collection(&name, ts)
+    let id = db.create_collection(&name, ts)
         .map_err(|e| e.to_string())?;
     Ok(id.to_string())
 }
@@ -43,9 +41,8 @@ pub fn create_folder(
     name: String,
 ) -> Result<String, String> {
     let db = state.db();
-    let repo = db.lock().unwrap();
     let ts = chrono::Utc::now().timestamp_millis();
-    let id = repo.create_folder(parent_id, &name, ts)
+    let id = db.create_folder(parent_id, &name, ts)
         .map_err(|e| e.to_string())?;
     Ok(id.to_string())
 }
@@ -58,13 +55,12 @@ pub fn create_request(
     name: String,
 ) -> Result<String, String> {
     let db = state.db();
-    let repo = db.lock().unwrap();
     let ts = chrono::Utc::now().timestamp_millis();
     // Insert into requests table first to get the request_id
-    let request_id = repo.insert_collection_request(collection_id, &name, "GET", "", ts)
+    let request_id = db.insert_collection_request(collection_id, &name, "GET", "", ts)
         .map_err(|e| e.to_string())?;
     // Then create the node referencing it
-    let node_id = repo.create_request_node(parent_id, &name, request_id, ts)
+    let node_id = db.create_request_node(parent_id, &name, request_id, ts)
         .map_err(|e| e.to_string())?;
     // Return both IDs as JSON so frontend can populate requestId for later saves
     Ok(serde_json::json!({ "nodeId": node_id, "requestId": request_id }).to_string())
@@ -76,16 +72,7 @@ pub fn delete_node(
     node_id: i64,
 ) -> Result<(), String> {
     let db = state.db();
-    let repo = db.lock().unwrap();
-
-    // Prevent deleting the last remaining collection (default module is always present)
-    let collections = repo.load_all_collections().map_err(|e| e.to_string())?;
-    let is_root_collection = collections.iter().any(|c| c.id == node_id);
-    if is_root_collection && collections.len() <= 1 {
-        return Err("cannot delete the last collection".to_string());
-    }
-
-    repo.delete_node_subtree(node_id).map_err(|e| e.to_string())
+    db.delete_node_if_not_last(node_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -95,9 +82,8 @@ pub fn rename_node(
     new_name: String,
 ) -> Result<(), String> {
     let db = state.db();
-    let repo = db.lock().unwrap();
     let ts = chrono::Utc::now().timestamp_millis();
-    repo.rename_node(node_id, &new_name, ts)
+    db.rename_node(node_id, &new_name, ts)
         .map_err(|e| e.to_string())
 }
 
@@ -108,9 +94,8 @@ pub fn move_node(
     new_parent_id: i64,
 ) -> Result<(), String> {
     let db = state.db();
-    let repo = db.lock().unwrap();
     let ts = chrono::Utc::now().timestamp_millis();
-    repo.move_node(node_id, new_parent_id, ts)
+    db.move_node(node_id, new_parent_id, ts)
         .map_err(|e| e.to_string())
 }
 
@@ -129,14 +114,13 @@ pub fn save_request(
     auth_data: Option<String>,
 ) -> Result<(), String> {
     let db = state.db();
-    let repo = db.lock().unwrap();
     let headers_json =
         serde_json::to_string(&headers.unwrap_or_default()).unwrap_or_default();
     let params_json =
         serde_json::to_string(&params.unwrap_or_default()).unwrap_or_default();
     let cookies_json =
         serde_json::to_string(&cookies.unwrap_or_default()).unwrap_or_default();
-    repo.update_collection_request(
+    db.update_collection_request(
         id,
         &method,
         &url,
@@ -157,20 +141,19 @@ pub fn duplicate_request(
     node_id: i64,
 ) -> Result<String, String> {
     let db = state.db();
-    let repo = db.lock().unwrap();
 
     // Load all collections to find the original node's parent_id, name, and request_id
-    let collections = repo.load_all_collections().map_err(|e| e.to_string())?;
+    let collections = db.load_all_collections().map_err(|e| e.to_string())?;
     let (parent_id, name, request_id) =
         find_request_node(&collections, node_id).ok_or_else(|| format!("node not found: {}", node_id))?;
 
     let ts = chrono::Utc::now().timestamp_millis();
 
     // Duplicate the request row to get a new request_id
-    let new_request_id = repo.duplicate_collection_request(request_id, ts)
+    let new_request_id = db.duplicate_collection_request(request_id, ts)
         .map_err(|e| e.to_string())?;
     // Create a new collection node referencing the duplicated request
-    let new_node_id = repo.create_request_node(parent_id, &format!("{} (副本)", name), new_request_id, ts)
+    let new_node_id = db.create_request_node(parent_id, &format!("{} (副本)", name), new_request_id, ts)
         .map_err(|e| e.to_string())?;
 
     Ok(new_node_id.to_string())

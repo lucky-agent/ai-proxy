@@ -16,8 +16,8 @@ import { Separator } from '@/components/ui/separator'
 export type DetailPosition = 'bottom' | 'right' | 'hidden'
 
 interface BottomBarProps {
-  showDomainSidebar: boolean
-  onToggleDomainSidebar: () => void
+  showSidebar: boolean
+  onToggleSidebar: () => void
   detailPosition: DetailPosition
   onToggleDetailPosition: (next: DetailPosition) => void
   scriptEnabled: boolean
@@ -27,8 +27,8 @@ interface BottomBarProps {
 }
 
 export function BottomBar({
-  showDomainSidebar,
-  onToggleDomainSidebar,
+  showSidebar,
+  onToggleSidebar,
   detailPosition,
   onToggleDetailPosition,
   scriptEnabled,
@@ -64,18 +64,18 @@ export function BottomBar({
       {/* Left: host sidebar toggle */}
       <button
         type="button"
-        onClick={onToggleDomainSidebar}
+        onClick={onToggleSidebar}
         className={cn(
           'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
-          showDomainSidebar
+          showSidebar
             ? 'bg-surface-elevated text-foreground'
             : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
         )}
         title={t('layout.hostSidebar')}>
-        {showDomainSidebar && (
+        {showSidebar && (
           <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-foreground/70" />
         )}
-        {showDomainSidebar ? (
+        {showSidebar ? (
           <LayoutSidebarOn className="size-4" />
         ) : (
           <LayoutSidebarOff className="size-4" />

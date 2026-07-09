@@ -40,25 +40,23 @@ pub async fn resend_request(
     // 2. DB 持久化 — 获取自增 ID
     let db = state.db();
     let db_id: i64 = {
-        let guard = db.lock().map_err(|e| format!("db lock: {e}"))?;
         let q: HashMap<String, String> = HashMap::new();
-        guard
-            .upsert_request(
-                &method.to_string(),
-                &full_uri.to_string(),
-                chrono::Utc::now().timestamp_millis(),
-                &serde_json::to_string(&headers).unwrap_or_default(),
-                &serde_json::to_string(&q).unwrap_or_default(),
-                body.as_deref(),
-                true,
-                "traffic",
-                None,
-                "[]",
-                "",
-                "",
-                "",
-            )
-            .map_err(|e| format!("db upsert: {e}"))?
+        db.upsert_request(
+            &method.to_string(),
+            &full_uri.to_string(),
+            chrono::Utc::now().timestamp_millis(),
+            &serde_json::to_string(&headers).unwrap_or_default(),
+            &serde_json::to_string(&q).unwrap_or_default(),
+            body.as_deref(),
+            true,
+            "traffic",
+            None,
+            "[]",
+            "",
+            "",
+            "",
+        )
+        .map_err(|e| format!("db upsert: {e}"))?
     };
 
     // 3. body → Bytes
@@ -74,7 +72,7 @@ pub async fn resend_request(
 
     // 6. execute via rama client
     let up = state.settings().proxy.upstream_proxy;
-    let svc = client::build_upstream_service(rama::rt::Executor::default(), up, false);
+    let svc = client::build_upstream_service(up, false);
     match svc.serve(req).await {
         Ok(resp) => {
             let (parts, body) = resp.into_parts();
@@ -93,17 +91,14 @@ pub async fn resend_request(
             });
 
             // persist response metadata
-            if let Ok(db) = state.db().lock() {
-                db.update_response(
-                    db_id,
-                    parts.status.as_u16(),
-                    chrono::Utc::now().timestamp_millis(),
-                    ctx.duration_ms(),
-                    &headers_json,
-                )
-                .ok();
-                db.update_response_body(db_id, &resp_body).ok();
-            }
+            db.update_response(
+                db_id,
+                parts.status.as_u16(),
+                chrono::Utc::now().timestamp_millis(),
+                ctx.duration_ms(),
+                &headers_json,
+            ).ok();
+            db.update_response_body(db_id, &resp_body).ok();
 
             // 发送响应事件（用 ctx.request_id() 保持 ID 一致）
             ctx.send(ProxyEvent::Response {
@@ -136,9 +131,7 @@ pub async fn resend_request(
                 id: ctx.request_id().to_string(),
                 error: msg.clone(),
             });
-            if let Ok(db) = state.db().lock() {
-                db.set_error(db_id, &msg).ok();
-            }
+            db.set_error(db_id, &msg).ok();
             Ok(ctx.request_id().to_string())
         }
     }
