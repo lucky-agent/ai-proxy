@@ -15,6 +15,7 @@ use crate::commands::{
     get_theme, create_collection, create_folder, create_request, delete_node, rename_node,
     move_node, save_request, duplicate_request, save_script_config, save_settings, save_ssl_config, set_locale,
     set_theme, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
+    get_ai_config, save_ai_config,
 };
 use crate::config::{Settings, Store};
 
@@ -91,6 +92,20 @@ fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
 }
 
 pub fn run() {
+    // 诊断探针：Windows GUI 应用的 panic 默认只打 stderr（无处可看）。
+    // 钩子把 panic 位置与信息写入日志文件，用于排查静默任务死亡/锁毒化。
+    std::panic::set_hook(Box::new(|info| {
+        log::error!("[panic] {info}");
+    }));
+
+    // 排查上游转发偶发永久卡死：绕开 rama 在 Windows 上默认的原生
+    // DnsQueryEx 解析器（其取消路径存在 FFI 回调与 inflight 锁的死锁窗口，
+    // 新版 race_connect 拨号会高频丢弃在飞查询触发取消）。改用 tokio
+    // lookup_host（系统 getaddrinfo，spawn_blocking，无取消/回调路径）。
+    // 必须在首次 DNS 查询前调用（全局 OnceLock 懒初始化，一次定型）。
+    rama::dns::client::try_init_global_dns_resolver(rama::dns::client::TokioDnsResolver::new())
+        .unwrap_or_else(|_| log::warn!("global DNS resolver already initialized"));
+
     log::info!("Starting AI Proxy");
 
     let app = tauri::Builder::default()
@@ -102,6 +117,8 @@ pub fn run() {
             get_status,
             get_ssl_config,
             save_ssl_config,
+            get_ai_config,
+            save_ai_config,
             get_script_config,
             save_script_config,
             get_theme,

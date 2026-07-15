@@ -86,8 +86,24 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
   async function handleSave() {
     setSaving(true)
     setError('')
+
+    // flush 输入框中尚未点击 "+" / 未按回车的待添加域名
+    const pending = newDomain.trim()
+    let whitelist = sslConfig.whitelist
+    if (pending) {
+      const exists = whitelist.some(
+        (item) => item.domain.toLowerCase() === pending.toLowerCase()
+      )
+      if (!exists) {
+        whitelist = [...whitelist, { domain: pending, enabled: true }]
+      }
+    }
+    const finalConfig = { ...sslConfig, whitelist }
+
     try {
-      await invoke('save_ssl_config', { ssl: sslConfig })
+      await invoke('save_ssl_config', { ssl: finalConfig })
+      setSslConfig(finalConfig)
+      setNewDomain('')
       onOpenChange(false)
     } catch (err) {
       setError(String(err))

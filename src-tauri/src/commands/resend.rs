@@ -1,5 +1,6 @@
 use bytes::Bytes;
-use rama::http::{Body, Method, Request, Uri};
+use rama::http::{Body, Method, Request};
+use rama::net::uri::Uri;
 use rama::service::Service;
 use std::collections::HashMap;
 
@@ -19,7 +20,7 @@ pub async fn resend_request(
 ) -> Result<String, String> {
     let method = Method::from_bytes(method.as_bytes()).unwrap_or(Method::GET);
     let full_uri: Uri = url.parse().map_err(|_| "invalid url")?;
-    let ctx = ProxyCtx::new(method.clone(), full_uri.clone(), state.event_channel());
+    let ctx = ProxyCtx::new(method.clone(), full_uri.clone(), state.event_channel(), state.settings());
 
     // 1. 用 Body::empty() 获取 Parts
     let mut req_builder = Request::builder()

@@ -88,8 +88,28 @@ export default function ScriptConfigDialog({ open, onOpenChange }: Props) {
   async function handleSave() {
     setSaving(true)
     setError('')
+
+    // flush 输入框中尚未点击 "+" / 未按回车的待添加脚本（name 必填）
+    const pendingName = newName.trim()
+    let scripts = scriptConfig.scripts
+    if (pendingName) {
+      const exists = scripts.some(
+        (item) => item.name.toLowerCase() === pendingName.toLowerCase()
+      )
+      if (exists) {
+        setError(t('scriptConfig.duplicateName'))
+        setSaving(false)
+        return
+      }
+      scripts = [...scripts, { name: pendingName, domain: newDomain.trim(), enabled: true }]
+    }
+    const finalConfig = { ...scriptConfig, scripts }
+
     try {
-      await invoke('save_script_config', { script: scriptConfig })
+      await invoke('save_script_config', { script: finalConfig })
+      setScriptConfig(finalConfig)
+      setNewName('')
+      setNewDomain('')
       onOpenChange(false)
     } catch (err) {
       setError(String(err))

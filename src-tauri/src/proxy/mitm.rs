@@ -17,14 +17,14 @@ use rama::layer::AddInputExtensionLayer;
 use rama::layer::ConsumeErrLayer;
 use rama::layer::timeout::TimeoutLayer;
 use rama::net::proxy::IoForwardService;
-use rama::net::tls::server::peek_client_hello_from_input;
+use rama::tls::server::peek_client_hello_from_input;
 use rama::rt::Executor;
 use rama::service::service_fn;
 use rama::tcp::proxy::IoToProxyBridgeIoLayer;
 use rama::tls::rustls::server::TlsAcceptorLayer;
 
 use super::client::http_mitm_proxy;
-use super::events::ProxyEvent;
+use super::events::{AiHint, ProxyEvent};
 use super::state::{State, ViaConnectTunnel};
 
 pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infallible> {
@@ -34,6 +34,7 @@ pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infalli
         );
 
     let peek_timeout = Some(std::time::Duration::from_secs(30));
+    // 通过检查 TLS ClientHello 来决定是否进行 MITM
     let (prefixed, maybe_client_hello) =
         match peek_client_hello_from_input(upgraded, peek_timeout).await {
             Ok(result) => result,
@@ -47,65 +48,54 @@ pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infalli
         .as_ref()
         .and_then(|ch| ch.ext_server_name().map(|s| s.to_string()));
 
-    // 从运行时配置读取 SSL 白名单
-    let should_mitm = if let Some(ref host) = sni {
-        let settings = state.settings();
-        if !settings.ssl.enabled {
-            false
-        } else {
-            let host_lower = host.to_lowercase();
-            settings.ssl.whitelist.iter().any(|item| {
-                if !item.enabled {
-                    return false;
-                }
-                let p = item.domain.to_lowercase();
-                if p == "*" {
-                    return true;
-                }
-                if let Some(suffix) = p.strip_prefix("*.") {
-                    return host_lower.ends_with(suffix) && host_lower != suffix;
-                }
-                p == host_lower
-            })
-        }
-    } else {
-        false
-    };
-    if should_mitm {
-        let host = sni.as_deref().unwrap_or("?");
-        log::info!(
-            "CONNECT TLS, SNI={}, in MITM whitelist, routing to MITM",
-            host
-        );
-        // 把隧道解密后的流量重新解析成 HTTP 语义
-        let http_mitm_service =
-            AddInputExtensionLayer::new(ViaConnectTunnel).into_layer(new_http_mitm_proxy());
-        let http_transport = HttpServer::auto(Executor::default()).service(http_mitm_service);
-        let https_service = TlsAcceptorLayer::new(state.mitm_tls_service_data().clone())
-            .with_store_client_hello(true)
-            .into_layer(http_transport);
+    // SNI 命中已启用的 MITM 白名单 → 解密；否则（无 SNI 或未命中）→ 隧道透传。
+    match sni {
+        Some(host) if state.settings().ssl.should_mitm(&host) => {
+            log::info!(
+                "CONNECT TLS, SNI={}, in MITM whitelist, routing to MITM",
+                host
+            );
+            // 把隧道解密后的流量重新解析成 HTTP 语义
+            let http_mitm_service =
+                AddInputExtensionLayer::new(ViaConnectTunnel).into_layer(new_http_mitm_proxy());
+            let http_transport = HttpServer::auto(Executor::default()).service(http_mitm_service);
+            let https_service = TlsAcceptorLayer::new(state.mitm_tls_service_data().clone())
+                .with_store_client_hello(true)
+                .into_layer(http_transport);
 
-        if let Err(err) = https_service.serve(prefixed).await {
-            log::warn!("MITM TLS handshake failed for {}: {:?}", host, err);
+            if let Err(err) = https_service.serve(prefixed).await {
+                if is_timeout_err(&err) {
+                    // TLS 握手已成功，仅是连接空闲/预连接超过 header_read_timeout(30s)
+                    // 未发请求头，属正常连接回收，非故障。
+                    log::debug!(
+                        "MITM connection to {} idle-closed (no request): {:?}",
+                        host,
+                        err
+                    );
+                } else {
+                    log::warn!("MITM session failed for {}: {:?}", host, err);
+                }
+            }
         }
-    } else {
-        let (host, port, is_tls) = if let Some(h) = sni {
-            let port = prefixed
-                .extensions()
-                .get_ref::<rama::net::proxy::ProxyTarget>()
-                .map(|t| t.0.port)
-                .unwrap_or(443);
-            (h, port, true)
-        } else {
-            let proxy_target = prefixed
-                .extensions()
-                .get_ref::<rama::net::proxy::ProxyTarget>()
-                .map(|t| (t.0.host.to_string(), t.0.port));
-            let (host, port) = proxy_target.unwrap_or_else(|| ("unknown".to_string(), 0));
-            (host, port, false)
-        };
-        log::info!("CONNECT {}: not in MITM whitelist, routing to tunnel", host);
-        tunnel_connect_proxy(state, prefixed, host, port, is_tls).await;
+        maybe_host => {
+            let (host, port, is_tls) = if let Some(h) = maybe_host {
+                let port = prefixed
+                    .extensions()
+                    .get_ref::<rama::net::client::ConnectorTarget>()
+                    .map(|t| t.0.port)
+                    .unwrap_or(443);
+                (h, port, true)
+            } else {
+                let proxy_target = prefixed
+                    .extensions()
+                    .get_ref::<rama::net::client::ConnectorTarget>()
+                    .map(|t| (t.0.host.to_string(), t.0.port));
+                let (host, port) = proxy_target.unwrap_or_else(|| ("unknown".to_string(), 0));
+                (host, port, false)
+            };
+            log::info!("CONNECT {}: not in MITM whitelist, routing to tunnel", host);
+            tunnel_connect_proxy(state, prefixed, host, port, is_tls).await;
+        }
     }
     Ok(())
 }
@@ -136,13 +126,14 @@ where
             decrypted: false,
             content_type: None,
             content_length: None,
+            ai_hint: AiHint::None,
         })
         .ok();
     }
 
     let executor = Executor::default();
     let tunnel_svc = (TimeoutLayer::new(std::time::Duration::from_secs(30)),).into_layer(
-        IoToProxyBridgeIoLayer::extension_proxy_target(executor.clone())
+        IoToProxyBridgeIoLayer::extension_connector_target()
             .into_layer(IoForwardService::new(executor)),
     );
 
@@ -175,6 +166,21 @@ where
             }
         }
     }
+}
+
+/// 错误链中是否为超时（如 HTTP header read timeout）。
+/// 用于区分空闲连接回收（无害）与真正的 TLS/HTTP 失败。
+fn is_timeout_err(err: &rama::error::BoxError) -> bool {
+    let mut cur: Option<&(dyn std::error::Error + 'static)> = err.source();
+    while let Some(e) = cur {
+        if let Some(http_err) = e.downcast_ref::<rama::http::core::Error>() {
+            if http_err.is_timeout() {
+                return true;
+            }
+        }
+        cur = e.source();
+    }
+    false
 }
 
 pub(crate) fn new_http_mitm_proxy()

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import type { TrafficEntry } from '@/types/proxy'
+import type { TrafficEntry, ProxyJumpTarget } from '@/types/proxy'
 import { extractHost, classifyEntry, type TypeFilter } from '@/lib/format'
 import { buildFullUrl } from '@/lib/http-constants'
 import DomainSidebar from './DomainSidebar'
@@ -19,9 +19,10 @@ interface Props {
   detailPosition: DetailPosition
   onAutoOpenDetail: () => void
   typeFilter: TypeFilter
+  jumpTarget?: ProxyJumpTarget | null
 }
 
-export default function TrafficLog({ entries, showSidebar, detailPosition, onAutoOpenDetail, typeFilter }: Props) {
+export default function TrafficLog({ entries, showSidebar, detailPosition, onAutoOpenDetail, typeFilter, jumpTarget }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
   const [sortColumn, setSortColumn] = useState<SortColumn>(null)
@@ -47,6 +48,16 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
       panel.collapse()
     }
   }, [showSidebar])
+
+  // 响应来自 AI 视图的跳转指令：清域名过滤保证目标行可见，选中并展开详情。
+  // 仅认 nonce，重复跳同一条也能重触发；滚动由 RequestList 负责。
+  useEffect(() => {
+    if (!jumpTarget) return
+    setSelectedDomain(null)
+    setSelectedId(jumpTarget.id)
+    if (detailPosition === 'hidden') onAutoOpenDetail()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTarget?.nonce])
 
   const handleTogglePin = useCallback((domain: string) => {
     setPinnedDomains(prev => {
@@ -193,6 +204,8 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
       onSortChange={handleSortChange}
       onResendRequest={handleResendRequest}
       onEditRequest={handleEditRequest}
+      scrollToId={jumpTarget?.id}
+      scrollNonce={jumpTarget?.nonce}
     />
   )
 

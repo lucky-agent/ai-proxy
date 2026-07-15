@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use bytes::BytesMut;
 use rama::futures::StreamExt;
-use rama::http::{Body, Method, Request, Response, StatusCode, Uri, header};
+use rama::http::{Body, Method, Request, Response, StatusCode, header};
+use rama::net::uri::Uri;
 use serde::{Deserialize, Serialize};
 
 use super::engine;

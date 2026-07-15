@@ -17,6 +17,7 @@ interface Props {
 
 const MERGE_FORMATS: { value: MergeFormat; labelKey: string }[] = [
   { value: 'openai', labelKey: 'detail.mergeFormatOpenai' },
+  { value: 'anthropic', labelKey: 'detail.mergeFormatAnthropic' },
 ]
 
 export default function StreamingViewer({ entry }: Props) {

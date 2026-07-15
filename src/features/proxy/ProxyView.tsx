@@ -2,7 +2,7 @@ import { type TypeFilter } from '@/lib/format'
 import { TrafficLog } from './traffic-log'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { TypeFilterBar } from './TypeFilterBar'
-import type { TrafficEntry } from '@/types/proxy'
+import type { TrafficEntry, ProxyJumpTarget } from '@/types/proxy'
 import type { DetailPosition } from '@/features/bottom-bar'
 
 interface ProxyViewProps {
@@ -16,6 +16,7 @@ interface ProxyViewProps {
   onTypeFilterChange: (f: TypeFilter) => void
   running: boolean
   status: string
+  jumpTarget?: ProxyJumpTarget | null
 }
 
 export function ProxyView({
@@ -29,6 +30,7 @@ export function ProxyView({
   onTypeFilterChange,
   running,
   status,
+  jumpTarget,
 }: ProxyViewProps) {
   return (
     <>
@@ -50,6 +52,7 @@ export function ProxyView({
         detailPosition={detailPosition}
         onAutoOpenDetail={onAutoOpenDetail}
         typeFilter={typeFilter}
+        jumpTarget={jumpTarget}
       />
     </>
   )

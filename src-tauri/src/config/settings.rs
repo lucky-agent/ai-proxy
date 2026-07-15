@@ -1,3 +1,4 @@
+use crate::utils::domain_match;
 use log::info;
 use rama::error::{BoxError, ErrorContext};
 use serde::{Deserialize, Serialize};
@@ -31,6 +32,18 @@ impl Default for SslConfig {
             enabled: false,
             whitelist: Vec::new(),
         }
+    }
+}
+
+impl SslConfig {
+    /// host 是否命中已启用的 MITM 解密白名单。
+    /// 总开关关闭时恒为 false，不再迭代白名单。
+    pub fn should_mitm(&self, host: &str) -> bool {
+        self.enabled
+            && self
+                .whitelist
+                .iter()
+                .any(|item| item.enabled && domain_match::domain_match(&item.domain, host))
     }
 }
 
@@ -71,6 +84,127 @@ impl Default for ScriptConfig {
             scripts_dir: None,
         }
     }
+}
+
+/// AI 流量检测配置
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AiDetectionConfig {
+    /// URL glob 规则列表，首条命中即止。
+    /// 缺省（配置里无此段）时用内置默认规则播种；显式空数组则尊重用户清空。
+    #[serde(default = "default_ai_url_rules")]
+    pub url_patterns: Vec<AiUrlRule>,
+}
+
+impl Default for AiDetectionConfig {
+    fn default() -> Self {
+        Self {
+            url_patterns: default_ai_url_rules(),
+        }
+    }
+}
+
+/// 单条 AI URL 规则
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AiUrlRule {
+    /// URL glob，候选串为 host + path（已剥 scheme/query/默认端口）
+    #[serde(default)]
+    pub url: String,
+    /// "openai" | "anthropic" | null；null/非法 → Candidate
+    #[serde(default)]
+    pub provider: Option<String>,
+    /// 该条规则是否启用，缺省视为启用（兼容旧配置）
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+/// AI 配置根
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AiConfig {
+    /// AI 检测总开关。关闭时后端完全不做 AI 检测/归一化/推送事件。
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub detection: AiDetectionConfig,
+    #[serde(default)]
+    pub session: AiSessionConfig,
+}
+
+impl Default for AiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            detection: AiDetectionConfig::default(),
+            session: AiSessionConfig::default(),
+        }
+    }
+}
+
+/// AI 会话分组配置
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AiSessionConfig {
+    /// 会话标识请求头名单，按顺序取第一个命中的 header 值作为会话标识。
+    /// 不写死在分组逻辑中，用户可增删。
+    #[serde(default = "default_session_headers")]
+    pub session_headers: Vec<String>,
+    /// 无 session header 时是否启用消息前缀匹配兜底。
+    #[serde(default = "default_true")]
+    pub prefix_match_fallback: bool,
+    /// 内存会话表上限，超过后按 LRU 淘汰。
+    #[serde(default = "default_session_max")]
+    pub max_sessions: usize,
+}
+
+fn default_session_headers() -> Vec<String> {
+    vec![
+        "x-claude-code-session-id".to_string(),
+        "x-session-id".to_string(),
+    ]
+}
+
+fn default_session_max() -> usize {
+    500
+}
+
+impl Default for AiSessionConfig {
+    fn default() -> Self {
+        Self {
+            session_headers: default_session_headers(),
+            prefix_match_fallback: true,
+            max_sessions: default_session_max(),
+        }
+    }
+}
+
+/// 内置默认 URL 规则（OpenAI/Anthropic 官方 + DeepSeek/Azure/OpenRouter 常见），
+/// 作为初始种子写入配置；之后用户可自由增删/启用停用，全部以配置文件为准。
+pub(crate) fn default_ai_url_rules() -> Vec<AiUrlRule> {
+    vec![
+        AiUrlRule {
+            url: "api.openai.com/v1/chat/completions".into(),
+            provider: Some("openai".into()),
+            enabled: true,
+        },
+        AiUrlRule {
+            url: "api.anthropic.com/v1/messages".into(),
+            provider: Some("anthropic".into()),
+            enabled: true,
+        },
+        AiUrlRule {
+            url: "api.deepseek.com/v1/chat/completions".into(),
+            provider: Some("openai".into()),
+            enabled: true,
+        },
+        AiUrlRule {
+            url: "*.openai.azure.com/openai/deployments/*/chat/completions".into(),
+            provider: Some("openai".into()),
+            enabled: true,
+        },
+        AiUrlRule {
+            url: "openrouter.ai/api/v1/chat/completions".into(),
+            provider: None,
+            enabled: true,
+        },
+    ]
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -193,6 +327,9 @@ pub struct Settings {
     /// UI 配置
     #[serde(default)]
     pub ui: UiConfig,
+    /// AI 流量检测配置
+    #[serde(default)]
+    pub ai: AiConfig,
     #[serde(default)]
     pub persistence: Option<bool>,
     /// 数据保留天数（0 = 永久保留），默认 30 天
@@ -212,6 +349,7 @@ impl Default for Settings {
             script: ScriptConfig::default(),
             log: LogConfig::default(),
             ui: UiConfig::default(),
+            ai: AiConfig::default(),
             persistence: Some(false),
             retention_days: default_retention_days(),
         }
@@ -251,9 +389,7 @@ impl Settings {
 
     fn resolve_log_dir(&mut self, data_dir: &Path) {
         let resolved: PathBuf = match &self.log.dir {
-            None => {
-                data_dir.join("logs")
-            }
+            None => data_dir.join("logs"),
             Some(dir) => {
                 let path = Path::new(dir);
                 if !path.is_absolute() {
@@ -265,9 +401,11 @@ impl Settings {
         };
         self.log.dir = Some(resolved.to_string_lossy().into_owned());
         std::fs::create_dir_all(&resolved).unwrap_or_else(|e| {
-            log::error!("Failed to create log directory {}: {}", resolved.display(), e);
+            log::error!(
+                "Failed to create log directory {}: {}",
+                resolved.display(),
+                e
+            );
         });
     }
 }
-
-

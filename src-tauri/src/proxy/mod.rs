@@ -7,7 +7,7 @@ use rama::http::layer::upgrade::{DefaultHttpProxyConnectReplyService, UpgradeLay
 use rama::http::matcher::MethodMatcher;
 use rama::http::server::HttpServer;
 use rama::layer::{AddInputExtensionLayer, ConsumeErrLayer};
-use rama::net::stream::layer::http::BodyLimitLayer;
+use rama::http::BodyLimitLayer;
 use rama::service::service_fn;
 use rama::tcp::server::TcpListener;
 use rama::{graceful::Shutdown, rt::Executor};
@@ -21,6 +21,8 @@ use crate::proxy::state::AppState;
 use mitm::{http_connect_proxy, new_http_mitm_proxy};
 use state::State;
 
+pub(crate) mod ai;
+pub(crate) mod ai_hint;
 pub(crate) mod cert;
 pub(crate) mod client;
 pub(crate) mod events;
@@ -53,7 +55,7 @@ impl ProxyServer {
     pub async fn run(self) -> Result<(), BoxError> {
         let provider =
             cert::MitmCertProvider::try_new(&self.data_dir).context("MITM cert provider")?;
-        let mitm_tls_service_data = provider.into_tls_acceptor_data();
+        let mitm_tls_service_data = provider.into_tls_server_config();
 
         let listen_addr = format!("{}:{}", &self.config.listen_host, &self.config.listen_port);
 
@@ -85,7 +87,7 @@ impl ProxyServer {
                     event_channel,
                 );
 
-                let http_service = HttpServer::auto(exec.clone()).service(std::sync::Arc::new(
+                let http_service = HttpServer::auto(exec.clone()).service(
                     (
                         TraceLayer::new_for_http(),
                         ConsumeErrLayer::default(),
@@ -97,7 +99,7 @@ impl ProxyServer {
                         ),
                     )
                         .into_layer(new_http_mitm_proxy()),
-                ));
+                );
 
                 tcp_service
                     .serve(

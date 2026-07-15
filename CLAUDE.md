@@ -22,7 +22,7 @@ bun run build
 bun run build:vite
 ```
 
-本项目当前没有测试。Rust 版本要求：1.91.1+，edition 2024。包管理使用 bun。
+本项目当前没有测试。Rust 版本要求：1.96.0+，edition 2024。包管理使用 bun。
 
 ## 配置
 
@@ -139,6 +139,45 @@ import { TitleBar } from '@/features/title-bar'
 - rama 源码路径 E:\project\rust\rama
 - 前端：React 19 + Vite 8 + Tailwind CSS 4 + shadcn/ui
 - 桌面：Tauri 2
+
+## 主题系统（Theming）
+
+主题基于 **Tailwind CSS 4 + shadcn/ui**，所有颜色以 **OKLCH** 定义，全部集中在 `src/index.css`。**新增/修改 UI 颜色时不要写死颜色值，应使用下方的语义变量或 Tailwind 语义类（如 `text-foreground`、`bg-card`），确保明暗两套主题都正确。**
+
+### 主题切换机制
+
+- 三态：`light` / `dark` / `system`（跟随系统），类型见 `src/hooks/useTheme.ts` 的 `Theme`
+- 切换逻辑全在 `useTheme` hook：通过在 `<html>` 上 **增删 `.dark` class** + 设置 `style.colorScheme` 实现，`system` 模式监听 `prefers-color-scheme` 媒体查询
+- 持久化：`useTheme` 调用 Tauri command `get_theme` / `set_theme`（`src-tauri/src/commands/theme.rs`），写入 `setting.json` 的 `ui.theme`
+- CSS 侧：`:root` 定义亮色变量，`.dark` 覆盖为暗色；`@custom-variant dark (&:is(.dark *))` 使 `dark:` 变体生效
+
+### 变量分层（`src/index.css`）
+
+1. `@theme inline {}`（第 8–52 行）：把 `--xxx` 桥接为 Tailwind 的 `--color-xxx`，使 `bg-card`、`text-muted-foreground` 等语义类可用；同时定义字体与 `--radius-*` 阶梯
+2. `:root {}`（亮色）与 `.dark {}`（暗色）：**两处必须成对维护**，改一个变量记得改另一个
+
+### 语义变量分组（改 UI 优先复用这些）
+
+| 分组 | 变量 | 用途 |
+| --- | --- | --- |
+| 基础前景/背景 | `--background` `--foreground` | 页面级底色与正文色 |
+| 卡片/浮层 | `--card(-foreground)` `--popover(-foreground)` | 卡片、下拉、弹层 |
+| 主色/次色/强调 | `--primary(-foreground)` `--secondary` `--accent` `--muted(-foreground)` | **注意：`--primary` 是按钮填充色，暗色下为近黑色，不能当正文色用；正文用 `--foreground`** |
+| 表面层级 | `--surface-deep` `--surface-base` `--surface-elevated` | 项目自定义的三级面板底色，用于分隔区域深浅 |
+| 边框/输入/焦点 | `--border` `--input` `--ring` `--primary-border` | |
+| 破坏性 | `--destructive` | 删除/危险操作 |
+| 侧栏 | `--sidebar*` | shadcn sidebar 专用 |
+| 图表 | `--chart-1..5` | |
+| 滚动条 | `--scrollbar-thumb(-hover)` `--scrollbar-track` | 全局细滚动条（`@layer base` 中 6px 样式） |
+
+### 流量视图专用：HTTP 方法 / 状态徽章
+
+`--badge-*` 系列（`--badge-get/post/put/delete/patch/head/options/connect/bypass`、`--badge-success/redirect/client-err/server-err/error`）供 `SummaryBar`、traffic-log 等**内联 `style` 引用**（因动态拼接类名 `var(--badge-${method})` 无法被 Tailwind 静态提取）。暗色版本饱和度/亮度整体调高以保证可读性。
+
+### 代码高亮（两套独立主题，均需明暗成对）
+
+- **Shiki**（`.shiki-root`）：背景强制透明，继承容器底色
+- **CodeMirror**（`.tok-*`）：亮色为 GitHub 风格，`.dark .tok-*` 为 One Dark 风格——新增 token 类型时两处都要加
 
 ## 重要注意事项
 

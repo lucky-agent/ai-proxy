@@ -25,6 +25,20 @@ export interface ScriptConfig {
   scripts: ScriptItem[]
 }
 
+/** 单条 AI 检测 URL 规则；provider 为 null 表示自动检测（命中即候选，由响应/body 裁决） */
+export interface AiUrlRule {
+  url: string
+  provider: string | null
+  enabled: boolean
+}
+
+export interface AiConfig {
+  enabled: boolean
+  detection: {
+    url_patterns: AiUrlRule[]
+  }
+}
+
 export interface Settings {
   proxy: ProxyConfig
   ssl: SslConfig

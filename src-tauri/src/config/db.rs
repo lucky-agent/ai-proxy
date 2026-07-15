@@ -277,8 +277,8 @@ impl Db {
     }
 
     /// Extract URI query parameters as a JSON array of key-value pairs.
-    pub(crate) fn query_to_json(uri: &rama::http::Uri) -> String {
-        let q_str = uri.query().unwrap_or("");
+    pub(crate) fn query_to_json(uri: &rama::net::uri::Uri) -> String {
+        let q_str = uri.query_or_empty();
         if q_str.is_empty() {
             return "[]".to_string();
         }

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Channel, invoke } from '@tauri-apps/api/core'
 import type { ProxyEvent, TrafficEntry } from '@/types/proxy'
+import { publishAiEvent } from './aiEventBus'
 const MAX_CHUNKS = 2000
 const MAX_BODY_ACCUMULATE = 2 * 1024 * 1024
 export function useProxyEvents() {
@@ -42,6 +43,7 @@ export function useProxyEvents() {
             responseContentType: undefined,
             responseContentLength: undefined,
             error: null,
+            aiHint: event.ai_hint ?? 'none',
           })
           triggerUpdate()
           break
@@ -97,6 +99,12 @@ export function useProxyEvents() {
             entriesRef.current.set(id, entry)
           }
           triggerUpdate()
+          break
+        }
+        case 'ai_normalized':
+        case 'ai_session': {
+          // AI 事件转发到独立总线，由 useAiSessions 消费；不污染 entries。
+          publishAiEvent(event)
           break
         }
       }

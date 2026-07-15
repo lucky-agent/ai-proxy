@@ -101,6 +101,7 @@
     "tools": "Tools",
     "sslConfig": "SSL Decryption Config",
     "scriptConfig": "Script Config",
+    "aiConfig": "AI Detection",
     "quit": "Quit"
   },
   "toolbar": {
@@ -175,16 +176,39 @@
     "toolbarAddPlaceholder": "Add script...",
     "toolbarAddDomain": "Domain..."
   },
+  "aiConfig": {
+    "title": "AI Detection",
+    "description": "Configure URL rules used to detect AI traffic. Toggle each rule on or off; matching requests appear in the AI view.",
+    "ruleListHeader": "URL Rules",
+    "editHint": "(double-click a row to edit)",
+    "colEnabled": "On",
+    "colUrl": "URL",
+    "colProvider": "Provider",
+    "addRule": "Add Rule",
+    "placeholderUrl": "host + path (e.g. my-gw.local/v1/chat/completions)",
+    "providerAuto": "Auto-detect",
+    "duplicateUrl": "This URL rule already exists",
+    "emptyList": "No rules yet. Add a rule to see it here.",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving..."
+  },
   "view": {
     "proxy": "Proxy",
     "newRequest": "New Request",
     "ai": "AI",
-    "aiComingSoon": "AI features coming soon"
+    "aiComingSoon": "Select AI traffic to preview conversation"
   },
   "aiSidebar": {
     "title": "AI Chat",
     "newChat": "New chat",
-    "empty": "No conversations yet"
+    "empty": "No conversations yet",
+    "deleteSession": "Delete session",
+    "deleteRequest": "Delete request"
+  },
+  "aiView": {
+    "jumpToProxy": "View in proxy"
   },
   "requestEditor": {
     "params": "Params",

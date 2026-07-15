@@ -1,5 +1,5 @@
 use crate::AppState;
-use crate::config::{ProxyConfig, ScriptConfig, Settings, SslConfig};
+use crate::config::{AiConfig, ProxyConfig, ScriptConfig, Settings, SslConfig};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 #[tauri::command]
@@ -73,6 +73,33 @@ pub fn save_ssl_config(state: tauri::State<'_, AppState>, ssl: SslConfig) -> Res
     let data_dir = state.store().data_dir();
     let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
     settings.ssl = ssl;
+    settings
+        .save_to_path(&data_dir)
+        .map_err(|e| e.to_string())?;
+
+    state.set_settings(settings);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_ai_config(state: tauri::State<'_, AppState>) -> Result<AiConfig, String> {
+    let settings = state.settings();
+    Ok(settings.ai)
+}
+
+#[tauri::command]
+pub fn save_ai_config(state: tauri::State<'_, AppState>, ai: AiConfig) -> Result<(), String> {
+    let data_dir = state.store().data_dir();
+    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+
+    // 防御性剔除空 url 规则；其余（含启用状态）以前端为准整体覆盖
+    let mut ai = ai;
+    ai.detection
+        .url_patterns
+        .retain(|r| !r.url.trim().is_empty());
+
+    settings.ai = ai;
     settings
         .save_to_path(&data_dir)
         .map_err(|e| e.to_string())?;

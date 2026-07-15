@@ -101,6 +101,7 @@
     "tools": "工具",
     "sslConfig": "SSL 解密配置",
     "scriptConfig": "脚本配置",
+    "aiConfig": "AI 检测配置",
     "quit": "退出"
   },
   "toolbar": {
@@ -175,16 +176,39 @@
     "toolbarAddPlaceholder": "添加脚本...",
     "toolbarAddDomain": "域名..."
   },
+  "aiConfig": {
+    "title": "AI 检测配置",
+    "description": "配置用于识别 AI 流量的 URL 规则，可逐条启用或停用。命中规则的请求会进入 AI 视图预览。",
+    "ruleListHeader": "URL 规则",
+    "editHint": "（双击行可编辑）",
+    "colEnabled": "启用",
+    "colUrl": "URL",
+    "colProvider": "Provider",
+    "addRule": "添加规则",
+    "placeholderUrl": "host + path（如 my-gw.local/v1/chat/completions）",
+    "providerAuto": "自动检测",
+    "duplicateUrl": "该 URL 规则已存在",
+    "emptyList": "暂无规则，添加后将出现在这里。",
+    "delete": "删除",
+    "cancel": "取消",
+    "save": "保存",
+    "saving": "保存中..."
+  },
   "view": {
     "proxy": "代理",
     "newRequest": "新请求",
     "ai": "AI",
-    "aiComingSoon": "AI 功能即将推出"
+    "aiComingSoon": "选中 AI 流量查看对话预览"
   },
   "aiSidebar": {
     "title": "AI 对话",
     "newChat": "新建对话",
-    "empty": "暂无对话记录"
+    "empty": "暂无对话记录",
+    "deleteSession": "删除会话",
+    "deleteRequest": "删除该请求"
+  },
+  "aiView": {
+    "jumpToProxy": "在代理中查看"
   },
   "requestEditor": {
     "params": "Params",

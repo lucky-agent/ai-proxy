@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
-import { VList } from 'virtua'
+import { VList, type VListHandle } from 'virtua'
 import { useTranslation } from 'react-i18next'
 import { ArrowDownIcon, ArrowUpIcon, CopyIcon, RefreshCwIcon, PencilIcon, LockKeyholeIcon, LockOpenIcon } from 'lucide-react'
 import {
@@ -112,6 +112,9 @@ interface Props {
   onSortChange: (column: SortColumn, order: SortOrder) => void
   onResendRequest: (entry: TrafficEntry) => void
   onEditRequest: (entry: TrafficEntry) => void
+  /** 跳转定位：目标请求 id 与自增 nonce（由 AI 视图触发）。 */
+  scrollToId?: string
+  scrollNonce?: number
 }
 
 export default function RequestList({
@@ -123,6 +126,8 @@ export default function RequestList({
   onSortChange,
   onResendRequest,
   onEditRequest,
+  scrollToId,
+  scrollNonce,
 }: Props) {
   const { t } = useTranslation()
   const { copy } = useCopyToClipboard()
@@ -137,10 +142,25 @@ export default function RequestList({
   } = useColumnResize()
 
   const [listKey, setListKey] = useState(0)
+  const listRef = useRef<VListHandle>(null)
+  const lastScrollNonce = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     setListKey(k => k + 1)
   }, [sortColumn, sortOrder])
+
+  // 跳转定位：滚动到目标行居中。清域名过滤等会异步改变 entries，故依赖 entries
+  // 重试，直到目标行出现再消费 nonce；找不到（如流量已清空）则静默不滚动。
+  useEffect(() => {
+    if (scrollToId == null || scrollNonce == null) return
+    if (scrollNonce === lastScrollNonce.current) return
+    const idx = entries.findIndex(e => e.id === scrollToId)
+    const list = listRef.current
+    if (idx >= 0 && list) {
+      list.scrollToIndex(idx, { align: 'center' })
+      lastScrollNonce.current = scrollNonce
+    }
+  }, [scrollNonce, scrollToId, entries])
 
   const handleSortClick = useCallback(
     (col: ColKey) => {
@@ -223,7 +243,7 @@ export default function RequestList({
           </Empty>
         </div>
       ) : (
-        <VList key={listKey} className="flex-1 min-h-0">
+        <VList key={listKey} ref={listRef} className="flex-1 min-h-0">
           {entries.map((entry, i) => (
             <ContextMenu key={entry.id || i}>
               <ContextMenuTrigger>

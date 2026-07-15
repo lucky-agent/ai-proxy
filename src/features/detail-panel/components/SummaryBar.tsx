@@ -32,7 +32,7 @@ export default function SummaryBar({ entry, onClose }: { entry: TrafficEntry; on
         )}
         {entry.error != null ? t('detail.errorStatus') : (entry.status ?? t('detail.pending'))}
       </Badge>
-      <span className="min-w-0 flex-1 truncate text-primary" title={entry.uri}>
+      <span className="min-w-0 flex-1 truncate text-foreground" title={entry.uri}>
         {entry.uri}
       </span>
       {onClose && (

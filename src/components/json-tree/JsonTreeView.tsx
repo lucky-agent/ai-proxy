@@ -137,7 +137,7 @@ export default function JsonTreeView({
 }) {
   return (
     <div
-      className={`font-mono text-xs leading-5 select-none ${wrapped ? 'whitespace-pre-wrap break-all' : 'whitespace-nowrap overflow-x-auto'}`}>
+      className={`font-mono text-xs leading-5 ${wrapped ? 'whitespace-pre-wrap break-all' : 'whitespace-nowrap overflow-x-auto'}`}>
       <TreeNode value={data} defaultExpanded={defaultExpanded} depth={depth} />
     </div>
   )

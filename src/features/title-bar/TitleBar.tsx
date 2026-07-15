@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   AlignJustifyIcon,
@@ -12,6 +12,7 @@ import {
   Trash2Icon,
   XIcon,
   CodeIcon,
+  SparklesIcon,
 } from 'lucide-react'
 import appIcon from '@/assets/app-icon.png'
 import { useLocale } from '@/hooks/useLocale'
@@ -24,6 +25,7 @@ type TitleBarProps = {
   onOpenAbout: () => void
   onOpenSslConfig: () => void
   onOpenScriptConfig: () => void
+  onOpenAiConfig: () => void
   running: boolean
   onStartProxy: () => void
   onStopProxy: () => void
@@ -167,7 +169,7 @@ function WindowButton({
     </button>
   )
 }
-export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig, running, onStartProxy, onStopProxy, onClearTraffic, activeView, mountedViews, onViewChange, onCloseTab }: TitleBarProps) {
+export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig, onOpenAiConfig, running, onStartProxy, onStopProxy, onClearTraffic, activeView, mountedViews, onViewChange, onCloseTab }: TitleBarProps) {
   const { t } = useLocale()
   const appWindow = getCurrentWindow()
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
@@ -191,24 +193,10 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
     await appWindow?.close()
   }
 
-  function handleTitleBarMouseDown(event: MouseEvent<HTMLDivElement>) {
-    const target = event.target as HTMLElement
-    if (target.closest('[data-tauri-drag-region="false"]')) return
-    if (event.button !== 0) return
-
-    if (event.detail === 2) {
-      void appWindow?.toggleMaximize()
-      return
-    }
-
-    void appWindow?.startDragging()
-  }
-
   return (
     <div
       className="titlebar relative flex h-8 shrink-0 items-center border-b border-surface-elevated bg-surface-base select-none"
-      data-tauri-drag-region
-      onMouseDown={handleTitleBarMouseDown}>
+      data-tauri-drag-region="deep">
       <img src={appIcon} alt="" className="ml-2 size-4 shrink-0" draggable={false} />
 
       {/* Toolbar toggle button — hidden when expanded */}
@@ -288,6 +276,14 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
                 }}>
                 <CodeIcon className="size-4" />
                 {t('menu.scriptConfig')}
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  close()
+                  onOpenAiConfig()
+                }}>
+                <SparklesIcon className="size-4" />
+                {t('menu.aiConfig')}
               </MenuItem>
             </>
           )}

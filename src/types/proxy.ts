@@ -1,3 +1,5 @@
+import type { AiHint, AiConversation, AiUsage, AiTurn } from '@/types/ai'
+
 export interface RequestEvent {
   id: string
   method: string
@@ -8,6 +10,7 @@ export interface RequestEvent {
   decrypted: boolean
   content_type?: string
   content_length?: number
+  ai_hint?: AiHint
 }
 
 export interface ResponseEvent {
@@ -46,6 +49,7 @@ export type ProxyEvent =
       decrypted: boolean
       content_type?: string
       content_length?: number
+      ai_hint?: AiHint
     }
   | { type: 'request_chunk'; id: string; chunk: string }
   | {
@@ -60,9 +64,33 @@ export type ProxyEvent =
     }
   | { type: 'response_chunk'; id: string; chunk: string }
   | { type: 'error'; id: string; error: string }
+  | {
+      type: 'ai_normalized'
+      id: string
+      session_id: string
+      provider: string
+      request_turns: AiTurn[]
+      conversation: AiConversation
+      streaming: boolean
+    }
+  | {
+      type: 'ai_session'
+      session_id: string
+      scope_host: string
+      request_ids: string[]
+      usage_total: AiUsage
+      turn_count: number
+      match_reason: string
+    }
 
 export interface ChunkRecord {
   data: string
+}
+
+/** 从 AI 视图跳转到代理视图时下发的指令。nonce 自增确保重复跳同一 id 也能重触发。 */
+export interface ProxyJumpTarget {
+  id: string
+  nonce: number
 }
 
 export interface TrafficEntry {
@@ -87,4 +115,5 @@ export interface TrafficEntry {
   error: string | null
   edited?: boolean
   decrypted?: boolean
+  aiHint: AiHint
 }

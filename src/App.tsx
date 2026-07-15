@@ -7,6 +7,7 @@ import { SettingsDialog } from '@/features/settings'
 import { AboutDialog } from '@/features/about'
 import { SslConfigDialog } from '@/features/ssl-config'
 import { ScriptConfigDialog } from '@/features/script-config'
+import { AiConfigDialog } from '@/features/ai-config'
 import { TitleBar } from '@/features/title-bar'
 import { ToolBar } from '@/features/tool-bar'
 import { BottomBar, type DetailPosition } from '@/features/bottom-bar'
@@ -14,7 +15,9 @@ import { AiView } from '@/features/ai-view'
 import { NewRequestView } from '@/features/new-request'
 import { ProxyView } from '@/features/proxy'
 import type { ViewId } from '@/types/view'
+import type { ProxyJumpTarget } from '@/types/proxy'
 import { useProxyEvents } from '@/hooks/useProxyEvents'
+import { useAiSessions } from '@/hooks/useAiSessions'
 import { useTheme } from '@/hooks/useTheme'
 import { classifyEntry, type TypeFilter } from '@/lib/format'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -27,6 +30,7 @@ function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [sslConfigOpen, setSslConfigOpen] = useState(false)
   const [scriptConfigOpen, setScriptConfigOpen] = useState(false)
+  const [aiConfigOpen, setAiConfigOpen] = useState(false)
   const [sendRequestOpen, setSendRequestOpen] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
   const [detailPosition, setDetailPosition] = useState<DetailPosition>('bottom')
@@ -34,6 +38,8 @@ function App() {
   const [sslEnabled, setSslEnabled] = useState(false)
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [activeView, setActiveView] = useState<ViewId>('proxy')
+  // 从 AI 视图跳转到代理视图并定位某条流量的指令（含自增 nonce）。
+  const [proxyJump, setProxyJump] = useState<ProxyJumpTarget | null>(null)
   // mountedViews: which views have their component currently mounted.
   // Closing a tab = unmount (remove from set) + switch to proxy.
   // Clicking a tab = mount (add to set) + switch to it.
@@ -54,10 +60,19 @@ function App() {
     setActiveView(view)
   }, [])
 
+  // AI 气泡 → 代理视图：切视图并下发定位指令。清类型过滤，避免目标请求被过滤掉。
+  const handleJumpToProxy = useCallback((requestId: string) => {
+    setTypeFilter('all')
+    setMountedViews(prev => new Set(prev).add('proxy'))
+    setActiveView('proxy')
+    setProxyJump(prev => ({ id: requestId, nonce: (prev?.nonce ?? 0) + 1 }))
+  }, [])
+
   const handleNewRequestSuccess = useCallback((_entryId: string) => {
     // 不跳转，保持在 new-request 视图查看响应
   }, [])
   const { entries, clear } = useProxyEvents()
+  const { sessions: aiSessions, mergedTimeline, conversationOf, removeSession, removeRequest } = useAiSessions()
   const { theme, setTheme } = useTheme()
 
   const typeCounts = useMemo(() => {
@@ -160,6 +175,7 @@ function App() {
         onOpenAbout={() => setAboutOpen(true)}
         onOpenSslConfig={() => setSslConfigOpen(true)}
         onOpenScriptConfig={() => setScriptConfigOpen(true)}
+        onOpenAiConfig={() => setAiConfigOpen(true)}
         running={running}
         onStartProxy={startProxy}
         onStopProxy={stopProxy}
@@ -186,6 +202,7 @@ function App() {
               onTypeFilterChange={setTypeFilter}
               running={running}
               status={status}
+              jumpTarget={proxyJump}
             />
           )}
           {mountedViews.has('new-request') && activeView === 'new-request' && (
@@ -197,7 +214,15 @@ function App() {
               />
             )}
             {mountedViews.has('ai') && activeView === 'ai' && (
-              <AiView showSidebar={showSidebar} detailPosition={detailPosition} />
+              <AiView
+                sessions={aiSessions}
+                mergedTimeline={mergedTimeline}
+                conversationOf={conversationOf}
+                showSidebar={showSidebar}
+                onJumpToProxy={handleJumpToProxy}
+                onDeleteSession={removeSession}
+                onDeleteRequest={removeRequest}
+              />
             )}
         </div>
       </div>
@@ -216,6 +241,7 @@ function App() {
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
       <SslConfigDialog open={sslConfigOpen} onOpenChange={setSslConfigOpen} />
       <ScriptConfigDialog open={scriptConfigOpen} onOpenChange={setScriptConfigOpen} />
+      <AiConfigDialog open={aiConfigOpen} onOpenChange={setAiConfigOpen} />
       <EditRequestDialog
         open={sendRequestOpen}
         onOpenChange={setSendRequestOpen}

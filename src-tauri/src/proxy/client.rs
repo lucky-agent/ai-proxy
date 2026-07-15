@@ -5,14 +5,14 @@ use rama::extensions::ExtensionsRef;
 use rama::http::client::EasyHttpWebClient;
 use rama::http::layer::decompression::DecompressionLayer;
 use rama::http::layer::map_response_body::MapResponseBodyLayer;
-use rama::http::layer::timeout::TimeoutLayer;
+use rama::http::layer::timeout::{ResponseBodyTimeoutLayer, TimeoutLayer};
 use rama::http::request::HttpRequestParts;
 use rama::http::{Body, Request, Response, StatusCode, Version};
 use rama::layer::Layer;
 use rama::rt::Executor;
 use rama::service::BoxService;
 use rama::service::Service;
-use rama::tls::rustls::client::TlsConnectorDataBuilder;
+use rama::tls::client::{ServerVerifyMode, TlsClientConfig};
 
 use super::events::ProxyEvent;
 use super::parser;
@@ -22,13 +22,18 @@ use crate::proxy::state::ProxyCtx;
 use crate::script;
 
 pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible> {
+    let method = req.method().clone();
+    let uri = req.uri().clone();
+    // version 用于判别客户端与 MITM 之间是 HTTP/1.1 还是 h2（排查用）
+    log::info!("MITM request: {method} {uri} ({:?})", req.version());
+
     let state = req
         .extensions()
         .get_ref::<State>()
         .cloned()
         .expect("State not found in request extensions");
     let from_connect_tunnel = req.extensions().get_ref::<ViaConnectTunnel>().is_some();
-    let host = req.uri().host().unwrap_or("").to_string();
+    let host = req.uri().host_str().unwrap_or_default().to_string();
 
     let (parts, body) = req.into_parts();
     let scripts = state.get_scripts(&host);
@@ -36,7 +41,9 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
         parts.method.clone(),
         parts.uri().clone(),
         state.event_channel(),
-    );
+        state.settings().clone(),
+    )
+    .with_sessions(state.sessions());
 
     // ---- request: run scripts ----
     let req = match apply_request_scripts(&state, &scripts, parts, body).await {
@@ -56,6 +63,11 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
         }
     };
     parser::log_request(&ctx, &parts, &body_bytes);
+    log::info!(
+        "[probe] {} request logged, body={} bytes",
+        ctx.request_id(),
+        body_bytes.len()
+    );
     let req = Request::from_parts(parts, Body::from(body_bytes));
 
     // ---- direct request (non-tunnel) → reply inline ----
@@ -114,8 +126,16 @@ async fn forward_and_log(
     req: Request,
     scripts: &[String],
 ) -> Result<Response, Infallible> {
+    log::info!("[probe] {} forwarding to upstream...", ctx.request_id());
+    let forward_start = std::time::Instant::now();
     match client.serve(req).await {
         Ok(resp) => {
+            log::info!(
+                "[probe] {} upstream head: {} ({:?})",
+                ctx.request_id(),
+                resp.status(),
+                forward_start.elapsed()
+            );
             let resp = if !scripts.is_empty() {
                 let (parts, body) = resp.into_parts();
                 let body_str = script::collect_body_str(body).await;
@@ -130,9 +150,10 @@ async fn forward_and_log(
         }
         Err(err) => {
             log::error!(
-                "error proxying request [{} {}]: {err:?}",
+                "error proxying request [{} {}] after {:?}: {err:?}",
                 ctx.method(),
-                ctx.uri()
+                ctx.uri(),
+                forward_start.elapsed()
             );
             ctx.send(ProxyEvent::Error {
                 id: ctx.request_id().to_string(),
@@ -161,25 +182,21 @@ pub(crate) fn build_upstream_service(
         return svc.clone();
     }
 
-    let tls_builder = TlsConnectorDataBuilder::new()
-        .with_alpn_protocols_http_auto()
-        .try_with_env_key_logger()
-        .expect("with env key logger");
-
     // 跳过 TLS 验证（不安全，仅用于测试）
     let tls_config = if skip_tls_verify {
-        tls_builder.with_no_cert_verifier().build()
+        TlsClientConfig::default_http().with_server_verify(ServerVerifyMode::Disable)
     } else {
-        tls_builder.build()
+        TlsClientConfig::default_http()
     };
 
     let client = if upstream_proxy {
         EasyHttpWebClient::connector_builder()
             .with_default_transport_connector()
+            .with_default_dns_connector()
             .with_tls_proxy_support_using_rustls()
             .with_proxy_support()
             .with_tls_support_using_rustls_and_default_http_version(
-                Some(tls_config),
+                tls_config,
                 Version::HTTP_11,
             )
             .with_default_http_connector(Executor::default())
@@ -187,10 +204,11 @@ pub(crate) fn build_upstream_service(
     } else {
         EasyHttpWebClient::connector_builder()
             .with_default_transport_connector()
+            .with_default_dns_connector()
             .with_tls_proxy_support_using_rustls()
             .without_proxy_support()
             .with_tls_support_using_rustls_and_default_http_version(
-                Some(tls_config),
+                tls_config,
                 Version::HTTP_11,
             )
             .with_default_http_connector(Executor::default())
@@ -200,8 +218,11 @@ pub(crate) fn build_upstream_service(
     let svc = (
         MapResponseBodyLayer::new_boxed_streaming_body(),
         DecompressionLayer::new().with_insert_accept_encoding_header(false),
-        // 30-second request timeout to prevent hanging when upstream is unreachable
-        TimeoutLayer::with_status_code(StatusCode::GATEWAY_TIMEOUT, Duration::from_secs(30)),
+        // 300s overall timeout as safety net against hung requests
+        TimeoutLayer::with_status_code(StatusCode::GATEWAY_TIMEOUT, Duration::from_secs(300)),
+        // 60s per-chunk timeout: kills dead connections quickly while
+        // streaming AI responses can run arbitrarily long under the 300s cap
+        ResponseBodyTimeoutLayer::new(Duration::from_secs(60)),
     )
         .into_layer(client)
         .boxed();
