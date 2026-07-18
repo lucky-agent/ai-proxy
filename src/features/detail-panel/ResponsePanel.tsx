@@ -53,9 +53,11 @@ export default function ResponsePanel({ entry, onTitleClick }: Props) {
         { id: 'header', labelKey: 'detail.headers' },
         { id: 'body', labelKey: 'detail.body' },
         { id: 'raw', labelKey: 'detail.raw' },
+        { id: 'console', labelKey: 'detail.console' },
       ]
     }
     const hasStream = (entry.responseChunks?.length ?? 0) > 1 || isStreamingContentType(entry.responseHeaders)
+    const hasError = !!entry.error
     const base: TabDef[] = [
       { id: 'header', labelKey: 'detail.headers' },
       { id: 'cookies', labelKey: 'detail.cookies' },
@@ -65,6 +67,9 @@ export default function ResponsePanel({ entry, onTitleClick }: Props) {
       base.push({ id: 'stream', labelKey: 'detail.stream' })
     }
     base.push({ id: 'raw', labelKey: 'detail.raw' })
+    if (hasError) {
+      base.push({ id: 'console', labelKey: 'detail.console' })
+    }
     return base
   }, [entry])
 
@@ -120,9 +125,6 @@ function ResponsePanelContent({
   }
 
   if (tab === 'body') {
-    if (entry.error) {
-      return <RawView content={entry.error} />
-    }
     return entry.responseBody ? (
       <BodyView body={entry.responseBody} contentType={entry.responseContentType} />
     ) : (
@@ -134,7 +136,15 @@ function ResponsePanelContent({
     return <StreamingViewer entry={entry} onClose={onCloseStream} />
   }
 
-  // raw — when error, show error instead of formatted response
-  const content = entry.error ? entry.error : formatResponseRaw(entry)
+  if (tab === 'console') {
+    return entry.error ? (
+      <RawView content={entry.error} />
+    ) : (
+      <Empty><EmptyTitle>{t('detail.noConsole')}</EmptyTitle></Empty>
+    )
+  }
+
+  // raw
+  const content = formatResponseRaw(entry)
   return <RawView content={content} />
 }

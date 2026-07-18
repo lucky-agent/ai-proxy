@@ -4,6 +4,7 @@ import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { useTheme } from '@/hooks/useTheme'
 import { useShiki } from '@/hooks/useShiki'
 import { CopyIcon, CheckIcon, ChevronDown, ChevronRight } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 
@@ -176,7 +177,14 @@ function MultipartPartCard({ part }: { part: FormField }) {
           )}
           <div className='relative group/mini'>
             <div className='absolute top-1 right-1 z-10 opacity-0 group-hover/mini:opacity-100 transition-all'>
-              <button onClick={() => copy(part.value)} className='rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors' title={copied ? 'Copied' : 'Copy'}>{copied ? <CheckIcon className='size-3 text-primary' /> : <CopyIcon className='size-3' />}</button>
+              <Tooltip>
+                <TooltipTrigger className="inline-flex">
+                  <button onClick={() => copy(part.value)} className='rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors'>{copied ? <CheckIcon className='size-3 text-primary' /> : <CopyIcon className='size-3' />}</button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
+                  {copied ? 'Copied' : 'Copy'}
+                </TooltipContent>
+              </Tooltip>
             </div>
             {highlightedBody ? <div className='shiki-root whitespace-pre-wrap break-all overflow-x-auto px-2.5 py-1.5' dangerouslySetInnerHTML={{ __html: highlightedBody }} /> : <pre className='whitespace-pre-wrap break-all px-2.5 py-1.5 text-foreground/80 font-mono'>{part.value}</pre>}
           </div>

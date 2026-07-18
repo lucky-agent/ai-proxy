@@ -166,7 +166,6 @@ export function SaveToCollectionDialog({
                       size="icon"
                       className="size-5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity [&_svg]:size-3"
                       onClick={e => startAddFolder(f.id, e)}
-                      title={t('collection.newFolder')}
                     >
                       <PlusIcon />
                     </Button>

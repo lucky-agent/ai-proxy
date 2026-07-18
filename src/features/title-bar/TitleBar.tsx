@@ -16,8 +16,10 @@ import {
 } from 'lucide-react'
 import appIcon from '@/assets/app-icon.png'
 import { useLocale } from '@/hooks/useLocale'
+import { useClickOutside } from '@/hooks/useClickOutside'
 import { cn } from '@/lib/utils'
-import type { ViewId } from '@/types/view'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import type { ScriptTab, ViewId } from '@/types/view'
 import { TabBar } from './TabBar'
 
 type TitleBarProps = {
@@ -34,60 +36,53 @@ type TitleBarProps = {
   mountedViews: Set<ViewId>
   onViewChange: (view: ViewId) => void
   onCloseTab: (view: ViewId) => void
+  toolbarExpanded: boolean
+  onToolbarToggle: (expanded: boolean) => void
+  scriptTabs: ScriptTab[]
+  activeTabId: string
+  onSelectScriptTab: (fileKey: string) => void
+  onCloseScriptTab: (fileKey: string) => void
 }
 
 function stopTitleBarDrag(event: { stopPropagation: () => void }) {
   event.stopPropagation()
 }
 
+type MenuId = 'ai-proxy' | 'tools'
+
 function TitleBarMenu({
   label,
+  menuId,
+  activeMenu,
+  onMenuChange,
   children,
 }: {
   label: string
+  menuId: MenuId
+  activeMenu: MenuId | null
+  onMenuChange: (id: MenuId | null) => void
   children: (close: () => void) => ReactNode
 }) {
-  const [open, setOpen] = useState(false)
+  const open = activeMenu === menuId
   const rootRef = useRef<HTMLDivElement>(null)
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
-
-  function scheduleClose() {
-    closeTimerRef.current = setTimeout(() => setOpen(false), 150)
-  }
-
-  function cancelClose() {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current)
-      closeTimerRef.current = null
-    }
-  }
 
   function close() {
-    cancelClose()
-    setOpen(false)
+    onMenuChange(null)
+  }
+
+  function requestOpen() {
+    onMenuChange(menuId)
   }
 
   // 菜单打开时，点击外部关闭
-  useEffect(() => {
-    if (!open) return
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        close()
-      }
-    }
-
-    document.addEventListener('pointerdown', onPointerDown, true)
-    return () => document.removeEventListener('pointerdown', onPointerDown, true)
-  }, [open])
+  useClickOutside(rootRef, close, open)
 
   return (
     <div
       ref={rootRef}
       className="relative h-full"
       data-tauri-drag-region={false}
-      onMouseEnter={() => { cancelClose(); setOpen(true) }}
-      onMouseLeave={scheduleClose}>
+      onMouseEnter={requestOpen}>
       <button
         type="button"
         data-tauri-drag-region={false}
@@ -105,9 +100,7 @@ function TitleBarMenu({
         <div
           role="menu"
           data-tauri-drag-region={false}
-          className="absolute top-full left-0 z-[200] min-w-32 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
-          onMouseEnter={cancelClose}
-          onMouseLeave={scheduleClose}>
+          className="absolute top-full left-0 z-[200] min-w-32 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10">
           {children(close)}
         </div>
       ) : null}
@@ -133,7 +126,7 @@ function MenuItem({
       onPointerDown={stopTitleBarDrag}
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground',
+        'flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm text-muted-foreground outline-none transition-colors hover:bg-foreground/10 hover:text-foreground',
         variant === 'destructive' &&
           'text-destructive hover:bg-destructive/10 hover:text-destructive'
       )}>
@@ -169,25 +162,23 @@ function WindowButton({
     </button>
   )
 }
-export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig, onOpenAiConfig, running, onStartProxy, onStopProxy, onClearTraffic, activeView, mountedViews, onViewChange, onCloseTab }: TitleBarProps) {
+export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig, onOpenAiConfig, running, onStartProxy, onStopProxy, onClearTraffic, activeView, mountedViews, onViewChange, onCloseTab, toolbarExpanded, onToolbarToggle, scriptTabs, activeTabId, onSelectScriptTab, onCloseScriptTab }: TitleBarProps) {
   const { t } = useLocale()
   const appWindow = getCurrentWindow()
-  const [toolbarExpanded, setToolbarExpanded] = useState(false)
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const [activeMenu, setActiveMenu] = useState<MenuId | null>(null)
+
+  // 展开工具栏时默认打开第一个菜单
+  useEffect(() => {
+    if (toolbarExpanded) {
+      setActiveMenu('ai-proxy')
+    } else {
+      setActiveMenu(null)
+    }
+  }, [toolbarExpanded])
 
   // 点击外部区域时收起工具栏
-  useEffect(() => {
-    if (!toolbarExpanded) return
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!toolbarRef.current?.contains(event.target as Node)) {
-        setToolbarExpanded(false)
-      }
-    }
-
-    document.addEventListener('pointerdown', onPointerDown, true)
-    return () => document.removeEventListener('pointerdown', onPointerDown, true)
-  }, [toolbarExpanded])
+  useClickOutside(toolbarRef, () => onToolbarToggle(false), toolbarExpanded)
 
   async function handleQuit() {
     await appWindow?.close()
@@ -204,11 +195,13 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
         <button
           type="button"
           data-tauri-drag-region={false}
-          onMouseDown={stopTitleBarDrag}
-          onPointerDown={stopTitleBarDrag}
-          onClick={() => setToolbarExpanded(true)}
+          onMouseDown={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            onToolbarToggle(true)
+          }}
           className="inline-flex h-8 w-8 items-center justify-center text-foreground/70 outline-none transition-colors hover:bg-surface-elevated/50 hover:text-foreground focus:outline-none focus-visible:outline-none"
-          title={t('toolbar.expand')}>
+        >
           <AlignJustifyIcon className="size-4" />
         </button>
       )}
@@ -226,7 +219,7 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
         style={toolbarExpanded ? {
           background: 'linear-gradient(to right, var(--surface-elevated) 0%, color-mix(in oklch, var(--surface-elevated) 60%, transparent) 40%, color-mix(in oklch, var(--surface-elevated) 20%, transparent) 70%, transparent 100%)',
         } : undefined}>
-        <TitleBarMenu label="AI Proxy">
+        <TitleBarMenu label="AI Proxy" menuId="ai-proxy" activeMenu={activeMenu} onMenuChange={setActiveMenu}>
           {close => (
             <>
               <MenuItem
@@ -258,7 +251,7 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
             </>
           )}
         </TitleBarMenu>
-        <TitleBarMenu label={t('menu.tools')}>
+        <TitleBarMenu label={t('menu.tools')} menuId="tools" activeMenu={activeMenu} onMenuChange={setActiveMenu}>
           {close => (
             <>
               <MenuItem
@@ -272,18 +265,18 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
               <MenuItem
                 onClick={() => {
                   close()
-                  onOpenScriptConfig()
-                }}>
-                <CodeIcon className="size-4" />
-                {t('menu.scriptConfig')}
-              </MenuItem>
-              <MenuItem
-                onClick={() => {
-                  close()
                   onOpenAiConfig()
                 }}>
                 <SparklesIcon className="size-4" />
                 {t('menu.aiConfig')}
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  close()
+                  onOpenScriptConfig()
+                }}>
+                <CodeIcon className="size-4" />
+                {t('menu.scriptConfig')}
               </MenuItem>
             </>
           )}
@@ -291,7 +284,17 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
       </div>
 
       {/* View tabs */}
-      <TabBar activeView={activeView} mountedViews={mountedViews} onViewChange={onViewChange} onCloseTab={onCloseTab} />
+      {!toolbarExpanded && (
+        <TabBar
+          activeTabId={activeTabId}
+          scriptTabs={scriptTabs}
+          mountedViews={mountedViews}
+          onViewChange={onViewChange}
+          onCloseTab={onCloseTab}
+          onSelectScriptTab={onSelectScriptTab}
+          onCloseScriptTab={onCloseScriptTab}
+        />
+      )}
 
       {/* Spacer: pushes right-side buttons to the far right */}
       <div className="min-w-0 flex-1" data-tauri-drag-region />
@@ -299,38 +302,50 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
       {/* Far-right group: Delete, Start/Stop — order from left to right */}
       {!toolbarExpanded && (
         <div className="flex items-center gap-1" data-tauri-drag-region={false}>
-          <button
-            type="button"
-            data-tauri-drag-region={false}
-            onMouseDown={stopTitleBarDrag}
-            onPointerDown={stopTitleBarDrag}
-            onClick={onClearTraffic}
-            className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-surface-elevated text-muted-foreground border border-border hover:bg-muted transition-colors"
-            title={t('traffic.clear')}>
-            <Trash2Icon className="size-3" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              data-tauri-drag-region={false}
+              onMouseDown={stopTitleBarDrag}
+              onPointerDown={stopTitleBarDrag}
+              onClick={onClearTraffic}
+              className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-surface-elevated text-muted-foreground border border-border hover:bg-muted transition-colors"
+            >
+              <Trash2Icon className="size-3" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+              {t('traffic.clear')}
+            </TooltipContent>
+          </Tooltip>
           {running ? (
-            <button
-              type="button"
-              data-tauri-drag-region={false}
-              onMouseDown={stopTitleBarDrag}
-              onPointerDown={stopTitleBarDrag}
-              onClick={onStopProxy}
-              className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-colors"
-              title={t('app.stop')}>
-              <SquareIcon className="size-3" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                data-tauri-drag-region={false}
+                onMouseDown={stopTitleBarDrag}
+                onPointerDown={stopTitleBarDrag}
+                onClick={onStopProxy}
+                className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-colors"
+              >
+                <SquareIcon className="size-3" />
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+                {t('app.stop')}
+              </TooltipContent>
+            </Tooltip>
           ) : (
-            <button
-              type="button"
-              data-tauri-drag-region={false}
-              onMouseDown={stopTitleBarDrag}
-              onPointerDown={stopTitleBarDrag}
-              onClick={onStartProxy}
-              className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
-              title={t('app.start')}>
-              <PlayIcon className="size-3" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger
+                data-tauri-drag-region={false}
+                onMouseDown={stopTitleBarDrag}
+                onPointerDown={stopTitleBarDrag}
+                onClick={onStartProxy}
+                className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+              >
+                <PlayIcon className="size-3" />
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+                {t('app.start')}
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       )}

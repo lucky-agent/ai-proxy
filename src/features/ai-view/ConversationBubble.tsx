@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, ChevronDown, WrenchIcon, FileTextIcon, ExternalLinkIcon, CopyIcon, CheckIcon } from 'lucide-react'
-import type { AiTurn, AiContentBlock } from '@/types/ai'
+import { ChevronRight, ChevronDown, WrenchIcon, FileTextIcon, ExternalLinkIcon, CopyIcon, CheckIcon, CodeIcon, TextIcon } from 'lucide-react'
+import { type AiTurn, type AiContentBlock } from '@/types/ai'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { isLikelyMarkdown } from '@/lib/markdown'
+import { MarkdownContent } from '@/components/markdown/MarkdownContent'
 
 /** 把单个 content block 拼成可复制的纯文本 */
 function blockToText(block: AiContentBlock): string {
@@ -33,14 +36,25 @@ interface ConversationBubbleProps {
   reqLabel?: string
   /** 可选：点击跳转到代理视图定位该请求 */
   onJump?: () => void
+  /** 会话级默认视图：raw 原文（默认）/ md 渲染 */
+  defaultView?: 'md' | 'raw'
+}
+
+/** 顶层 text block：检测命中且当前视图为 md 时走 Markdown 渲染 */
+function TextBlock({ text, showMd, inverted }: { text: string; showMd: boolean; inverted: boolean }) {
+  const isMd = useMemo(() => isLikelyMarkdown(text), [text])
+  if (showMd && isMd) {
+    return <MarkdownContent text={text} variant={inverted ? 'inverted' : 'default'} />
+  }
+  return <span>{text}</span>
 }
 
 /** 单个 content block 的渲染 */
-function ContentBlock({ block }: { block: AiContentBlock }) {
+function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock; showMd: boolean; headerActions?: React.ReactNode }) {
   const [expanded, setExpanded] = useState(false)
 
   if (block.type === 'text') {
-    return <span>{block.text}</span>
+    return <TextBlock text={block.text} showMd={showMd} inverted={false} />
   }
 
   if (block.type === 'tool_use') {
@@ -52,7 +66,8 @@ function ContentBlock({ block }: { block: AiContentBlock }) {
         >
           {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
           <WrenchIcon className="size-3 flex-shrink-0" />
-          <span className="truncate">{block.name}</span>
+          <span className="truncate flex-1">{block.name}</span>
+          {headerActions}
         </button>
         {expanded && (
           <pre className="max-h-48 overflow-y-auto border-t border-amber-500/15 px-3 py-2 text-[11px] font-mono text-foreground/80 whitespace-pre-wrap break-all">
@@ -67,17 +82,18 @@ function ContentBlock({ block }: { block: AiContentBlock }) {
     return (
       <div className="mt-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
         <button
-          className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+          className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
           <FileTextIcon className="size-3 flex-shrink-0" />
-          <span className="truncate">tool result</span>
+          <span className="truncate flex-1">tool result</span>
+          {headerActions}
         </button>
         {expanded && (
           <div className="max-h-48 overflow-y-auto border-t border-emerald-500/15 px-3 py-2 text-xs">
             {block.content.map((innerBlock, i) => (
-              <ContentBlock key={i} block={innerBlock} />
+              <ContentBlock key={i} block={innerBlock} showMd={showMd} />
             ))}
           </div>
         )}
@@ -88,16 +104,69 @@ function ContentBlock({ block }: { block: AiContentBlock }) {
   return null
 }
 
+/** tool 角色气泡：默认折叠，展开后渲染子内容 */
+function ToolTurn({ turn, showMd }: { turn: AiTurn; showMd: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div>
+      <button
+        className="flex w-full items-center gap-1.5 text-left text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
+        <WrenchIcon className="size-3 flex-shrink-0" />
+        <span>tool</span>
+      </button>
+      {expanded && (
+        <div className="mt-1.5 border-t border-emerald-500/15 pt-1.5 text-xs">
+          {turn.content.map((block, j) => (
+            <ContentBlock key={j} block={block} showMd={showMd} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** 对话气泡：role 决定对齐与配色，内部渲染 content blocks */
-export function ConversationBubble({ turn, isStreaming, reqLabel, onJump }: ConversationBubbleProps) {
+export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaultView = 'raw' }: ConversationBubbleProps) {
   const { t } = useTranslation()
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const [systemExpanded, setSystemExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  // md 能力：递归检测所有 text block（包括 tool_result 内部的）
+  const mdCapable = useMemo(() => {
+    const check = (blocks: AiContentBlock[]): boolean =>
+      blocks.some((b) => {
+        if (b.type === 'text') return isLikelyMarkdown(b.text)
+        if (b.type === 'tool_result') return check(b.content)
+        return false
+      })
+    return check(turn.content)
+  }, [turn])
+  // 气泡级覆盖：null = 跟随会话级 defaultView；会话级切换时清除覆盖
+  const [override, setOverride] = useState<'md' | 'raw' | null>(null)
+  useEffect(() => {
+    setOverride(null)
+  }, [defaultView])
+  const view = override ?? defaultView
+  const showMd = mdCapable && view === 'md'
+  const contentRef = useRef<HTMLDivElement>(null)
+
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(turnToText(turn))
+      let text: string
+      if (showMd && contentRef.current) {
+        // 临时隐藏代码块头部（语言标签），innerText 排除 visibility:hidden 的节点
+        const headers = Array.from(contentRef.current.querySelectorAll<HTMLElement>('[data-streamdown="code-block-header"]'))
+        headers.forEach((h) => (h.style.visibility = 'hidden'))
+        text = contentRef.current.innerText.replace(/▌\s*$/, '')
+        headers.forEach((h) => (h.style.visibility = ''))
+      } else {
+        text = turnToText(turn)
+      }
+      await navigator.clipboard.writeText(text)
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
     } catch {
@@ -105,7 +174,43 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump }: Conv
     }
   }
 
-  // role-based style
+  // 检测是否「纯工具」气泡：只有 tool_use / tool_result，没有 text block
+  const toolsOnly = useMemo(() => {
+    if (turn.content.length === 0) return false
+    return turn.content.every((b) => b.type === 'tool_use' || b.type === 'tool_result')
+  }, [turn])
+
+  // 内联到工具行尾部的操作按钮（复制 + 跳转代理）
+  const headerActions = useMemo(() => {
+    if (!toolsOnly) return undefined
+    return (
+      <span className="inline-flex items-center gap-0.5 ml-auto" onClick={(e) => e.stopPropagation()}>
+        {onJump && (
+          <Tooltip>
+            <TooltipTrigger className="inline-flex">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onJump() }}
+                className="inline-flex items-center p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
+              >
+                <ExternalLinkIcon className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+              {t('aiView.jumpToProxy', '在代理中查看')}
+            </TooltipContent>
+          </Tooltip>
+        )}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); handleCopy() }}
+          className="inline-flex items-center p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
+        >
+          {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
+        </button>
+      </span>
+    )
+  }, [toolsOnly, onJump, copied, handleCopy, t])
   const isUser = turn.role === 'user'
   const isSystem = turn.role === 'system'
   const isToolsDef = turn.role === 'tools_def'
@@ -116,7 +221,7 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump }: Conv
 
   let bubbleClass: string
   if (isUser) {
-    bubbleClass = 'bg-blue-500 text-white'
+    bubbleClass = 'bg-ai-user-bubble text-ai-user-bubble-text'
   } else if (isSystem) {
     bubbleClass = 'bg-surface-base/50 text-muted-foreground text-xs'
   } else if (isToolsDef) {
@@ -124,7 +229,7 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump }: Conv
   } else if (isTool) {
     bubbleClass = 'bg-emerald-500/5 border border-emerald-500/15 text-foreground'
   } else {
-    bubbleClass = 'bg-surface-base text-foreground'
+    bubbleClass = 'bg-background text-foreground'
   }
 
   /** 获取 system turn 纯文本（用于折叠标题） */
@@ -137,8 +242,22 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump }: Conv
   return (
     <div className={`group flex ${alignClass}`}>
       <div className={`relative max-w-[80%] rounded-xl px-4 py-2.5 text-sm ${bubbleClass}`}>
-        <CopyButton copied={copied} onCopy={handleCopy} isUser={isUser} />
-        {(reqLabel || onJump) && (
+        <CopyButton copied={copied} onCopy={handleCopy} isUser={isUser} show={!toolsOnly} />
+        {mdCapable && !toolsOnly && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setOverride(view === 'md' ? 'raw' : 'md')
+            }}
+            className={`absolute top-1.5 right-8 z-10 rounded-md p-1 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity cursor-pointer ${
+              isUser ? 'text-white/80 hover:bg-white/15' : 'text-muted-foreground bg-surface-base/40 hover:bg-surface-base/80'
+            }`}
+          >
+            {view === 'md' ? <CodeIcon className="size-3.5" /> : <TextIcon className="size-3.5" />}
+          </button>
+        )}
+        {!toolsOnly && (reqLabel || onJump) && (
           <div className={`mb-1 flex items-center gap-1 text-[9px] font-mono ${isUser ? 'text-white/60' : 'text-muted-foreground/50'}`}>
             {reqLabel && <span>{reqLabel}</span>}
             {onJump && (
@@ -164,9 +283,9 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump }: Conv
               <span className="italic">💬 {systemPreview}</span>
             </button>
             {systemExpanded && (
-              <div className="mt-1.5 border-t border-border/30 pt-1.5 text-xs text-muted-foreground whitespace-pre-wrap break-words">
+              <div ref={contentRef} className="mt-1.5 border-t border-border/30 pt-1.5 text-xs whitespace-pre-wrap break-words">
                 {turn.content.map((block, j) => (
-                  block.type === 'text' ? <span key={j}>{block.text}</span> : <ContentBlock key={j} block={block} />
+                  block.type === 'text' ? <TextBlock key={j} text={block.text} showMd={showMd} inverted={false} /> : <ContentBlock key={j} block={block} showMd={showMd} />
                 ))}
               </div>
             )}
@@ -191,26 +310,49 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump }: Conv
                 </button>
               )
             })()}
+            {/*
+              tools_def 折叠后展示：text block 走 TextBlock（让工具描述也享受 md），
+              完整 JSON 格式化展示保持纯文本不动
+            */}
             {toolsExpanded && (() => {
               const toolsText = turn.content[0]?.type === 'text' ? turn.content[0].text : ''
               let formatted = toolsText
               try { formatted = JSON.stringify(JSON.parse(toolsText), null, 2) } catch {}
               return (
-                <pre className="mt-1.5 max-h-64 overflow-y-auto border-t border-violet-500/15 pt-1.5 text-[10px] font-mono text-foreground/70 whitespace-pre-wrap break-all">
-                  {formatted}
-                </pre>
+                <div ref={contentRef} className="mt-1.5 max-h-64 overflow-y-auto border-t border-violet-500/15 pt-1.5">
+                  {turn.content.map((block, j) =>
+                    block.type === 'text' ? (
+                      <TextBlock key={j} text={block.text} showMd={showMd} inverted={false} />
+                    ) : (
+                      <ContentBlock key={j} block={block} showMd={showMd} />
+                    ),
+                  )}
+                  <details className="mt-1">
+                    <summary className="text-[10px] text-muted-foreground/60 cursor-pointer">查看原始 JSON</summary>
+                    <pre className="mt-1 text-[10px] font-mono text-foreground/70 whitespace-pre-wrap break-all">
+                      {formatted}
+                    </pre>
+                  </details>
+                </div>
               )
             })()}
           </div>
+        ) : isTool ? (
+          /* tool 特殊渲染：默认折叠，展开后才渲染子内容 */
+          <ToolTurn turn={turn} showMd={showMd} />
         ) : (
-          <>
-            {turn.content.map((block, j) => (
-              <ContentBlock key={j} block={block} />
-            ))}
-          </>
-        )}
-        {isStreaming && turn.role === 'assistant' && (
-          <span className="animate-pulse">▌</span>
+          <div ref={contentRef}>
+            {turn.content.map((block, j) =>
+              block.type === 'text' ? (
+                <TextBlock key={j} text={block.text} showMd={showMd} inverted={isUser} />
+              ) : (
+                <ContentBlock key={j} block={block} showMd={showMd} headerActions={j === 0 ? headerActions : undefined} />
+              ),
+            )}
+            {isStreaming && turn.role === 'assistant' && (
+              <span className="animate-pulse">▌</span>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -218,7 +360,8 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump }: Conv
 }
 
 /** 气泡内右上角的复制按钮：默认淡出，hover 气泡时显示，复制后短暂变对勾 */
-function CopyButton({ copied, onCopy, isUser }: { copied: boolean; onCopy: () => void; isUser?: boolean }) {
+function CopyButton({ copied, onCopy, isUser, show = true }: { copied: boolean; onCopy: () => void; isUser?: boolean; show?: boolean }) {
+  if (!show) return null
   return (
     <button
       type="button"

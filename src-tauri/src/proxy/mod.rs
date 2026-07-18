@@ -25,6 +25,7 @@ pub(crate) mod ai;
 pub(crate) mod ai_hint;
 pub(crate) mod cert;
 pub(crate) mod client;
+pub(crate) mod ctx;
 pub(crate) mod events;
 pub(crate) mod mitm;
 pub(crate) mod parser;
@@ -76,6 +77,7 @@ impl ProxyServer {
         log::info!("MITM Proxy server listening on http://{}", listen_addr);
 
         let app_state = app_handle.state::<AppState>();
+        let db = app_state.db();
         let settings = app_state.settings_arc();
         let event_channel = app_state.event_channel_arc();
 
@@ -85,6 +87,7 @@ impl ProxyServer {
                     mitm_tls_service_data,
                     settings,
                     event_channel,
+                    db,
                 );
 
                 let http_service = HttpServer::auto(exec.clone()).service(

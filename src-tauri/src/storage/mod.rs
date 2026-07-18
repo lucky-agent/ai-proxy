@@ -1,7 +1,16 @@
 use serde::{Deserialize, Serialize};
+use sqlite;
 
 pub(crate) mod collection_nodes;
-pub(crate) mod requests;
+pub(crate) mod collection_requests;
+pub(crate) mod traffic;
+
+// ── DbTable trait ────────────────────────────────────────────────────────────────
+
+/// Each storage module implements this trait to handle its own table creation.
+pub(crate) trait DbTable {
+    fn migrate(conn: &sqlite::Connection) -> Result<(), sqlite::Error>;
+}
 
 /// A key-value pair representing an HTTP header.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -48,7 +57,7 @@ pub enum ApiTreeNode {
         auth_type: Option<String>,
         #[serde(rename = "authData")]
         auth_data: Option<String>,
-        /// The request_id linking to the `requests` table.
+        /// The request_id linking to the `collection_requests` table.
         #[serde(rename = "requestId")]
         request_id: i64,
     },

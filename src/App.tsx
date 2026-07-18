@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -14,13 +15,24 @@ import { BottomBar, type DetailPosition } from '@/features/bottom-bar'
 import { AiView } from '@/features/ai-view'
 import { NewRequestView } from '@/features/new-request'
 import { ProxyView } from '@/features/proxy'
-import type { ViewId } from '@/types/view'
+import type { ViewId, ScriptTab } from '@/types/view'
 import type { ProxyJumpTarget } from '@/types/proxy'
 import { useProxyEvents } from '@/hooks/useProxyEvents'
 import { useAiSessions } from '@/hooks/useAiSessions'
 import { useTheme } from '@/hooks/useTheme'
 import { classifyEntry, type TypeFilter } from '@/lib/format'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import ScriptEditor from '@/features/script-config/ScriptEditor'
+import type { ScriptItem } from '@/types/settings'
+
+function nextScriptId(used: string[]): number {
+  const nums = used
+    .map(k => { const m = k.match(/^script-(\d+)$/); return m ? parseInt(m[1], 10) : 0 })
+    .filter(n => n > 0)
+  for (let i = 1; ; i++) {
+    if (!nums.includes(i)) return i
+  }
+}
 
 function App() {
   const [status, setStatus] = useState('Stopped')
@@ -38,12 +50,19 @@ function App() {
   const [sslEnabled, setSslEnabled] = useState(false)
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [activeView, setActiveView] = useState<ViewId>('proxy')
+  const [toolbarExpanded, setToolbarExpanded] = useState(false)
   // 从 AI 视图跳转到代理视图并定位某条流量的指令（含自增 nonce）。
   const [proxyJump, setProxyJump] = useState<ProxyJumpTarget | null>(null)
   // mountedViews: which views have their component currently mounted.
   // Closing a tab = unmount (remove from set) + switch to proxy.
   // Clicking a tab = mount (add to set) + switch to it.
   const [mountedViews, setMountedViews] = useState<Set<ViewId>>(new Set(['proxy']))
+  // Script editor tabs
+  const [scriptTabs, setScriptTabs] = useState<ScriptTab[]>([])
+  // Floating script editor (overlay, not yet in a tab)
+  const [floatingScript, setFloatingScript] = useState<{ tab: ScriptTab } | null>(null)
+  // activeTabId: either a ViewId or a script fileKey
+  const [activeTabId, setActiveTabId] = useState<string>('proxy')
 
   const handleCloseTab = useCallback((view: ViewId) => {
     if (view === 'proxy') return
@@ -52,19 +71,127 @@ function App() {
       next.delete(view)
       return next
     })
-    setActiveView('proxy')
+    setActiveTabId('proxy')
   }, [])
 
   const handleViewChange = useCallback((view: ViewId) => {
     setMountedViews(prev => new Set(prev).add(view))
-    setActiveView(view)
+    setActiveTabId(view)
+  }, [])
+
+  // Script tab management
+  const handleEditScript = useCallback(async (item: ScriptItem) => {
+    const key = item.file_name || `script-${nextScriptId([...scriptTabs.map(t => t.fileKey), floatingScript?.tab.fileKey].filter((k): k is string => !!k))}`
+    const label = item.name || key
+
+    // If already in a tab, just switch to it
+    const existingTab = scriptTabs.find(t => t.fileKey === key)
+    if (existingTab) {
+      setActiveTabId(key)
+      return
+    }
+
+    // If already floating, just switch to it
+    if (floatingScript?.tab.fileKey === key) return
+
+    // Load content from disk for existing scripts, use template for new ones
+    let content = `// ${label}\nfunction onRequest(req) {\n  return req;\n}\n\nfunction onResponse(res) {\n  return res;\n}\n`
+    if (item.file_name) {
+      try {
+        content = await invoke<string>('get_script_content', { fileName: item.file_name })
+      } catch (_) {
+        // If loading fails, keep the default template
+      }
+    }
+
+    const newTab: ScriptTab = {
+      fileKey: key,
+      label,
+      content,
+      method: item.method || '',
+      domain: item.domain || '',
+      dirty: false,
+      saved: !!item.file_name,
+    }
+    // Open as floating overlay, close config dialog so they don't stack
+    setScriptConfigOpen(false)
+    setFloatingScript({ tab: newTab })
+  }, [scriptTabs, floatingScript])
+
+  const handleCloseFloatingScript = useCallback(() => {
+    setFloatingScript(null)
+    // Re-open config dialog if it was closed when the floating editor opened
+    setScriptConfigOpen(true)
+  }, [])
+
+  const handleMaximizeScript = useCallback(() => {
+    if (!floatingScript) return
+    setScriptConfigOpen(false)
+    setScriptTabs(prev => [...prev, floatingScript.tab])
+    setActiveTabId(floatingScript.tab.fileKey)
+    setFloatingScript(null)
+  }, [floatingScript])
+
+  const handleRestoreScript = useCallback((fileKey: string) => {
+    const tab = scriptTabs.find(t => t.fileKey === fileKey)
+    if (!tab) return
+    // Remove from tabs and open as floating
+    setScriptTabs(prev => prev.filter(t => t.fileKey !== fileKey))
+    setFloatingScript({ tab })
+    setActiveTabId('proxy')
+  }, [scriptTabs])
+
+  const handleSelectScriptTab = useCallback((fileKey: string) => {
+    setActiveTabId(fileKey)
+  }, [])
+
+  const handleCloseScriptTab = useCallback((fileKey: string) => {
+    setScriptTabs(prev => prev.filter(t => t.fileKey !== fileKey))
+    setActiveTabId('proxy')
+  }, [])
+
+  const handleUpdateScriptDraft = useCallback((fileKey: string, content: string) => {
+    setScriptTabs(prev => prev.map(t =>
+      t.fileKey === fileKey ? { ...t, content, dirty: true } : t
+    ))
+  }, [])
+
+  const handleUpdateScriptMethod = useCallback((fileKey: string, method: string) => {
+    setScriptTabs(prev => prev.map(t =>
+      t.fileKey === fileKey ? { ...t, method, dirty: true } : t
+    ))
+  }, [])
+
+  const handleUpdateScriptDomain = useCallback((fileKey: string, domain: string) => {
+    setScriptTabs(prev => prev.map(t =>
+      t.fileKey === fileKey ? { ...t, domain, dirty: true } : t
+    ))
+  }, [])
+
+  const handleUpdateScriptName = useCallback((fileKey: string, name: string) => {
+    setScriptTabs(prev => prev.map(t =>
+      t.fileKey === fileKey ? { ...t, label: name, dirty: true } : t
+    ))
+  }, [])
+
+  const handleScriptSaved = useCallback((fileKey: string, savedTab: ScriptTab) => {
+    setScriptTabs(prev => prev.map(t =>
+      t.fileKey === fileKey ? savedTab : t
+    ))
+    // Also update floating script if it matches
+    setFloatingScript(prev => {
+      if (prev && prev.tab.fileKey === fileKey) {
+        return { tab: savedTab }
+      }
+      return prev
+    })
   }, [])
 
   // AI 气泡 → 代理视图：切视图并下发定位指令。清类型过滤，避免目标请求被过滤掉。
   const handleJumpToProxy = useCallback((requestId: string) => {
     setTypeFilter('all')
     setMountedViews(prev => new Set(prev).add('proxy'))
-    setActiveView('proxy')
+    setActiveTabId('proxy')
     setProxyJump(prev => ({ id: requestId, nonce: (prev?.nonce ?? 0) + 1 }))
   }, [])
 
@@ -133,7 +260,8 @@ function App() {
     const next = !scriptEnabled
     setScriptEnabled(next)
     try {
-      await invoke('save_script_config', { script: { enabled: next, scripts: [] } })
+      // 只切总开关，脚本列表由后端原样保留
+      await invoke('set_script_enabled', { enabled: next })
     } catch (_) {}
   }
 
@@ -141,7 +269,8 @@ function App() {
     const next = !sslEnabled
     setSslEnabled(next)
     try {
-      await invoke('save_ssl_config', { ssl: { enabled: next, whitelist: [] } })
+      // 只切总开关，域名白名单由后端原样保留
+      await invoke('set_ssl_enabled', { enabled: next })
     } catch (_) {}
   }
 
@@ -184,13 +313,19 @@ function App() {
         mountedViews={mountedViews}
         onViewChange={handleViewChange}
         onCloseTab={handleCloseTab}
+        toolbarExpanded={toolbarExpanded}
+        onToolbarToggle={setToolbarExpanded}
+        scriptTabs={scriptTabs}
+        activeTabId={activeTabId}
+        onSelectScriptTab={handleSelectScriptTab}
+        onCloseScriptTab={handleCloseScriptTab}
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <ToolBar activeView={activeView} mountedViews={mountedViews} onViewChange={handleViewChange} />
+        <ToolBar activeTabId={activeTabId} mountedViews={mountedViews} onViewChange={handleViewChange} />
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {mountedViews.has('proxy') && activeView === 'proxy' && (
+          {mountedViews.has('proxy') && activeTabId === 'proxy' && (
             <ProxyView
               entries={entries}
               error={error}
@@ -205,7 +340,7 @@ function App() {
               jumpTarget={proxyJump}
             />
           )}
-          {mountedViews.has('new-request') && activeView === 'new-request' && (
+          {mountedViews.has('new-request') && activeTabId === 'new-request' && (
               <NewRequestView
                 onSendSuccess={handleNewRequestSuccess}
                 entries={entries}
@@ -213,18 +348,61 @@ function App() {
                 detailPosition={detailPosition}
               />
             )}
-            {mountedViews.has('ai') && activeView === 'ai' && (
+            {mountedViews.has('ai') && activeTabId === 'ai' && (
               <AiView
                 sessions={aiSessions}
                 mergedTimeline={mergedTimeline}
                 conversationOf={conversationOf}
                 showSidebar={showSidebar}
+                detailPosition={detailPosition}
                 onJumpToProxy={handleJumpToProxy}
                 onDeleteSession={removeSession}
                 onDeleteRequest={removeRequest}
               />
             )}
-        </div>
+            {/* Script editor tabs */}
+            {scriptTabs.map(tab => (
+              <div key={tab.fileKey} className={activeTabId === tab.fileKey ? 'flex-1 flex flex-col min-h-0' : 'hidden'}>
+                <ScriptEditor
+                  mode="tab"
+                  tab={tab}
+                  onUpdateDraft={(content) => handleUpdateScriptDraft(tab.fileKey, content)}
+                  onSaved={handleScriptSaved}
+                  onRestore={() => handleRestoreScript(tab.fileKey)}
+                  onMethodChange={(method) => handleUpdateScriptMethod(tab.fileKey, method)}
+                  onDomainChange={(domain) => handleUpdateScriptDomain(tab.fileKey, domain)}
+                  onNameChange={(name) => handleUpdateScriptName(tab.fileKey, name)}
+                />
+              </div>
+            ))}
+            {/* Floating script editor overlay — Portal to body so it's above all dialogs */}
+            {floatingScript && createPortal(
+              <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 p-6">
+                <div className="flex h-[66%] w-[75%] flex-col overflow-hidden rounded-xl border border-border bg-surface-deep shadow-2xl">
+                  <ScriptEditor
+                    mode="floating"
+                    tab={floatingScript.tab}
+                    onUpdateDraft={(content) => {
+                      setFloatingScript(prev => prev ? { tab: { ...prev.tab, content, dirty: true } } : null)
+                    }}
+                    onSaved={handleScriptSaved}
+                    onClose={handleCloseFloatingScript}
+                    onMaximize={handleMaximizeScript}
+                    onMethodChange={(method) => {
+                      setFloatingScript(prev => prev ? { tab: { ...prev.tab, method, dirty: true } } : null)
+                    }}
+                    onDomainChange={(domain) => {
+                      setFloatingScript(prev => prev ? { tab: { ...prev.tab, domain, dirty: true } } : null)
+                    }}
+                    onNameChange={(name) => {
+                      setFloatingScript(prev => prev ? { tab: { ...prev.tab, label: name, dirty: true } } : null)
+                    }}
+                  />
+                </div>
+              </div>,
+              document.body
+            )}
+          </div>
       </div>
 
       <BottomBar
@@ -240,8 +418,15 @@ function App() {
 
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
       <SslConfigDialog open={sslConfigOpen} onOpenChange={setSslConfigOpen} />
-      <ScriptConfigDialog open={scriptConfigOpen} onOpenChange={setScriptConfigOpen} />
-      <AiConfigDialog open={aiConfigOpen} onOpenChange={setAiConfigOpen} />
+      <ScriptConfigDialog open={scriptConfigOpen} onOpenChange={setScriptConfigOpen} onEditScript={handleEditScript} />
+      <AiConfigDialog
+        open={aiConfigOpen}
+        onOpenChange={(open) => {
+          setAiConfigOpen(open)
+          // 保存 AI 配置可能联动打开 SSL 解密，关闭弹窗后刷新底部栏开关状态
+          if (!open) loadScriptAndSslState()
+        }}
+      />
       <EditRequestDialog
         open={sendRequestOpen}
         onOpenChange={setSendRequestOpen}

@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { VList, type VListHandle } from 'virtua'
 import { useTranslation } from 'react-i18next'
 import { ArrowDownIcon, ArrowUpIcon, CopyIcon, RefreshCwIcon, PencilIcon, LockKeyholeIcon, LockOpenIcon } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -19,17 +20,16 @@ import { cn } from '@/lib/utils'
 export type ListEntry = TrafficEntry
 export type SortOrder = 'desc' | 'asc'
 export type SortColumn = ColKey | null
-type ColKey = 'id' | 'url' | 'method' | 'status' | 'duration' | 'time' | 'ssl' | 'edited'
-const COLS: ColKey[] = ['id', 'url', 'method', 'status', 'duration', 'time', 'ssl', 'edited']
+type ColKey = 'id' | 'url' | 'method' | 'status' | 'duration' | 'time' | 'ssl'
+const COLS: ColKey[] = ['id', 'url', 'method', 'status', 'duration', 'time', 'ssl']
 const DEFAULT_WIDTHS: Record<ColKey, number> = {
   id: 9,
-  url: 29,
+  url: 32,
   method: 9,
   status: 9,
   duration: 9,
   time: 15,
   ssl: 8,
-  edited: 13,
 }
 const MIN_PCT = 5
 const MAX_PCT = 40
@@ -233,7 +233,6 @@ export default function RequestList({
         {renderHeaderCell('duration', 'requestList.duration')}
         {renderHeaderCell('time', 'requestList.time')}
         {renderHeaderCell('ssl', 'requestList.ssl')}
-        {renderHeaderCell('edited', 'requestList.edited')}
       </div>
 
       {entries.length === 0 ? (
@@ -259,10 +258,15 @@ export default function RequestList({
                   <div className="px-1 py-2 min-w-0 tabular-nums text-[10px] text-muted-foreground text-left">
                     {entry.requestNumber}
                   </div>
-                  <div
-                    className="px-1 py-2 text-foreground/80 font-mono min-w-0 overflow-hidden"
-                    title={entry.uri}>
-                    <span className="block truncate">{entry.uri}</span>
+                  <div className="px-1 py-2 text-foreground/80 font-mono min-w-0 overflow-hidden">
+                    <Tooltip>
+                      <TooltipTrigger className="block w-full min-w-0">
+                        <span className="block truncate">{entry.uri}</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="start" className="max-w-[500px] bg-popover text-popover-foreground font-mono text-[11px]">
+                        {entry.uri}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                   <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
                     <Badge
@@ -298,13 +302,6 @@ export default function RequestList({
                       <LockKeyholeIcon className="size-3.5 text-muted-foreground/70 shrink-0" />
                     ) : entry.decrypted === true ? (
                       <LockOpenIcon className="size-3.5 text-muted-foreground/70 shrink-0" />
-                    ) : null}
-                  </div>
-                  <div className="px-1 py-2 min-w-0 overflow-hidden text-left">
-                    {entry.edited ? (
-                      <span className="text-[10px] text-amber-400 font-medium">
-                        {t('requestList.edited')}
-                      </span>
                     ) : null}
                   </div>
                 </div>

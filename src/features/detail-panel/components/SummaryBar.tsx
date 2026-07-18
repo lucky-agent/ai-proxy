@@ -1,11 +1,12 @@
 import { CheckIcon, CopyIcon, XIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { statusCategory, formatDuration } from '@/lib/format'
 import type { TrafficEntry } from '@/types/proxy'
 import { Badge } from '@/components/ui/badge'
 
-export default function SummaryBar({ entry, onClose }: { entry: TrafficEntry; onClose?: () => void }) {
+export default function SummaryBar({ entry, onClose, showUriTooltip = true }: { entry: TrafficEntry; onClose?: () => void; showUriTooltip?: boolean }) {
   const { t } = useTranslation()
   const { copied, copy } = useCopyToClipboard()
 
@@ -32,23 +33,46 @@ export default function SummaryBar({ entry, onClose }: { entry: TrafficEntry; on
         )}
         {entry.error != null ? t('detail.errorStatus') : (entry.status ?? t('detail.pending'))}
       </Badge>
-      <span className="min-w-0 flex-1 truncate text-foreground" title={entry.uri}>
-        {entry.uri}
-      </span>
-      {onClose && (
-        <button
-          onClick={onClose}
-          className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors"
-          title="关闭详情">
-          <XIcon className="size-3" />
-        </button>
+      {showUriTooltip ? (
+        <Tooltip>
+          <TooltipTrigger className="min-w-0 flex-1 truncate text-left">
+            <span className="truncate text-foreground">{entry.uri}</span>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="start" className="max-w-[500px] bg-popover text-popover-foreground font-mono text-[11px]">
+            {entry.uri}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-left text-foreground">{entry.uri}</span>
       )}
-      <button
-        onClick={() => copy(entry.uri)}
-        className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors"
-        title={copied ? t('detail.copied') : t('detail.copyUri')}>
-        {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
-      </button>
+      {onClose && (
+        <Tooltip>
+          <TooltipTrigger className="inline-flex shrink-0">
+            <button
+              onClick={onClose}
+              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors"
+            >
+              <XIcon className="size-3" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+            关闭详情
+          </TooltipContent>
+        </Tooltip>
+      )}
+      <Tooltip>
+        <TooltipTrigger className="inline-flex shrink-0">
+          <button
+            onClick={() => copy(entry.uri)}
+            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors"
+          >
+            {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+          {copied ? t('detail.copied') : t('detail.copyUri')}
+        </TooltipContent>
+      </Tooltip>
       {entry.durationMs != null && (
         <span className="shrink-0 text-muted-foreground tabular-nums">
           {formatDuration(entry.durationMs)}

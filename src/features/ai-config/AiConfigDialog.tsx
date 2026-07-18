@@ -1,25 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { PlusIcon, Trash2Icon } from 'lucide-react'
+import { CheckIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -29,39 +13,80 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { MatchTestRow } from '@/components/match-test/MatchTestRow'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useLocale } from '@/hooks/useLocale'
+import { useMatchTest } from '@/hooks/useMatchTest'
+import { cn } from '@/lib/utils'
 import type { AiConfig, AiUrlRule } from '@/types/settings'
+import RuleEditForm from './RuleEditDialog'
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-/** provider 下拉里「自动检测」对应后端 provider: null */
-const PROVIDER_AUTO = 'auto'
-
-function selectToProvider(value: string): string | null {
-  return value === PROVIDER_AUTO ? null : value
+/** 六列网格：表头与数据行共用，保证列对齐 */
+const ROW_GRID = 'flex items-center gap-2.5 px-3'
+const COL = {
+  enabled: 'flex w-4 shrink-0 justify-start',
+  url: 'min-w-0 flex-1',
+  provider: 'flex w-[74px] shrink-0 items-center gap-1.5',
+  sources: 'w-24 shrink-0',
+  mergeHeader: 'w-24 shrink-0',
+  actions: 'flex w-[46px] shrink-0 items-center justify-end gap-0.5',
 }
 
-function providerToSelect(provider: string | null): string {
-  return provider ?? PROVIDER_AUTO
+/** 勾选框选中态改用 AI 蓝（默认 primary 在暗色下近黑，缺乏反馈） */
+const AI_CHECKBOX =
+  'after:-inset-1 data-checked:border-ai-user-bubble data-checked:bg-ai-user-bubble data-checked:text-ai-user-bubble-text dark:data-checked:bg-ai-user-bubble'
+
+function providerDotClass(provider: string | null) {
+  if (provider === 'openai') return 'bg-ai-provider-openai'
+  if (provider === 'anthropic') return 'bg-ai-provider-anthropic'
+  return 'border-[1.5px] border-muted-foreground/70'
 }
 
 export default function AiConfigDialog({ open, onOpenChange }: Props) {
   const { t } = useLocale()
   const [enabled, setEnabled] = useState(false)
   const [rules, setRules] = useState<AiUrlRule[]>([])
-  const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  // 侧滑面板状态
+  const [editingPanel, setEditingPanel] = useState<{ index: number | null } | null>(null)
+  const [closingPanel, setClosingPanel] = useState(false)
+
+  // 匹配测试（按钮触发）：与运行时 compute_ai_hint 同一套 domain_match，按 host+path 匹配（matchPath=true）
+  const { testUrl, setTestUrl, hits, tested, runTest } = useMatchTest(
+    rules.map((r) => r.url),
+    true
+  )
+  /** 行是否参与了本次测试 = 已启用 && 非空 url（与运行时生效条件一致） */
+  const rowEligible = (rule: AiUrlRule) =>
+    tested && rule.enabled && rule.url.trim() !== ''
+  const rowHit = (rule: AiUrlRule, index: number) =>
+    rowEligible(rule) && !!hits[index]
+  const hitCount = rules.filter((rule, i) => rowHit(rule, i)).length
+
+  const listRef = useRef<HTMLDivElement>(null)
+  // 测试出结果后滚动到第一条命中行（命中行滚出可视区时也能看到是哪条）
+  useEffect(() => {
+    if (!tested) return
+    listRef.current
+      ?.querySelector('[data-match-hit]')
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [tested])
 
   useEffect(() => {
     if (!open) return
     setLoading(true)
     setError('')
-    setEditingIndex(null)
+    setTestUrl('')
+    setEditingPanel(null)
+    setClosingPanel(false)
     invoke<AiConfig>('get_ai_config')
       .then((config) => {
         setEnabled(config.enabled)
@@ -71,21 +96,6 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
       .finally(() => setLoading(false))
   }, [open])
 
-  // 点击编辑行之外 → 收起编辑框（仅退出编辑态，不落盘；值仍留在内存，
-  // 只有「保存」按钮才写入 setting.json）。放行：编辑行内 & provider 下拉浮层内。
-  useEffect(() => {
-    if (editingIndex === null) return
-    function handlePointerDown(e: PointerEvent) {
-      const target = e.target as Element | null
-      if (!target) return
-      if (target.closest('[data-editing-row]')) return
-      if (target.closest('[data-slot="select-content"]')) return
-      setEditingIndex(null)
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    return () => document.removeEventListener('pointerdown', handlePointerDown)
-  }, [editingIndex])
-
   function toggleItem(index: number) {
     setRules((prev) => {
       const updated = [...prev]
@@ -94,60 +104,49 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
     })
   }
 
-  function updateUrl(index: number, url: string) {
-    setRules((prev) => {
-      const updated = [...prev]
-      updated[index] = { ...updated[index], url }
-      return updated
-    })
-  }
-
-  function updateProvider(index: number, value: string) {
-    setRules((prev) => {
-      const updated = [...prev]
-      updated[index] = { ...updated[index], provider: selectToProvider(value) }
-      return updated
-    })
-  }
-
-  /** 追加一条空规则并直接进入编辑态 */
-  function addRule() {
-    setRules((prev) => {
-      const next = [...prev, { url: '', provider: 'openai', enabled: true }]
-      setEditingIndex(next.length - 1)
-      return next
-    })
-    setError('')
-  }
-
   function removeItem(index: number) {
     setRules((prev) => prev.filter((_, i) => i !== index))
-    setEditingIndex(null)
+  }
+
+  function openAdd() {
+    setEditingPanel({ index: null })
+    setClosingPanel(false)
+  }
+
+  function openEdit(index: number) {
+    setEditingPanel({ index })
+    setClosingPanel(false)
+  }
+
+  function handleClosePanel() {
+    setClosingPanel(true)
+    setTimeout(() => {
+      setEditingPanel(null)
+      setClosingPanel(false)
+    }, 150) // 匹配 slide-out 动画时长
+  }
+
+  /** 编辑器「确定」：新增追加（默认启用），编辑原位替换（保留启用状态） */
+  function applyRule(draft: Omit<AiUrlRule, 'enabled'>) {
+    setRules((prev) => {
+      if (editingPanel === null) return prev
+      if (editingPanel.index === null) return [...prev, { ...draft, enabled: true }]
+      const updated = [...prev]
+      updated[editingPanel.index] = { ...draft, enabled: updated[editingPanel.index].enabled }
+      return updated
+    })
+    handleClosePanel()
   }
 
   async function handleSave() {
-    // 重复 URL 校验（忽略空行、大小写）
-    const seen = new Set<string>()
-    for (const r of rules) {
-      const key = r.url.trim().toLowerCase()
-      if (!key) continue
-      if (seen.has(key)) {
-        setError(t('aiConfig.duplicateUrl'))
-        return
-      }
-      seen.add(key)
-    }
-
     setSaving(true)
     setError('')
-    // 丢弃空 url 行（等价删除）
     const finalRules = rules.filter((r) => r.url.trim() !== '')
     try {
       await invoke('save_ai_config', {
         ai: { enabled, detection: { url_patterns: finalRules } },
       })
       setRules(finalRules)
-      setEditingIndex(null)
       onOpenChange(false)
     } catch (err) {
       setError(String(err))
@@ -156,168 +155,328 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
     }
   }
 
+  const editIndex = editingPanel?.index ?? null
+  const editingRule = editIndex !== null ? (rules[editIndex] ?? null) : null
+  const existingUrls = rules
+    .filter((_, i) => i !== editIndex)
+    .map((r) => r.url.trim().toLowerCase())
+    .filter(Boolean)
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-[640px]" showCloseButton={!editingPanel}>
         <DialogHeader>
-          <DialogTitle>{t('aiConfig.title')}</DialogTitle>
+          <div className="flex items-center gap-2.5">
+            <DialogTitle>{t('aiConfig.title')}</DialogTitle>
+            <Switch checked={enabled} onCheckedChange={setEnabled} />
+          </div>
           <DialogDescription>{t('aiConfig.description')}</DialogDescription>
         </DialogHeader>
 
-        {loading ? (
-          <p className="text-sm text-muted-foreground">{t('settings.loading')}</p>
-        ) : (
-          <div className="grid gap-2">
-            <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 cursor-pointer">
-              <Checkbox
-                checked={enabled}
-                onCheckedChange={(v) => setEnabled(v === true)}
-              />
-              <span className="text-sm font-medium">{t('aiConfig.enableDetection', 'AI 检测')}</span>
-              <span className="ml-auto text-xs text-muted-foreground">
-                {enabled ? t('aiConfig.enabledOn', '已开启') : t('aiConfig.enabledOff', '已关闭')}
-              </span>
-            </label>
+        {/* 包裹内容区 + error + footer：侧滑面板的定位锚 */}
+        <div className="relative overflow-hidden">
+          {loading ? (
+            <p className="text-sm text-muted-foreground">{t('settings.loading')}</p>
+          ) : (
+            <>
+              {/* 列表区（面板打开时变暗 + 禁止交互） */}
+              <div
+                className={cn(
+                  'grid gap-2 transition-opacity duration-200 select-none',
+                  !enabled && 'pointer-events-none opacity-40',
+                  editingPanel && 'pointer-events-none opacity-30'
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t('aiConfig.ruleListHeader')}
+                    {rules.length > 0 && (
+                      <span className="ml-1 font-normal opacity-80">
+                        {t('aiConfig.ruleCount', { n: rules.length })}
+                      </span>
+                    )}
+                  </span>
+                  <Button variant="ghost" size="xs" onClick={openAdd}>
+                    <PlusIcon className="size-3.5" />
+                    {t('aiConfig.addRule')}
+                  </Button>
+                </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">
-                {t('aiConfig.ruleListHeader')}
-                <span className="ml-2 font-normal opacity-70">
-                  {t('aiConfig.editHint')}
-                </span>
-              </span>
-              <Button variant="outline" size="xs" onClick={addRule}>
-                <PlusIcon className="size-3.5" />
-                {t('aiConfig.addRule')}
-              </Button>
-            </div>
-
-            {rules.length === 0 ? (
-              <p className="text-xs text-muted-foreground px-0.5">
-                {t('aiConfig.emptyList')}
-              </p>
-            ) : (
-              <div className="max-h-72 overflow-y-auto rounded-lg border border-border">
-                <Table>
-                  <TableHeader className="sticky top-0 z-10 bg-card">
-                    <TableRow>
-                      <TableHead className="h-8 w-10 text-center text-xs">
-                        {t('aiConfig.colEnabled')}
-                      </TableHead>
-                      <TableHead className="h-8 text-xs">
-                        {t('aiConfig.colUrl')}
-                      </TableHead>
-                      <TableHead className="h-8 w-28 text-xs">
-                        {t('aiConfig.colProvider')}
-                      </TableHead>
-                      <TableHead className="h-8 w-9" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rules.map((rule, index) => {
-                      const editing = editingIndex === index
-                      return (
-                        <TableRow
-                          key={index}
-                          {...(editing ? { 'data-editing-row': '' } : {})}
+                {rules.length === 0 ? (
+                  <p className="px-0.5 text-xs text-muted-foreground">
+                    {t('aiConfig.emptyList')}
+                  </p>
+                ) : (
+                  <div ref={listRef} className="max-h-80 overflow-y-auto rounded-[10px] border border-border">
+                    <div
+                      className={cn(
+                        ROW_GRID,
+                        'sticky top-0 z-10 h-7 border-b border-border bg-[color-mix(in_oklab,var(--popover),var(--foreground)_3%)]'
+                      )}
+                    >
+                      {(
+                        [
+                          ['colEnabled', COL.enabled],
+                          ['colUrl', COL.url],
+                          ['colProvider', COL.provider],
+                          ['colSources', COL.sources],
+                          ['colMergeHeader', COL.mergeHeader],
+                        ] as const
+                      ).map(([key, colClass]) => (
+                        <span
+                          key={key}
+                          className={cn(
+                            colClass,
+                            'overflow-visible text-[10px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase'
+                          )}
                         >
-                          <TableCell className="py-1 text-center">
-                            <Checkbox
-                              checked={rule.enabled}
-                              onCheckedChange={() => toggleItem(index)}
-                            />
-                          </TableCell>
-                          <TableCell
-                            className="py-1"
-                            onDoubleClick={() => setEditingIndex(index)}
-                          >
-                            {editing ? (
-                              <Input
-                                autoFocus
-                                className="h-7 min-w-0 font-mono text-xs"
-                                value={rule.url}
-                                placeholder={t('aiConfig.placeholderUrl')}
-                                onChange={(e) => updateUrl(index, e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === 'Escape') {
-                                    setEditingIndex(null)
-                                  }
-                                }}
-                              />
-                            ) : (
+                          {t(`aiConfig.${key}`)}
+                        </span>
+                      ))}
+                      <span className={COL.actions} />
+                    </div>
+
+                    {rules.map((rule, index) => {
+                      const names = rule.sources
+                        .map((s) => s.name.trim())
+                        .filter(Boolean)
+                      const headers = rule.sources
+                        .map((s) => s.merge_header.trim())
+                        .filter(Boolean)
+                      return (
+                      <div
+                        key={index}
+                        data-match-hit={rowHit(rule, index) || undefined}
+                        className={cn(
+                          ROW_GRID,
+                          'group/row h-[34px] cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-foreground/[0.035]',
+                          rowHit(rule, index) &&
+                            'bg-ai-user-bubble/[0.08] shadow-[inset_2px_0_0_var(--ai-user-bubble)] hover:bg-ai-user-bubble/[0.12]'
+                        )}
+                        onClick={() => openEdit(index)}
+                      >
+                        <span
+                          className={COL.enabled}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Checkbox
+                            className={AI_CHECKBOX}
+                            checked={rule.enabled}
+                            onCheckedChange={() => toggleItem(index)}
+                          />
+                        </span>
+                        <span className={cn(COL.url, !rule.enabled && 'opacity-40')}>
+                          <Tooltip>
+                            <TooltipTrigger className="block w-full min-w-0">
                               <span className="block truncate font-mono text-xs">
-                                {rule.url || (
-                                  <span className="text-muted-foreground italic">
-                                    {t('aiConfig.placeholderUrl')}
-                                  </span>
-                                )}
+                                {rule.url}
                               </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="start" className="max-w-[420px] font-mono text-[11px] bg-popover text-popover-foreground">
+                              {rule.url}
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
+                        <span
+                          className={cn(
+                            COL.provider,
+                            'text-[11px] text-muted-foreground',
+                            !rule.enabled && 'opacity-40'
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'size-1.5 shrink-0 rounded-full',
+                              providerDotClass(rule.provider)
                             )}
-                          </TableCell>
-                          <TableCell
-                            className="py-1"
-                            onDoubleClick={() => setEditingIndex(index)}
-                          >
-                            {editing ? (
-                              <Select
-                                value={providerToSelect(rule.provider)}
-                                onValueChange={(v) => {
-                                  if (v) updateProvider(index, v)
+                          />
+                          <span className="truncate">
+                            {rule.provider ?? t('aiConfig.providerAuto')}
+                          </span>
+                        </span>
+                        <span
+                          className={cn(
+                            COL.sources,
+                            'text-[11px] text-muted-foreground',
+                            !rule.enabled && 'opacity-40'
+                          )}
+                        >
+                          {names.length === 0 ? (
+                            <span className="opacity-60">—</span>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger className="block min-w-0">
+                                <span className="flex items-center">
+                                  <span className="truncate">{names[0]}</span>
+                                  {names.length > 1 && (
+                                    <span className="ml-1 shrink-0 rounded-full bg-muted px-1 text-[9px]">
+                                      +{names.length - 1}
+                                    </span>
+                                  )}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" align="start" className="max-w-[360px] bg-popover text-popover-foreground">
+                                <div className="space-y-1 text-[11px]">
+                                  {rule.sources.map((s, si) => (
+                                    <div key={si}>
+                                      <span className="font-medium">{s.name.trim() || '—'}</span>
+                                      <span className="mx-1 text-muted-foreground">·</span>
+                                      <span className="font-mono opacity-70">{s.merge_header.trim() || '—'}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </span>
+                        <span
+                          className={cn(
+                            COL.mergeHeader,
+                            'truncate font-mono text-[11px]',
+                            !rule.enabled && 'opacity-40'
+                          )}
+                        >
+                          <Tooltip>
+                            <TooltipTrigger className="block min-w-0 truncate font-mono text-[11px] text-left w-full">
+                              {headers.length === 0 ? (
+                                <span className="text-muted-foreground opacity-60">—</span>
+                              ) : headers.length === 1 ? (
+                                headers[0]
+                              ) : (
+                                `${headers[0]} +${headers.length - 1}`
+                              )}
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="start" className="max-w-[360px] bg-popover text-popover-foreground">
+                              {headers.length > 0 ? (
+                                <div className="space-y-1 text-[11px]">
+                                  {rule.sources.map((s, si) => (
+                                    <div key={si}>
+                                      <span className="font-medium">{s.name.trim() || '—'}</span>
+                                      <span className="mx-1 text-muted-foreground">·</span>
+                                      <span className="font-mono opacity-70">{s.merge_header.trim() || '—'}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-[11px] opacity-70">{t('aiConfig.mergeHeaderGlobal')}</span>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
+                        <span className={cn(COL.actions, 'relative')}>
+                          {rowEligible(rule) && (
+                            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center transition-opacity group-hover/row:opacity-0">
+                              {hits[index] ? (
+                                <CheckIcon
+                                  className="size-3.5"
+                                  style={{ color: 'var(--badge-success)' }}
+                                />
+                              ) : (
+                                <XIcon className="size-3.5 text-muted-foreground/60" />
+                              )}
+                            </span>
+                          )}
+                          <Tooltip>
+                            <TooltipTrigger className="inline-flex">
+                              <button
+                                type="button"
+                                className="inline-flex size-[22px] items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors group-hover/row:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openEdit(index)
                                 }}
                               >
-                                <SelectTrigger className="h-7 w-full text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="openai">openai</SelectItem>
-                                  <SelectItem value="anthropic">
-                                    anthropic
-                                  </SelectItem>
-                                  <SelectItem value={PROVIDER_AUTO}>
-                                    {t('aiConfig.providerAuto')}
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <Badge variant="secondary" className="font-normal">
-                                {rule.provider ?? t('aiConfig.providerAuto')}
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-1 pr-1.5">
-                            <button
-                              type="button"
-                              onClick={() => removeItem(index)}
-                              className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                              title={t('aiConfig.delete')}
-                            >
-                              <Trash2Icon className="size-3.5" />
-                            </button>
-                          </TableCell>
-                        </TableRow>
+                                <PencilIcon className="size-3" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">{t('aiConfig.edit')}</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger className="inline-flex">
+                              <button
+                                type="button"
+                                className="inline-flex size-[22px] items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors group-hover/row:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  removeItem(index)
+                                }}
+                              >
+                                <Trash2Icon className="size-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">{t('aiConfig.delete')}</TooltipContent>
+                          </Tooltip>
+                        </span>
+                      </div>
                       )
                     })}
-                  </TableBody>
-                </Table>
+                    <MatchTestRow
+                      value={testUrl}
+                      onChange={setTestUrl}
+                      placeholder={t('matchTest.placeholder')}
+                      runLabel={t('matchTest.run')}
+                      onRun={runTest}
+                      hit={tested ? hitCount > 0 : null}
+                      title={
+                        tested
+                          ? hitCount > 0
+                            ? t('matchTest.hit', { n: hitCount })
+                            : t('matchTest.miss')
+                          : undefined
+                      }
+                    />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+              {/* 侧滑遮罩：点击关闭面板 */}
+              {editingPanel && (
+                <div
+                  className={cn(
+                    'absolute inset-0 z-10 bg-black/5',
+                    closingPanel ? 'animate-fade-out-overlay' : 'animate-fade-in-overlay'
+                  )}
+                  onClick={handleClosePanel}
+                />
+              )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('aiConfig.cancel')}
-          </Button>
-          <Button onClick={handleSave} disabled={loading || saving}>
-            {saving ? t('aiConfig.saving') : t('aiConfig.save')}
-          </Button>
-        </DialogFooter>
+              {/* 侧滑编辑面板 */}
+              {editingPanel && (
+                <div
+                  className={cn(
+                    'absolute inset-y-0 right-0 z-20 flex w-[min(88%,400px)] flex-col border-l-2 border-border bg-popover shadow-lg',
+                    closingPanel ? 'animate-slide-out-right' : 'animate-slide-in-right'
+                  )}
+                >
+                  <div className="flex-1 flex flex-col overflow-y-auto p-4">
+                    <RuleEditForm
+                      initial={editingRule}
+                      existingUrls={existingUrls}
+                      onConfirm={applyRule}
+                      onCancel={handleClosePanel}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* 列表视图显示底部按钮；编辑面板打开时仅隐藏但保留占位，防止弹窗高度收缩 */}
+          <DialogFooter className={editingPanel ? 'invisible' : ''}>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              {t('aiConfig.cancel')}
+              </Button>
+              <Button onClick={handleSave} disabled={loading || saving}>
+                {saving ? t('aiConfig.saving') : t('aiConfig.save')}
+              </Button>
+            </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   )

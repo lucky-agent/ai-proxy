@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useState } from 'react'
 import { ChevronRightIcon, PinIcon, PinOffIcon } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
@@ -60,9 +61,14 @@ export default function DomainSidebar({
                 : 'hover:bg-surface-elevated/50 text-muted-foreground'
             }`}
             onClick={() => onSelectDomain(host)}>
-            <span className="flex-1 truncate" title={host}>
-              {host}
-            </span>
+            <Tooltip>
+              <TooltipTrigger className="flex-1 truncate text-left">
+                <span>{host}</span>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="start" className="max-w-[320px] bg-popover text-popover-foreground text-[11px]">
+                {host}
+              </TooltipContent>
+            </Tooltip>
             <span className="text-muted-foreground tabular-nums text-[10px]">{count}</span>
             <button
               className="shrink-0 p-0 rounded hover:bg-surface-elevated/50 text-amber-500 transition-colors"

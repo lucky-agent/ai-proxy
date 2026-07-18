@@ -1,17 +1,89 @@
 import { SparklesIcon } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useTranslation } from 'react-i18next'
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { AiSidebar, type AiSelection } from './AiSidebar'
 import { ConversationBubble } from './ConversationBubble'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { usePanelRef } from 'react-resizable-panels'
 import type { AiConversation, AiSessionState, AiTurn } from '@/types/ai'
+import type { DetailPosition } from '@/features/bottom-bar'
+
+/** 会话元信息面板，在右侧/下方布局中复用 */
+function MetaPanel({ session }: { session: AiSessionState }) {
+  return (
+    <div className="text-xs text-muted-foreground space-y-2 min-w-0">
+      <div>
+        <span className="font-semibold text-foreground/70">Session</span><br />
+        <span className="break-all">{session.scopeHost || '—'}</span>
+      </div>
+      <div>
+        <span className="font-semibold text-foreground/70">分组依据</span><br />
+        <Tooltip>
+          <TooltipTrigger className="break-all text-left">
+            <span>{session.matchReason || '—'}</span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[360px] bg-popover text-popover-foreground text-[11px]">
+            {session.matchReason || '—'}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      <div>
+        <span className="font-semibold text-foreground/70">轮次</span><br />
+        {session.requestIds.length} 次请求
+      </div>
+      <div>
+        <span className="font-semibold text-foreground/70">Token（累加）</span><br />
+        Prompt: {session.usageTotal.promptTokens ?? '-'}<br />
+        Completion: {session.usageTotal.completionTokens ?? '-'}<br />
+        Total: {session.usageTotal.totalTokens ?? '-'}
+        {session.usageTotal.cachedTokens != null && (
+          <><br />Cached: {session.usageTotal.cachedTokens}</>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function renderConversation(
+  rendered: { turn: AiTurn; requestId: string }[],
+  selection: AiSelection,
+  reqIndex: Map<string, number>,
+  isStreamingReq: (requestId: string) => boolean,
+  mdSessions: Record<string, boolean>,
+  onJumpToProxy: ((requestId: string) => void) | undefined,
+  t: ReturnType<typeof useTranslation>['t'],
+): ReactNode {
+  if (rendered.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        {t('aiView.waiting', '等待归一化数据…')}
+      </div>
+    )
+  }
+  return rendered.map(({ turn, requestId }, i) => {
+    const idx = reqIndex.get(requestId)
+    const showLabel = !selection.requestId && idx != null
+    const isLast = i === rendered.length - 1
+    return (
+      <ConversationBubble
+        key={`${selection.sessionId}:${selection.requestId ?? 'all'}:${i}`}
+        turn={turn}
+        isStreaming={turn.role === 'assistant' && isLast && isStreamingReq(requestId)}
+        reqLabel={showLabel ? `#${idx}` : undefined}
+        onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
+        defaultView={mdSessions[selection.sessionId] ? 'md' : 'raw'}
+      />
+    )
+  })
+}
 
 interface AiViewProps {
   sessions: AiSessionState[]
   mergedTimeline: (sessionId: string) => { turn: AiTurn; requestId: string }[]
   conversationOf: (requestId: string) => AiConversation | undefined
   showSidebar: boolean
+  detailPosition: DetailPosition
   /** 点击气泡的跳转钮 → 切到代理视图并定位该请求。 */
   onJumpToProxy?: (requestId: string) => void
   /** 右键删除整个会话（仅前端移除） */
@@ -20,9 +92,15 @@ interface AiViewProps {
   onDeleteRequest: (sessionId: string, requestId: string) => void
 }
 
-export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, onJumpToProxy, onDeleteSession, onDeleteRequest }: AiViewProps) {
+export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, detailPosition, onJumpToProxy, onDeleteSession, onDeleteRequest }: AiViewProps) {
   const { t } = useTranslation()
   const [selection, setSelection] = useState<AiSelection | null>(null)
+
+  // 会话级 md 渲染开关：sessionId → 是否 md 渲染（默认 raw，不持久化）
+  const [mdSessions, setMdSessions] = useState<Record<string, boolean>>({})
+  const toggleMdSession = useCallback((sessionId: string) => {
+    setMdSessions((prev) => ({ ...prev, [sessionId]: !prev[sessionId] }))
+  }, [])
 
   const aiSidebarPanelRef = usePanelRef()
   useEffect(() => {
@@ -96,7 +174,7 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
     <ResizablePanelGroup orientation="horizontal" id="ai-view" className="h-full bg-surface-deep">
       <ResizablePanel id="ai-sidebar" defaultSize="22%" minSize="15%" maxSize="40%" collapsible collapsedSize={0} panelRef={aiSidebarPanelRef}>
         <div className="h-full overflow-hidden">
-          <AiSidebar sessions={sessions} selection={selection} onSelect={setSelection} onDeleteSession={handleDeleteSession} onDeleteRequest={handleDeleteRequest} />
+          <AiSidebar sessions={sessions} selection={selection} onSelect={setSelection} onDeleteSession={handleDeleteSession} onDeleteRequest={handleDeleteRequest} mdSessions={mdSessions} onToggleMd={toggleMdSession} />
         </div>
       </ResizablePanel>
 
@@ -104,55 +182,39 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
 
       <ResizablePanel id="ai-main" defaultSize="78%" minSize="60%">
         {selection && selectedSession ? (
-          <div className="flex h-full gap-2 p-4">
-            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-3">
-              {rendered.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  {t('aiView.waiting', '等待归一化数据…')}
+          <>
+            {/* 右侧元信息组件，三种布局复用 */}
+            {detailPosition === 'right' && (
+              <div className="flex h-full gap-2 p-4">
+                <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-3">
+                  {renderConversation(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t)}
                 </div>
-              ) : (
-                rendered.map(({ turn, requestId }, i) => {
-                  const idx = reqIndex.get(requestId)
-                  const showLabel = !selection.requestId && idx != null
-                  const isLast = i === rendered.length - 1
-                  return (
-                    <ConversationBubble
-                      key={i}
-                      turn={turn}
-                      isStreaming={turn.role === 'assistant' && isLast && isStreamingReq(requestId)}
-                      reqLabel={showLabel ? `#${idx}` : undefined}
-                      onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
-                    />
-                  )
-                })
-              )}
-            </div>
-
-            {/* 会话元信息侧栏 */}
-            <div className="w-56 flex-shrink-0 border-l border-border/40 pl-3 text-xs text-muted-foreground space-y-2">
-              <div>
-                <span className="font-semibold text-foreground/70">Session</span><br />
-                <span className="break-all">{selectedSession.scopeHost || '—'}</span>
+                <div className="w-56 flex-shrink-0 border-l border-border/40 pl-3">
+                  <MetaPanel session={selectedSession} />
+                </div>
               </div>
-              <div title={selectedSession.matchReason}>
-                <span className="font-semibold text-foreground/70">分组依据</span><br />
-                {selectedSession.matchReason || '—'}
+            )}
+            {detailPosition === 'bottom' && (
+              <ResizablePanelGroup orientation="vertical" id="ai-main-vertical" className="h-full">
+                <ResizablePanel id="conversation" defaultSize="65%" minSize="30%">
+                  <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto space-y-3 p-4">
+                    {renderConversation(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t)}
+                  </div>
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel id="meta" defaultSize="35%" minSize="10%" collapsible collapsedSize={0}>
+                  <div className="h-full overflow-y-auto p-4">
+                    <MetaPanel session={selectedSession} />
+                  </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            )}
+            {detailPosition === 'hidden' && (
+              <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto space-y-3 p-4">
+                {renderConversation(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t)}
               </div>
-              <div>
-                <span className="font-semibold text-foreground/70">轮次</span><br />
-                {selectedSession.requestIds.length} 次请求
-              </div>
-              <div>
-                <span className="font-semibold text-foreground/70">Token（累加）</span><br />
-                Prompt: {selectedSession.usageTotal.promptTokens ?? '-'}<br />
-                Completion: {selectedSession.usageTotal.completionTokens ?? '-'}<br />
-                Total: {selectedSession.usageTotal.totalTokens ?? '-'}
-                {selectedSession.usageTotal.cachedTokens != null && (
-                  <><br />Cached: {selectedSession.usageTotal.cachedTokens}</>
-                )}
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 bg-surface-deep text-muted-foreground">
             <SparklesIcon className="size-12 text-muted-foreground/30" />

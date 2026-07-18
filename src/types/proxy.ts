@@ -81,6 +81,10 @@ export type ProxyEvent =
       usage_total: AiUsage
       turn_count: number
       match_reason: string
+      /** 会话标题：来自首请求响应的 {"title": "..."}，无则缺省 */
+      title?: string
+      /** 来源归属：规则内 (来源, 合并头) 对的头命中时为对应来源名，无则缺省 */
+      source?: string
     }
 
 export interface ChunkRecord {
@@ -113,7 +117,6 @@ export interface TrafficEntry {
   responseContentType?: string
   responseContentLength?: number
   error: string | null
-  edited?: boolean
   decrypted?: boolean
   aiHint: AiHint
 }

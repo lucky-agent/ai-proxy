@@ -34,6 +34,13 @@ pub fn set_theme(
     };
     if let Some(window) = app_handle.get_webview_window("main") {
         window.set_theme(tauri_theme).map_err(|e| e.to_string())?;
+        // 拖拽窗口时 webview 重绘可能滞后于窗口边框，Native 背景色暴露为白色。
+        // 与 CSS 背景色同步避免拖拽边缘闪白（Windows 忽略 alpha 通道）。
+        let bg = match theme.as_str() {
+            "dark" => tauri::webview::Color(0x25, 0x25, 0x25, 0xff),
+            _ => tauri::webview::Color(0xfa, 0xfb, 0xfb, 0xff),
+        };
+        window.set_background_color(Some(bg)).map_err(|e| e.to_string())?;
     }
 
     Ok(theme)

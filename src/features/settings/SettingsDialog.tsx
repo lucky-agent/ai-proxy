@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Select as SelectPrimitive } from '@base-ui/react/select'
 import {
   Dialog,
   DialogContent,
@@ -29,9 +37,6 @@ interface Props {
 
 const inputClass =
   'h-auto w-full'
-
-const selectClass =
-  'h-auto w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 export default function SettingsDialog({ open, onOpenChange, theme, onThemeChange }: Props) {
   const { t, setLocale } = useLocale()
@@ -91,26 +96,32 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
               <span className="text-xs font-medium text-muted-foreground">
                 {t('settings.language')}
               </span>
-              <select
-                className={selectClass}
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as LocaleSetting)}>
-                <option value="system">{t('settings.languageSystem')}</option>
-                <option value="en">{t('settings.languageEn')}</option>
-                <option value="zh">{t('settings.languageZh')}</option>
-              </select>
+              <Select value={language} onValueChange={(v) => v && setLanguage(v as LocaleSetting)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectPrimitive.Portal>
+                  <SelectPrimitive.Positioner side="bottom" sideOffset={4} alignItemWithTrigger={false} collisionAvoidance={{ side: 'none' }} className="isolate z-50">
+                    <SelectPrimitive.Popup className="relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+                      <SelectPrimitive.List>
+                        <SelectItem value="system">{t('settings.languageSystem')}</SelectItem>
+                        <SelectItem value="en">{t('settings.languageEn')}</SelectItem>
+                        <SelectItem value="zh">{t('settings.languageZh')}</SelectItem>
+                      </SelectPrimitive.List>
+                    </SelectPrimitive.Popup>
+                  </SelectPrimitive.Positioner>
+                </SelectPrimitive.Portal>
+              </Select>
             </label>
             <div className="grid gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">
                 {t('settings.theme')}
               </span>
               <ToggleGroup
-                type="single"
                 value={[theme]}
                 onValueChange={(value) => {
                   if (value && value.length > 0) onThemeChange(value[0] as Theme)
                 }}
-                variant="outline"
                 size="sm"
                 className="w-fit rounded-md border border-border bg-surface-elevated/50 p-0.5">
                 {(
@@ -120,13 +131,19 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
                     { value: 'system' as Theme, icon: MonitorIcon },
                   ] as const
                 ).map(({ value, icon: Icon }) => (
-                  <ToggleGroupItem
-                    key={value}
-                    value={value}
-                    className="inline-flex size-7 items-center justify-center rounded-[4px] transition-colors cursor-pointer"
-                    title={t(`theme.${value}`)}>
-                    <Icon className="size-3.5" />
-                  </ToggleGroupItem>
+                  <Tooltip key={value}>
+                    <TooltipTrigger className="inline-flex">
+                      <ToggleGroupItem
+                        value={value}
+                        className="inline-flex size-7 items-center justify-center rounded-[4px] border border-transparent text-muted-foreground transition-colors cursor-pointer hover:text-foreground aria-pressed:border-ring/60 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm aria-pressed:hover:bg-background"
+                      >
+                        <Icon className="size-3.5" />
+                      </ToggleGroupItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+                      {t(`theme.${value}`)}
+                    </TooltipContent>
+                  </Tooltip>
                 ))}
               </ToggleGroup>
             </div>

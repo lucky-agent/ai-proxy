@@ -186,6 +186,8 @@ import { TitleBar } from '@/features/title-bar'
 - SSE 流式响应（`text/event-stream`）采用逐 chunk 透传模式，非流式响应会完整收集后转发
 - 错误处理不使用 anyhow，而是自建的 `bail!` / `anyhow!` 宏 + rama 的 `OpaqueError`
 - 新增业务组件放 `features/<区域>/`，公共组件放 `components/<类别>/`，跨 feature 复用逻辑放 `hooks/` 或 `lib/`
+- `src/components/ui/` 下的组件来自 shadcn/ui，**禁止修改**。需要额外功能时在业务组件中直接使用 Base UI 原语（`import { Select as SelectPrimitive } from '@base-ui/react/select'`）绕过 wrapper。
+- **禁止使用 `git checkout -- <file>` 还原文件** — 会丢失未提交的改动，只能通过手动编辑修复。
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
 

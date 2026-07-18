@@ -129,9 +129,6 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
         case 'time':
           cmp = a.requestTimestamp - b.requestTimestamp
           break
-       case 'edited':
-         cmp = (a.edited ? 1 : 0) - (b.edited ? 1 : 0)
-         break
         case 'ssl':
           cmp = (a.decrypted ? 1 : 0) - (b.decrypted ? 1 : 0)
           break

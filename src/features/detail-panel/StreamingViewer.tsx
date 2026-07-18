@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CopyIcon, CheckIcon, ChevronRight, ChevronDown, ListChecks } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Empty, EmptyTitle } from '@/components/ui/empty'
@@ -56,30 +57,48 @@ export default function StreamingViewer({ entry }: Props) {
   return (
     <Tabs value={tabValue} onValueChange={(v) => setView(v as ViewMode)} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <TabsList variant="line" className="shrink-0 justify-start border-b border-surface-elevated bg-surface-elevated/20 px-0 rounded-none">
-        <TabsTrigger
-          value="chunks"
-          className="text-[11px]"
-          title={`${chunkStats.count} ${t('detail.streamChunks')} · ${chunkStats.totalBytes} B`}
-        >
-          {t('detail.streamChunks')}
-        </TabsTrigger>
+        <Tooltip>
+          <TooltipTrigger className="inline-flex">
+            <TabsTrigger
+              value="chunks"
+              className="text-[11px]"
+            >
+              {t('detail.streamChunks')}
+            </TabsTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+            {chunkStats.count} {t('detail.streamChunks')} · {chunkStats.totalBytes} B
+          </TooltipContent>
+        </Tooltip>
         {isSse && (
-          <TabsTrigger
-            value="events"
-            className="text-[11px]"
-            title={`${sseEvents.length} ${t('detail.streamEvents')}`}
-          >
-            {t('detail.streamEvents')}
-          </TabsTrigger>
+          <Tooltip>
+            <TooltipTrigger className="inline-flex">
+              <TabsTrigger
+                value="events"
+                className="text-[11px]"
+              >
+                {t('detail.streamEvents')}
+              </TabsTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+              {sseEvents.length} {t('detail.streamEvents')}
+            </TooltipContent>
+          </Tooltip>
         )}
         {isSse && hasMerged && (
-          <TabsTrigger
-            value="merged"
-            className="text-[11px]"
-            title={`${mergedResult!.eventCount} ${t('detail.streamEvents')} → ${t('detail.streamMerged')}`}
-          >
-            {t('detail.streamMerged')}
-          </TabsTrigger>
+          <Tooltip>
+            <TooltipTrigger className="inline-flex">
+              <TabsTrigger
+                value="merged"
+                className="text-[11px]"
+              >
+                {t('detail.streamMerged')}
+              </TabsTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+              {mergedResult!.eventCount} {t('detail.streamEvents')} → {t('detail.streamMerged')}
+            </TooltipContent>
+          </Tooltip>
         )}
         {/* 合并选项：选中合并 Tab 时显示在同一行 */}
         {view === 'merged' && hasMerged && (
@@ -111,7 +130,7 @@ export default function StreamingViewer({ entry }: Props) {
           <Empty><EmptyTitle>{t('detail.noStreamData')}</EmptyTitle></Empty>
         ) : (
           chunks.map((chunk, idx) => (
-            <ChunkItem key={idx} index={idx} data={chunk.data} totalChunks={chunks.length} />
+            <ChunkItem key={idx} index={idx} data={chunk.data} />
           ))
         )}
         </ScrollArea>
@@ -151,12 +170,19 @@ function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: T
   return (
     <div className="flex flex-col h-full">
       <div className="relative min-h-0 flex-1 group">
-        <button
-          onClick={() => copy(result.formatted)}
-          className="absolute right-1.5 top-1.5 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-surface-elevated/50 transition-all group-hover:opacity-100"
-          title={copied ? t('detail.copied') : t('detail.copyUri')}>
-          {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
-        </button>
+        <Tooltip>
+          <TooltipTrigger className="absolute right-1.5 top-1.5 z-10">
+            <button
+              onClick={() => copy(result.formatted)}
+              className="rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-surface-elevated/50 transition-all group-hover:opacity-100"
+            >
+              {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
+            {copied ? t('detail.copied') : t('detail.copyUri')}
+          </TooltipContent>
+        </Tooltip>
         {/* Token — 右下角固定 */}
         <div className="absolute bottom-1.5 right-2 z-10 flex items-center gap-1.5 rounded bg-background/70 px-1.5 py-0.5 text-[10px] text-muted-foreground/60 tabular-nums backdrop-blur-sm select-none">
           <span>
@@ -184,15 +210,12 @@ function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: T
 function ChunkItem({
   index,
   data,
-  totalChunks,
 }: {
   index: number
   data: string
-  totalChunks: number
 }) {
   const [expanded, setExpanded] = useState(false)
   const trimmed = data.replace(/\n$/, '')
-  const isLast = index === totalChunks - 1
   // Detect [DONE] marker
   const isDone = trimmed.trim() === '[DONE]'
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { ShieldCheckIcon, ShieldOffIcon } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useLocale } from '@/hooks/useLocale'
 import type { SslConfig } from '@/types/settings'
 
@@ -30,28 +31,34 @@ export function SslToolbar({ onOpenFullConfig }: Props) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        if (sslConfig.enabled) {
-          toggleGlobal()
-        } else {
-          onOpenFullConfig()
-        }
-      }}
-      title={t('sslConfig.globalToggle')}
-      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
-        sslConfig.enabled
-          ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
-          : 'bg-surface-elevated text-muted-foreground hover:bg-surface-elevated/80'
-      }`}
-    >
-      {sslConfig.enabled ? (
-        <ShieldCheckIcon className="size-3" />
-      ) : (
-        <ShieldOffIcon className="size-3" />
-      )}
-      {t('sslConfig.toolbarToggle')}
-    </button>
+    <Tooltip>
+      <TooltipTrigger className="inline-flex">
+        <button
+          type="button"
+          onClick={() => {
+            if (sslConfig.enabled) {
+              toggleGlobal()
+            } else {
+              onOpenFullConfig()
+            }
+          }}
+          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
+            sslConfig.enabled
+              ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
+              : 'bg-surface-elevated text-muted-foreground hover:bg-surface-elevated/80'
+          }`}
+        >
+          {sslConfig.enabled ? (
+            <ShieldCheckIcon className="size-3" />
+          ) : (
+            <ShieldOffIcon className="size-3" />
+          )}
+          {t('sslConfig.toolbarToggle')}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+        {t('sslConfig.globalToggle')}
+      </TooltipContent>
+    </Tooltip>
   )
 }

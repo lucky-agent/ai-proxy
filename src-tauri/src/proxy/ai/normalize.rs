@@ -89,3 +89,96 @@ pub(crate) struct AiConversation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub finish_reason: Option<String>,
 }
+
+/// 从响应 conversation 提取会话标题：
+/// 第一条 assistant turn 的文本若为 `{"title": "..."}` JSON，返回 title。
+/// 供会话表在首请求响应定稿时命名会话。
+pub(crate) fn extract_title(conv: &AiConversation) -> Option<String> {
+    let turn = conv.turns.iter().find(|t| t.role == "assistant")?;
+    let mut text = String::new();
+    for block in &turn.content {
+        if let AiContentBlock::Text { text: t } = block {
+            text.push_str(t);
+        }
+    }
+    let value: serde_json::Value = serde_json::from_str(strip_code_fence(text.trim())).ok()?;
+    let title = value.as_object()?.get("title")?.as_str()?.trim();
+    (!title.is_empty()).then(|| title.to_string())
+}
+
+/// 剥掉包裹全文的 ``` / ```json 代码栅栏（部分模型会包一层）；不匹配时原样返回。
+fn strip_code_fence(s: &str) -> &str {
+    let Some(rest) = s.strip_prefix("```").and_then(|r| r.strip_suffix("```")) else {
+        return s;
+    };
+    // 首行可能是语言标记（json 等），跳过到首个换行
+    match rest.find('\n') {
+        Some(i) => rest[i + 1..].trim(),
+        None => rest.trim(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn conv(turns: Vec<AiTurn>) -> AiConversation {
+        AiConversation {
+            provider: "openai".to_string(),
+            turns,
+            streaming: false,
+            model: None,
+            usage: None,
+            finish_reason: None,
+        }
+    }
+
+    fn assistant_text(text: &str) -> AiTurn {
+        AiTurn::new("assistant", vec![AiContentBlock::text(text)])
+    }
+
+    #[test]
+    fn extracts_plain_title_json() {
+        let c = conv(vec![assistant_text(r#"{"title": "调整气泡背景颜色搭配"}"#)]);
+        assert_eq!(extract_title(&c).as_deref(), Some("调整气泡背景颜色搭配"));
+    }
+
+    #[test]
+    fn extracts_fenced_title_json() {
+        let c = conv(vec![assistant_text("```json\n{\"title\": \"标题\"}\n```")]);
+        assert_eq!(extract_title(&c).as_deref(), Some("标题"));
+        let c = conv(vec![assistant_text("```\n{\"title\": \"标题\"}\n```")]);
+        assert_eq!(extract_title(&c).as_deref(), Some("标题"));
+    }
+
+    #[test]
+    fn tolerates_extra_keys_and_whitespace() {
+        let c = conv(vec![assistant_text(
+            "  {\"title\": \" 标题 \", \"emoji\": \"🎨\"}  ",
+        )]);
+        assert_eq!(extract_title(&c).as_deref(), Some("标题"));
+    }
+
+    #[test]
+    fn rejects_non_title_responses() {
+        // 普通文本
+        assert_eq!(extract_title(&conv(vec![assistant_text("你好！有什么可以帮你？")])), None);
+        // title 为空串
+        assert_eq!(extract_title(&conv(vec![assistant_text(r#"{"title": ""}"#)])), None);
+        // title 非字符串
+        assert_eq!(extract_title(&conv(vec![assistant_text(r#"{"title": 42}"#)])), None);
+        // 顶层非对象
+        assert_eq!(extract_title(&conv(vec![assistant_text(r#"["title"]"#)])), None);
+        // 无 assistant turn
+        assert_eq!(extract_title(&conv(vec![])), None);
+    }
+
+    #[test]
+    fn only_first_assistant_turn_is_considered() {
+        let c = conv(vec![
+            assistant_text("普通回复"),
+            assistant_text(r#"{"title": "后来的标题"}"#),
+        ]);
+        assert_eq!(extract_title(&c), None);
+    }
+}

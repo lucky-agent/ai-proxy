@@ -67,7 +67,15 @@ impl Store {
             .format(|out, message, record| {
                 out.finish(format_args!(
                     "[{}][{}] {}",
-                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+                    time::OffsetDateTime::now_local()
+                        .unwrap_or_else(|_| time::OffsetDateTime::now_utc())
+                        .format(
+                            &time::format_description::parse(
+                                "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]",
+                            )
+                            .expect("valid time format description"),
+                        )
+                        .unwrap_or_else(|e| format!("?? {e}")),
                     record.level(),
                     message
                 ))

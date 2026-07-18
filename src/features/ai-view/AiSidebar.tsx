@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { MessageSquareIcon, ChevronRight, ChevronDown, Trash2Icon } from 'lucide-react'
+import { MessageSquareIcon, ChevronRight, ChevronDown, Trash2Icon, CodeIcon, TextIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -24,6 +25,9 @@ interface AiSidebarProps {
   onSelect: (sel: AiSelection) => void
   onDeleteSession: (sessionId: string) => void
   onDeleteRequest: (sessionId: string, requestId: string) => void
+  /** sessionId → 是否 md 渲染 */
+  mdSessions: Record<string, boolean>
+  onToggleMd: (sessionId: string) => void
 }
 
 /** 归组依据 → 短标签 */
@@ -40,12 +44,16 @@ function SessionGroup({
   onSelect,
   onDeleteSession,
   onDeleteRequest,
+  mdSessions,
+  onToggleMd,
 }: {
   session: AiSessionState
   selection: AiSelection | null
   onSelect: (sel: AiSelection) => void
   onDeleteSession: (sessionId: string) => void
   onDeleteRequest: (sessionId: string, requestId: string) => void
+  mdSessions: Record<string, boolean>
+  onToggleMd: (sessionId: string) => void
 }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(true)
@@ -77,10 +85,34 @@ function SessionGroup({
               <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400 border-violet-500/20">
                 {reasonLabel(session.matchReason)}
               </span>
+              {session.source && (
+                <Tooltip>
+                  <TooltipTrigger className="inline-flex">
+                    <span className="max-w-24 truncate text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-500 border-sky-500/20 dark:text-sky-400">
+                      {session.source}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[320px] bg-popover text-popover-foreground text-[11px]">
+                    {session.source}
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <span className="text-[10px] text-muted-foreground/60">{session.requestIds.length} 轮</span>
+              <span
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleMd(session.sessionId)
+                }}
+                className={cn(
+                  'ml-auto rounded p-0.5 transition-colors hover:bg-surface-base cursor-pointer',
+                  mdSessions[session.sessionId] ? 'text-violet-400' : 'text-muted-foreground/40 hover:text-muted-foreground',
+                )}
+              >
+                {mdSessions[session.sessionId] ? <CodeIcon className="size-3" /> : <TextIcon className="size-3" />}
+              </span>
             </div>
             <p className="text-[11px] text-foreground/80 truncate leading-tight">
-              {session.scopeHost || session.sessionId}
+              {session.title || session.scopeHost || session.sessionId}
             </p>
             <p className="text-[10px] text-muted-foreground/50 mt-0.5">
               {total != null ? `Σ ${total} tokens` : '— tokens'}
@@ -128,7 +160,7 @@ function SessionGroup({
   )
 }
 
-export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDeleteRequest }: AiSidebarProps) {
+export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDeleteRequest, mdSessions, onToggleMd }: AiSidebarProps) {
   const { t } = useTranslation()
 
   return (
@@ -158,6 +190,8 @@ export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDe
                 onSelect={onSelect}
                 onDeleteSession={onDeleteSession}
                 onDeleteRequest={onDeleteRequest}
+                mdSessions={mdSessions}
+                onToggleMd={onToggleMd}
               />
             ))}
           </div>

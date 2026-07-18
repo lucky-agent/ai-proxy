@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { CheckIcon, CopyIcon } from 'lucide-react'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 
 const MIN_KEY_RATIO = 0.15
@@ -113,36 +114,43 @@ function KeyValueRow({ entryKey, value }: { entryKey: string; value: string }) {
         {entryKey}
       </TableCell>
       <TableCell className="py-1.5 pr-2 align-top text-foreground/80 text-sm break-all relative">
-        <span
-          onClick={handleClick}
-          className="cursor-pointer"
-          title={
-            valueCopied
+        <Tooltip>
+          <TooltipTrigger className="cursor-pointer">
+            <span onClick={handleClick}>
+              {value}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+            {valueCopied
               ? 'Copied value'
               : rowCopied
                 ? 'Copied key: value'
-                : 'Click to copy value, double-click to copy key: value'
-          }>
-          {value}
-        </span>
-        <button
-          onClick={handleClick}
-          className="absolute right-0 top-0 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all opacity-0 group-hover:opacity-100"
-          title={
-            valueCopied
+                : 'Click to copy value, double-click to copy key: value'}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger className="absolute right-0 top-0 inline-flex">
+            <button
+              onClick={handleClick}
+              className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all opacity-0 group-hover:opacity-100"
+            >
+              {rowCopied ? (
+                <CheckIcon className="size-3 text-primary" />
+              ) : valueCopied ? (
+                <CheckIcon className="size-3 text-primary" />
+              ) : (
+                <CopyIcon className="size-3" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+            {valueCopied
               ? 'Copied value'
               : rowCopied
                 ? 'Copied key: value'
-                : 'Click: copy value, DblClick: copy key: value'
-          }>
-          {rowCopied ? (
-            <CheckIcon className="size-3 text-primary" />
-          ) : valueCopied ? (
-            <CheckIcon className="size-3 text-primary" />
-          ) : (
-            <CopyIcon className="size-3" />
-          )}
-        </button>
+                : 'Click: copy value, DblClick: copy key: value'}
+          </TooltipContent>
+        </Tooltip>
       </TableCell>
     </TableRow>
   )

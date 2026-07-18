@@ -1,5 +1,6 @@
 import { useState, useMemo, memo } from 'react'
 import { CheckIcon, CopyIcon, ChevronDown, ChevronRight, ArrowLeftToLine, TextWrap } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { useTheme } from '@/hooks/useTheme'
 import { useShiki } from '@/hooks/useShiki'
@@ -133,49 +134,59 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
     <div className="flex flex-col h-full">
       <div className="relative min-h-0 flex-1 group/mini">
         <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 opacity-0 group-hover/mini:opacity-100 transition-all">
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value as typeof format)}
-            className="appearance-none rounded bg-surface-elevated/30 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors cursor-pointer outline-none border border-surface-elevated/30"
-            title="Format">
-            <option value="auto">Auto</option>
-            <option value="json">JSON</option>
-            <option value="xml">XML</option>
-            <option value="html">HTML</option>
-            <option value="plaintext">Text</option>
-          </select>
-          <button
-            onClick={() => setWrapped(w => !w)}
-            className={`rounded p-1 transition-colors ${
-              wrapped
-                ? 'text-foreground bg-surface-elevated/50'
-                : 'text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30'
-            }`}
-            title={wrapped ? 'Disable wrap' : 'Enable wrap'}>
-            {wrapped ? <ArrowLeftToLine className="size-3" /> : <TextWrap className="size-3" />}
-          </button>
+          <Tooltip>
+            <TooltipTrigger className="inline-flex">
+              <button
+                onClick={() => setWrapped(w => !w)}
+                className={`rounded p-1 transition-colors ${
+                  wrapped
+                    ? 'text-foreground bg-surface-elevated/50'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30'
+                }`}
+              >
+                {wrapped ? <ArrowLeftToLine className="size-3" /> : <TextWrap className="size-3" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
+              {wrapped ? 'Disable wrap' : 'Enable wrap'}
+            </TooltipContent>
+          </Tooltip>
           {useTreeView && (
-            <button
-              onClick={allExpanded ? () => setAllExpanded(false) : () => setAllExpanded(true)}
-              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30 transition-colors"
-              title={allExpanded ? 'Collapse all' : 'Expand all'}>
-              {allExpanded ? (
-                <ChevronDown className="size-3" />
-              ) : (
-                <ChevronRight className="size-3" />
-              )}
-            </button>
+            <Tooltip>
+              <TooltipTrigger className="inline-flex">
+                <button
+                  onClick={allExpanded ? () => setAllExpanded(false) : () => setAllExpanded(true)}
+                  className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30 transition-colors"
+                >
+                  {allExpanded ? (
+                    <ChevronDown className="size-3" />
+                  ) : (
+                    <ChevronRight className="size-3" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
+                {allExpanded ? 'Collapse all' : 'Expand all'}
+              </TooltipContent>
+            </Tooltip>
           )}
-          <button
-            onClick={() => copy(displayBody)}
-            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30 transition-colors"
-            title={copied ? 'Copied' : 'Copy body'}>
-            {copied ? (
-              <CheckIcon className="size-3 text-primary" />
-            ) : (
-              <CopyIcon className="size-3" />
-            )}
-          </button>
+          <Tooltip>
+            <TooltipTrigger className="inline-flex">
+              <button
+                onClick={() => copy(displayBody)}
+                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30 transition-colors"
+              >
+                {copied ? (
+                  <CheckIcon className="size-3 text-primary" />
+                ) : (
+                  <CopyIcon className="size-3" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
+              {copied ? 'Copied' : 'Copy body'}
+            </TooltipContent>
+          </Tooltip>
         </div>
         <div className="absolute inset-0 overflow-auto">
           {useTreeView && parsedJson ? (

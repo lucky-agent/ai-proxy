@@ -41,6 +41,12 @@ export function useAiSessions() {
   const sessionsRef = useRef<Map<string, AiSessionState>>(new Map())
   /** requestId → sessionId，便于 AiNormalized 快速定位所属会话 */
   const reqToSessionRef = useRef<Map<string, string>>(new Map())
+  /**
+   * requestId → 请求侧 turns 缓存。后端仅在请求侧首发与定稿快照携带
+   * request_turns（流式节流增量为空数组，省去后端热路径克隆/序列化），
+   * 前端在此缓存首发值供增量快照合并复用。
+   */
+  const reqTurnsRef = useRef<Map<string, AiTurn[]>>(new Map())
   const [, setTick] = useState(0)
 
   // rAF 合批：流式高频 AiNormalized 落同一帧刷新
@@ -61,10 +67,14 @@ export function useAiSessions() {
         map.set(event.session_id, {
           sessionId: event.session_id,
           scopeHost: event.scope_host,
+          // 后端某次事件缺 title 字段时不闪回旧值
+          title: event.title ?? prev?.title,
           requestIds: event.request_ids,
           usageTotal: event.usage_total ?? EMPTY_USAGE,
           turnCount: event.turn_count,
           matchReason: event.match_reason,
+          // 来源归属同 title：缺省时保留已确认的值
+          source: event.source ?? prev?.source,
           conversations: prev?.conversations ?? {},
         })
         for (const rid of event.request_ids) {
@@ -89,9 +99,13 @@ export function useAiSessions() {
           map.set(sid, sess)
         }
         // 合并：请求 messages（历史）+ 响应对话（assistant 回复）为一次完整对话
+        if (event.request_turns.length > 0) {
+          reqTurnsRef.current.set(event.id, event.request_turns)
+        }
+        const requestTurns = reqTurnsRef.current.get(event.id) ?? event.request_turns
         const fullConv: AiConversation = {
           ...event.conversation,
-          turns: [...event.request_turns, ...event.conversation.turns],
+          turns: [...requestTurns, ...event.conversation.turns],
         }
         sess.conversations = { ...sess.conversations, [event.id]: fullConv }
         if (!sess.requestIds.includes(event.id)) {
@@ -109,7 +123,10 @@ export function useAiSessions() {
   const removeSession = useCallback((sessionId: string) => {
     const sess = sessionsRef.current.get(sessionId)
     if (!sess) return
-    for (const rid of sess.requestIds) reqToSessionRef.current.delete(rid)
+    for (const rid of sess.requestIds) {
+      reqToSessionRef.current.delete(rid)
+      reqTurnsRef.current.delete(rid)
+    }
     sessionsRef.current.delete(sessionId)
     scheduleUpdate()
   }, [scheduleUpdate])
@@ -119,6 +136,7 @@ export function useAiSessions() {
     const sess = sessionsRef.current.get(sessionId)
     if (!sess) return
     reqToSessionRef.current.delete(requestId)
+    reqTurnsRef.current.delete(requestId)
     const rest = sess.requestIds.filter((rid) => rid !== requestId)
     if (rest.length === 0) {
       sessionsRef.current.delete(sessionId)

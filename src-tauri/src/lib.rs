@@ -10,12 +10,14 @@ use tauri::{Emitter, Manager, RunEvent};
 
 use crate::commands::load_traffic_history;
 use crate::commands::resend_request;
+use crate::commands::open_url;
 use crate::commands::{
-    get_collections, get_locale, get_script_config, get_settings, get_ssl_config, get_status,
+    get_collections, get_locale, get_script_config, get_script_content, get_settings, get_ssl_config, get_status,
     get_theme, create_collection, create_folder, create_request, delete_node, rename_node,
-    move_node, save_request, duplicate_request, save_script_config, save_settings, save_ssl_config, set_locale,
+    move_node, save_request, duplicate_request, save_script_config, save_script_content, save_settings, save_ssl_config, set_locale,
+    set_script_enabled, set_ssl_enabled,
     set_theme, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
-    get_ai_config, save_ai_config,
+    get_ai_config, save_ai_config, test_rule_match,
 };
 use crate::config::{Settings, Store};
 
@@ -68,6 +70,15 @@ fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             _ => None,
         };
         window.set_theme(tauri_theme).ok();
+
+        // 与 CSS 背景色同步，避免拖拽窗口时 webview 重绘滞后露出白色边缘
+        let is_dark = window.theme().is_ok_and(|t| matches!(t, tauri::Theme::Dark));
+        let bg = if is_dark {
+            tauri::webview::Color(0x25, 0x25, 0x25, 0xff)
+        } else {
+            tauri::webview::Color(0xfa, 0xfb, 0xfb, 0xff)
+        };
+        window.set_background_color(Some(bg)).ok();
     }
     tray::setup_tray(app, ui.tray_locale())?;
     Ok(())
@@ -94,8 +105,11 @@ fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
 pub fn run() {
     // 诊断探针：Windows GUI 应用的 panic 默认只打 stderr（无处可看）。
     // 钩子把 panic 位置与信息写入日志文件，用于排查静默任务死亡/锁毒化。
-    std::panic::set_hook(Box::new(|info| {
+    // 同时链回默认 hook：logger 未挂载时（setup 早期）panic 仍可见于 stderr。
+    let default_panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
         log::error!("[panic] {info}");
+        default_panic_hook(info);
     }));
 
     // 排查上游转发偶发永久卡死：绕开 rama 在 Windows 上默认的原生
@@ -110,17 +124,24 @@ pub fn run() {
 
     let app = tauri::Builder::default()
         .setup(app_setup)
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
             start_proxy,
             stop_proxy,
             get_status,
+            open_url,
             get_ssl_config,
             save_ssl_config,
+            set_ssl_enabled,
             get_ai_config,
             save_ai_config,
+            test_rule_match,
             get_script_config,
             save_script_config,
+            set_script_enabled,
+            get_script_content,
+            save_script_content,
             get_theme,
             set_theme,
             get_settings,
@@ -156,6 +177,7 @@ pub fn run() {
                 if let Some(tx) = state.take_shutdown_signal() {
                     tx.send(()).ok();
                 }
+                state.db().shutdown();
             }
         }
     });

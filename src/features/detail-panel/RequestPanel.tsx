@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TrafficEntry } from '@/types/proxy'
 import SidePanel, { type PanelTab, type TabDef } from './components/SidePanel'

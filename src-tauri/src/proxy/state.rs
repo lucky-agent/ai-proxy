@@ -1,16 +1,11 @@
 use crate::proxy::ai::session::SessionStore;
 use crate::proxy::events::ProxyEvent;
-use crate::utils::domain_match::domain_match;
 use rama::extensions::Extension;
-use rama::http::Method;
-use rama::net::uri::Uri;
 use rama::tls::server::TlsServerConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Instant;
 use tauri::ipc::Channel;
 use tokio::sync::oneshot;
-use uuid::Uuid;
 
 use crate::config::db::Db;
 use crate::config::{Settings, Store};
@@ -22,6 +17,8 @@ pub(crate) struct State {
     event_channel: Arc<RwLock<Option<Channel<ProxyEvent>>>>,
     /// 跨请求 AI 会话表（内存，不持久化）。
     sessions: Arc<Mutex<SessionStore>>,
+    /// DB 连接（解密流量的 traffic_log 持久化）。
+    db: Arc<Db>,
 }
 
 impl std::fmt::Debug for State {
@@ -29,6 +26,7 @@ impl std::fmt::Debug for State {
         f.debug_struct("State")
             .field("mitm_tls_service_data", &self.mitm_tls_service_data)
             .field("settings", &self.read_settings)
+            .field("db", &"<Db>")
             .finish()
     }
 }
@@ -36,11 +34,16 @@ impl std::fmt::Debug for State {
 #[derive(Debug, Clone, Copy, Extension)]
 pub(crate) struct ViaConnectTunnel;
 
+/// 请求入口时间戳（毫秒），由 `http_connect_proxy` 注入，MITM 路径消费。
+#[derive(Debug, Clone, Copy, Extension)]
+pub(crate) struct StartTime(pub i64);
+
 impl State {
     pub(crate) fn new(
         mitm_tls_service_data: TlsServerConfig,
         read_settings: Arc<RwLock<Settings>>,
         event_channel: Arc<RwLock<Option<Channel<ProxyEvent>>>>,
+        db: Arc<Db>,
     ) -> Self {
         let max_sessions = read_settings
             .read()
@@ -51,6 +54,7 @@ impl State {
             read_settings,
             event_channel,
             sessions: Arc::new(Mutex::new(SessionStore::new(max_sessions))),
+            db,
         }
     }
 
@@ -59,12 +63,17 @@ impl State {
         self.sessions.clone()
     }
 
+    /// 访问 DB 连接（用于解密流量持久化）。
+    pub(crate) fn db(&self) -> Arc<Db> {
+        self.db.clone()
+    }
+
     pub(crate) fn mitm_tls_service_data(&self) -> &TlsServerConfig {
         &self.mitm_tls_service_data
     }
 
-    /// 按域名匹配加载已启用脚本的内容
-    pub(crate) fn get_scripts(&self, host: &str) -> Vec<String> {
+    /// 按域名 + HTTP 方法匹配加载已启用脚本的内容
+    pub(crate) fn get_scripts(&self, host: &str, method: &str) -> Vec<String> {
         let settings = self.settings();
         let config = &settings.script;
         let Some(ref dir) = config.scripts_dir else {
@@ -73,7 +82,7 @@ impl State {
         config
             .scripts
             .iter()
-            .filter(|item| item.enabled && !item.file_name.is_empty() && domain_match(&item.domain, host))
+            .filter(|item| item.matches(host, method))
             .filter_map(|item| {
                 let path = dir.join(&item.file_name);
                 match std::fs::read_to_string(&path) {
@@ -177,96 +186,5 @@ impl AppState {
 
     pub(crate) fn settings(&self) -> Settings {
         self.settings.read().expect("lock").clone()
-    }
-}
-
-/// Shared context for a single proxy request.
-pub(crate) struct ProxyCtx {
-    request_id: String,
-    method: Method,
-    uri: Uri,
-    start_time: Instant,
-    sender: Option<Channel<ProxyEvent>>,
-    settings: crate::config::Settings,
-    /// AI 会话表（proxy 流量有；resend 等场景为 None）。
-    sessions: Option<Arc<Mutex<SessionStore>>>,
-    /// 请求侧归一化判定出的 (provider, session_id, 请求 turns)，供响应侧消费。
-    ai_req: Arc<Mutex<Option<(crate::proxy::ai::Provider, String, Vec<crate::proxy::ai::AiTurn>)>>>,
-}
-
-impl ProxyCtx {
-    pub(crate) fn new(
-        method: Method,
-        uri: Uri,
-        sender: Option<Channel<ProxyEvent>>,
-        settings: crate::config::Settings,
-    ) -> Self {
-        Self {
-            request_id: Uuid::new_v4().to_string(),
-            method,
-            uri,
-            start_time: Instant::now(),
-            sender,
-            settings,
-            sessions: None,
-            ai_req: Arc::new(Mutex::new(None)),
-        }
-    }
-
-    /// 附加 AI 会话表（proxy 转发路径调用）。
-    pub(crate) fn with_sessions(mut self, sessions: Arc<Mutex<SessionStore>>) -> Self {
-        self.sessions = Some(sessions);
-        self
-    }
-
-    pub(crate) fn sessions(&self) -> Option<&Arc<Mutex<SessionStore>>> {
-        self.sessions.as_ref()
-    }
-
-    /// 请求侧登记归一化判定结果。
-    pub(crate) fn set_ai_req(
-        &self,
-        provider: crate::proxy::ai::Provider,
-        session_id: String,
-        request_turns: Vec<crate::proxy::ai::AiTurn>,
-    ) {
-        *self.ai_req.lock().expect("ai_req lock") = Some((provider, session_id, request_turns));
-    }
-
-    /// 响应侧读取请求侧判定结果。
-    pub(crate) fn ai_req(
-        &self,
-    ) -> Option<(crate::proxy::ai::Provider, String, Vec<crate::proxy::ai::AiTurn>)> {
-        self.ai_req.lock().expect("ai_req lock").clone()
-    }
-
-    pub(crate) fn request_id(&self) -> &str {
-        &self.request_id
-    }
-
-    pub(crate) fn method(&self) -> &Method {
-        &self.method
-    }
-
-    pub(crate) fn uri(&self) -> &Uri {
-        &self.uri
-    }
-
-    pub(crate) fn sender(&self) -> &Option<Channel<ProxyEvent>> {
-        &self.sender
-    }
-
-    pub(crate) fn settings(&self) -> &crate::config::Settings {
-        &self.settings
-    }
-
-    pub(crate) fn duration_ms(&self) -> u64 {
-        self.start_time.elapsed().as_millis() as u64
-    }
-
-    pub(crate) fn send(&self, event: ProxyEvent) {
-        if let Some(ref ch) = self.sender {
-            ch.send(event).ok();
-        }
     }
 }

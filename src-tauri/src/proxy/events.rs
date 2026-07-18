@@ -67,6 +67,8 @@ pub(crate) enum ProxyEvent {
         session_id: String,
         provider: String,
         /// 该次请求的 messages（system/user/assistant 历史），供前端渲染完整对话。
+        /// 仅请求侧首发与定稿快照携带；流式节流增量为空数组
+        /// （前端 useAiSessions 按 requestId 缓存首发值）。
         request_turns: Vec<crate::proxy::ai::AiTurn>,
         /// 该次响应归一化对话（assistant 回复）。
         conversation: AiConversation,
@@ -81,5 +83,11 @@ pub(crate) enum ProxyEvent {
         turn_count: u32,
         /// 归组依据：`header:<name>` / `prefix` / `new`。
         match_reason: String,
+        /// 会话标题：来自首请求响应的 `{"title": "..."}`，无则缺省。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        /// 来源归属：规则内 (来源, 合并头) 对的头命中时为对应来源名，无则缺省。
+        #[serde(skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
     },
 }

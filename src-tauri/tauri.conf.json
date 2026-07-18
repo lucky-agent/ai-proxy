@@ -16,14 +16,15 @@
         "title": "AI Proxy",
         "decorations": false,
         "dragDropEnabled": false,
-        "width": 1000,
-        "height": 650,
-        "minWidth": 900,
+        "width": 1200,
+        "height": 780,
+        "minWidth": 1024,
         "minHeight": 600,
         "visible": false,
         "resizable": true,
         "fullscreen": false,
-        "center": true
+        "center": true,
+        "backgroundColor": "#fafbfb"
       }
     ],
     "security": {

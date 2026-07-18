@@ -12,6 +12,7 @@ import {
 import { useLocale } from '@/hooks/useLocale'
 import { cn } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 export type DetailPosition = 'bottom' | 'right' | 'hidden'
 
@@ -62,83 +63,111 @@ export function BottomBar({
     <div className="flex h-7 shrink-0 items-center bg-surface-deep select-none px-2 relative">
       <Separator orientation="horizontal" className="absolute top-0 left-0 right-0" />
       {/* Left: host sidebar toggle */}
-      <button
-        type="button"
-        onClick={onToggleSidebar}
-        className={cn(
-          'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
-          showSidebar
-            ? 'bg-surface-elevated text-foreground'
-            : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
-        )}
-        title={t('layout.hostSidebar')}>
-        {showSidebar && (
-          <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-foreground/70" />
-        )}
-        {showSidebar ? (
-          <LayoutSidebarOn className="size-4" />
-        ) : (
-          <LayoutSidebarOff className="size-4" />
-        )}
-      </button>
+<Tooltip>
+          <TooltipTrigger className="inline-flex">
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className={cn(
+                'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
+                showSidebar
+                  ? 'bg-surface-elevated text-foreground'
+                  : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+              )}
+            >
+              {showSidebar && (
+                <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-foreground/70" />
+              )}
+              {showSidebar ? (
+                <LayoutSidebarOn className="size-4" />
+              ) : (
+                <LayoutSidebarOff className="size-4" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+            {t('layout.hostSidebar')}
+          </TooltipContent>
+        </Tooltip>
 
       {/* Spacer */}
       <div className="flex-1" />
 
       {/* Center-right: script toggle */}
-      <button
-        type="button"
-        onClick={onToggleScript}
-        className={cn(
-          'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
-          scriptEnabled
-            ? 'bg-emerald-500/15 text-emerald-400'
-            : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
-        )}
-        title={t('scriptConfig.globalToggle')}>
-        {scriptEnabled && (
-          <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />
-        )}
-        <ScriptIcon className="size-4" />
-      </button>
+<Tooltip>
+          <TooltipTrigger className="inline-flex">
+            <button
+              type="button"
+              onClick={onToggleScript}
+              className={cn(
+                'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
+                scriptEnabled
+                  ? 'bg-emerald-500/15 text-emerald-400'
+                  : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+              )}
+            >
+              {scriptEnabled && (
+                <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />
+              )}
+              <ScriptIcon className="size-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+            {t('scriptConfig.globalToggle')}
+          </TooltipContent>
+        </Tooltip>
 
       {/* Center-right: SSL toggle */}
-      <button
-        type="button"
-        onClick={onToggleSsl}
-        className={cn(
-          'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
-          sslEnabled
-            ? 'bg-emerald-500/15 text-emerald-400'
-            : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
-        )}
-        title={t('sslConfig.globalToggle')}>
-        {sslEnabled && (
-          <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />
-        )}
-        <ShieldMinusIcon className="size-4" />
-      </button>
+<Tooltip>
+          <TooltipTrigger className="inline-flex">
+            <button
+              type="button"
+              onClick={onToggleSsl}
+              className={cn(
+                'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
+                sslEnabled
+                  ? 'bg-emerald-500/15 text-emerald-400'
+                  : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+              )}
+            >
+              {sslEnabled && (
+                <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />
+              )}
+              <ShieldMinusIcon className="size-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+            {t('sslConfig.globalToggle')}
+          </TooltipContent>
+        </Tooltip>
 
       {/* Right: detail position toggle */}
-      <button
-        type="button"
-        onClick={handleDetailClick}
-        className={cn(
-          'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
-          detailPosition !== 'hidden'
-            ? 'bg-surface-elevated text-foreground'
-            : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
-        )}
-        title={t(detailTitleKey)}>
-        {detailPosition !== 'hidden' && (
+      <Tooltip>
+        <TooltipTrigger className="inline-flex">
+          <button
+            type="button"
+            onClick={handleDetailClick}
+            className={cn(
+              'relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors',
+              detailPosition !== 'hidden'
+                ? 'bg-surface-elevated text-foreground'
+                : 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+            )}
+          >
+            {detailPosition !== 'hidden' && (
           <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-foreground/70" />
         )}
-        {detailPosition !== 'hidden' ? (
-          <DetailIconOn className="size-4" />
-        ) : (
-          <DetailIconOff className="size-4" />
-        )}
-      </button>
+            {detailPosition !== 'hidden' ? (
+              <DetailIconOn className="size-4" />
+            ) : (
+              <DetailIconOff className="size-4" />
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+          {t(detailTitleKey)}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }

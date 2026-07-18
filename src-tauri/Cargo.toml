@@ -28,7 +28,8 @@ tokio = { version = "1", features = [
 ] }
 log = "0.4"
 tauri-plugin-log = "2"
-chrono = "0.4"
+tauri-plugin-window-state = "2"
+time = { version = "0.3", features = ["formatting", "local-offset"] }
 rama = { git = "https://github.com/plabayo/rama", features = [
   "http-full",
   "rustls",
@@ -36,7 +37,6 @@ rama = { git = "https://github.com/plabayo/rama", features = [
 ] }
 bytes = "1"
 uuid = { version = "1", features = ["v4"] }
-dirs = "6"
 base64 = "0.22"
 rcgen = { version = "0.14", features = ["ring"] }
 rustls = { version = "0.23", default-features = false, features = [
@@ -46,3 +46,4 @@ rustls = { version = "0.23", default-features = false, features = [
 ] }
 rquickjs = { version = "0.12" }
 sqlite = "0.37.0"
+open = "5"

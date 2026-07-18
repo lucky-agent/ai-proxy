@@ -55,11 +55,25 @@ pub struct ScriptItem {
     /// 域名匹配规则（支持 * 通配符，如 *.example.com）
     #[serde(default)]
     pub domain: String,
+    /// HTTP 方法匹配（大写，如 "GET"）；空串 = any，匹配所有方法
+    #[serde(default)]
+    pub method: String,
     #[serde(default)]
     pub enabled: bool,
     /// 脚本文件名（name + ".js" 的 SHA256 前 16 位，后端在保存时自动生成）
     #[serde(default)]
     pub file_name: String,
+}
+
+impl ScriptItem {
+    /// 该脚本是否对指定 host + method 生效：已启用、有脚本文件、域名与方法均命中。
+    /// method 规则为空串 = any；比较大小写不敏感。
+    pub fn matches(&self, host: &str, method: &str) -> bool {
+        self.enabled
+            && !self.file_name.is_empty()
+            && domain_match::domain_match(&self.domain, host)
+            && (self.method.is_empty() || self.method.eq_ignore_ascii_case(method))
+    }
 }
 
 /// 脚本配置
@@ -103,6 +117,18 @@ impl Default for AiDetectionConfig {
     }
 }
 
+/// 规则内的来源条目：来源名与其会话合并 header 成对。
+/// 运行时按序尝试各来源的 merge_header（优先于全局名单），命中即确认该会话的来源。
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AiRuleSource {
+    /// 来源名（客户端名，如 "Claude Code"）
+    #[serde(default)]
+    pub name: String,
+    /// 该来源的会话合并 header；空白 = 仅标注，不参与分组
+    #[serde(default)]
+    pub merge_header: String,
+}
+
 /// 单条 AI URL 规则
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AiUrlRule {
@@ -115,6 +141,9 @@ pub struct AiUrlRule {
     /// 该条规则是否启用，缺省视为启用（兼容旧配置）
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// (来源, 合并头) 对列表。合并头按序参与会话分组（优先于全局），命中即确认来源。
+    #[serde(default)]
+    pub sources: Vec<AiRuleSource>,
 }
 
 /// AI 配置根
@@ -183,26 +212,31 @@ pub(crate) fn default_ai_url_rules() -> Vec<AiUrlRule> {
             url: "api.openai.com/v1/chat/completions".into(),
             provider: Some("openai".into()),
             enabled: true,
+            sources: Vec::new(),
         },
         AiUrlRule {
             url: "api.anthropic.com/v1/messages".into(),
             provider: Some("anthropic".into()),
             enabled: true,
+            sources: Vec::new(),
         },
         AiUrlRule {
             url: "api.deepseek.com/v1/chat/completions".into(),
             provider: Some("openai".into()),
             enabled: true,
+            sources: Vec::new(),
         },
         AiUrlRule {
             url: "*.openai.azure.com/openai/deployments/*/chat/completions".into(),
             provider: Some("openai".into()),
             enabled: true,
+            sources: Vec::new(),
         },
         AiUrlRule {
             url: "openrouter.ai/api/v1/chat/completions".into(),
             provider: None,
             enabled: true,
+            sources: Vec::new(),
         },
     ]
 }
@@ -407,5 +441,104 @@ impl Settings {
                 e
             );
         });
+    }
+}
+
+/// 从 AI 规则 URL 提取域名部分（首个 `/` 之前）。
+fn ai_rule_host(url: &str) -> &str {
+    url.split('/').next().unwrap_or("")
+}
+
+/// AI 检测依赖 MITM 解密：启用 AI 检测时联动 SSL 配置——打开总开关，
+/// 并确保每条启用规则的域名被已启用的白名单项覆盖：
+/// 已有同名项则启用之；被已启用的通配项覆盖则跳过；否则追加新项。
+/// AI 检测未启用时不做任何改动。
+pub fn sync_ssl_for_ai(ssl: &mut SslConfig, ai: &AiConfig) {
+    if !ai.enabled {
+        return;
+    }
+    ssl.enabled = true;
+    for rule in ai.detection.url_patterns.iter().filter(|r| r.enabled) {
+        let host = ai_rule_host(rule.url.trim());
+        if host.is_empty() {
+            continue;
+        }
+        // 同名项（忽略大小写）→ 启用，不重复添加
+        if let Some(item) = ssl
+            .whitelist
+            .iter_mut()
+            .find(|w| w.domain.eq_ignore_ascii_case(host))
+        {
+            item.enabled = true;
+            continue;
+        }
+        // 具体域名已被启用的通配项覆盖 → 跳过（host 自带通配符时无法判定覆盖，直接追加）
+        let covered = !host.contains(['*', '?'])
+            && ssl
+                .whitelist
+                .iter()
+                .any(|w| w.enabled && domain_match::domain_match(&w.domain, host));
+        if !covered {
+            ssl.whitelist.push(SslWhitelistItem {
+                domain: host.to_string(),
+                enabled: true,
+            });
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 旧配置（无 sources 字段）反序列化时取默认空列表。
+    #[test]
+    fn ai_url_rule_sources_default_on_old_config() {
+        let rule: AiUrlRule =
+            serde_json::from_str(r#"{"url":"a/b","provider":"openai","enabled":true}"#).unwrap();
+        assert!(rule.sources.is_empty());
+    }
+
+    /// 旧配置（无 method 字段）反序列化时默认空串 = any。
+    #[test]
+    fn script_item_method_default_on_old_config() {
+        let item: ScriptItem =
+            serde_json::from_str(r#"{"name":"a","domain":"*.example.com","enabled":true}"#)
+                .unwrap();
+        assert_eq!(item.method, "");
+    }
+
+    fn script_item(method: &str) -> ScriptItem {
+        ScriptItem {
+            name: "a".into(),
+            domain: "*.example.com".into(),
+            method: method.into(),
+            enabled: true,
+            file_name: "abc".into(),
+        }
+    }
+
+    /// method 空串 = any 匹配所有方法；指定方法大小写不敏感精确匹配。
+    #[test]
+    fn script_item_method_matching() {
+        assert!(script_item("").matches("api.example.com", "GET"));
+        assert!(script_item("").matches("api.example.com", "POST"));
+        assert!(script_item("POST").matches("api.example.com", "POST"));
+        assert!(script_item("post").matches("api.example.com", "POST"));
+        assert!(!script_item("POST").matches("api.example.com", "GET"));
+        // 域名不命中时 method 一致也不生效
+        assert!(!script_item("POST").matches("other.com", "POST"));
+    }
+
+    /// (来源, 合并头) 成对反序列化。
+    #[test]
+    fn ai_rule_source_pair_deserializes() {
+        let rule: AiUrlRule = serde_json::from_str(
+            r#"{"url":"a/b","sources":[{"name":"Cursor","merge_header":"x-cursor-session"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(rule.sources.len(), 1);
+        assert_eq!(rule.sources[0].name, "Cursor");
+        assert_eq!(rule.sources[0].merge_header, "x-cursor-session");
     }
 }

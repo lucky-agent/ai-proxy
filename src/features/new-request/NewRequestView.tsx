@@ -373,13 +373,14 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
     const hasEntry = !!activeEntry
     prevHadEntryRef.current = hasEntry
 
-    // expand when entry appears; collapse when it goes away
-    if (hasEntry && !hadEntry) {
-      responsePanelRef.current?.expand()
-    } else if (!hasEntry && hadEntry) {
+    // 出现响应时展开到 60%；无响应时保持折叠
+    // （expand() 在面板未折叠时是 no-op，且只恢复上次尺寸，因此用 resize 强制 60%）
+    if (!hasEntry) {
       responsePanelRef.current?.collapse()
+    } else if (!hadEntry) {
+      responsePanelRef.current?.resize('60%')
     }
-  }, [activeEntry, responsePanelRef])
+  }, [activeEntry, detailPosition, responsePanelRef])
 
   // Abort controller for cancelling in-flight request
   const cancelRef = useRef<AbortController | null>(null)
@@ -541,7 +542,7 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
                     </div>
                   ) : detailPosition === 'bottom' ? (
                     <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="flex-1 min-h-0">
-                      <ResizablePanel id="editor" defaultSize={activeEntry ? "60%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
+                      <ResizablePanel id="editor" defaultSize={activeEntry ? "40%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
                         <div className="flex flex-col min-h-0 h-full overflow-hidden">
                           <RequestEditor
                             params={activeTab.params}
@@ -557,10 +558,10 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
                           />
                         </div>
                       </ResizablePanel>
-                      <ResizableHandle withHandle />
+                      <ResizableHandle withHandle disabled={!activeEntry} className={cn(!activeEntry && 'hidden')} />
                       <ResizablePanel
                         id="response"
-                        defaultSize="40%"
+                        defaultSize="60%"
                         minSize="10%"
                         collapsible
                         collapsedSize="0%"
@@ -573,7 +574,7 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
                     </ResizablePanelGroup>
                   ) : (
                     <ResizablePanelGroup orientation="horizontal" id="new-request-horizontal" className="flex-1 min-h-0">
-                      <ResizablePanel id="editor" defaultSize={activeEntry ? "60%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
+                      <ResizablePanel id="editor" defaultSize={activeEntry ? "40%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
                         <div className="flex flex-col min-h-0 h-full overflow-hidden">
                           <RequestEditor
                             params={activeTab.params}
@@ -589,10 +590,10 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
                           />
                         </div>
                       </ResizablePanel>
-                      <ResizableHandle withHandle />
+                      <ResizableHandle withHandle disabled={!activeEntry} className={cn(!activeEntry && 'hidden')} />
                       <ResizablePanel
                         id="response"
-                        defaultSize="40%"
+                        defaultSize="60%"
                         minSize="10%"
                         collapsible
                         collapsedSize="0%"
@@ -652,11 +653,15 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
           <DialogDescription>{t('tab.unsavedDesc')}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
+          <Button
+            variant="ghost"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive sm:mr-auto"
+            onClick={handleDiscardAndClose}
+          >
+            {t('tab.discardClose')}
+          </Button>
           <Button variant="outline" onClick={() => setCloseConfirmOpen(false)}>
             {t('settings.cancel')}
-          </Button>
-          <Button variant="ghost" onClick={handleDiscardAndClose}>
-            {t('tab.discardClose')}
           </Button>
           <Button onClick={handleSaveAndClose}>
             {t('tab.saveClose')}

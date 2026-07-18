@@ -37,16 +37,14 @@ import { lintKeymap } from '@codemirror/lint'
 import { classHighlighter } from '@lezer/highlight'
 import { json as jsonLang } from '@codemirror/lang-json'
 import { xml as xmlLang } from '@codemirror/lang-xml'
+import { javascript as jsLang } from '@codemirror/lang-javascript'
 import type { BodyType } from '@/types/collection'
 
 interface CodeEditorProps {
   value: string
-  language: BodyType
+  language: BodyType | 'javascript'
   onChange: (value: string) => void
 }
-
-// --- Module-level env detection ---
-const isTauri = typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__
 
 export default function CodeEditor({ value, language, onChange }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -59,7 +57,7 @@ export default function CodeEditor({ value, language, onChange }: CodeEditorProp
   // Build extensions set once per language
   if (extsRef.current === null || langRef.current !== language) {
     langRef.current = language
-    const lang = language === 'json' ? jsonLang() : language === 'xml' ? xmlLang() : null
+    const lang = language === 'json' ? jsonLang() : language === 'xml' ? xmlLang() : language === 'javascript' ? jsLang() : null
     const exts: any[] = [
       lineNumbers(),
       highlightActiveLineGutter(),

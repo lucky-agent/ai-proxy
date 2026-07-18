@@ -68,7 +68,8 @@ export default function DetailPanel({ entry, onClose, showRequest = true }: Prop
 
   return (
     <div className="flex min-h-0 min-w-0 h-full flex-col overflow-hidden bg-surface-base">
-      {entry && <SummaryBar entry={entry} onClose={onClose} />}
+      {/* response-only 模式（new-request 响应区）下 URL 已在上方输入框可见，不再弹 tooltip */}
+      {entry && <SummaryBar entry={entry} onClose={onClose} showUriTooltip={showRequest} />}
 
       <ResizablePanelGroup orientation="horizontal" id="detail-panel" className="min-h-0 flex-1">
         {showRequest && (
