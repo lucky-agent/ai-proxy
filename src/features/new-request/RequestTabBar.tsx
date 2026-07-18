@@ -232,7 +232,7 @@ export default function RequestTabBar({
                     onClick={() => handleDropdownSelect(tab.id)}
                   >
                     <span className={cn(
-                      'font-semibold text-[11px]',
+                      'font-semibold text-ui-sm',
                       tab.method === 'GET' && 'text-badge-get',
                       tab.method === 'POST' && 'text-badge-post',
                       tab.method === 'PUT' && 'text-badge-put',
@@ -298,13 +298,13 @@ export default function RequestTabBar({
             {editEnvs.map(e => (
               <div key={e.id} className="flex items-center gap-2">
                 <Input
-                  className="flex-1 h-7 text-xs"
+                  className="flex-1 h-7 text-prose-sm"
                   placeholder={t('tab.envName')}
                   value={e.name}
                   onChange={ev => handleEditEnv(e.id, 'name', ev.target.value)}
                 />
                 <Input
-                  className="flex-1 h-7 text-xs"
+                  className="flex-1 h-7 text-prose-sm"
                   placeholder={t('tab.envUrlPrefix')}
                   value={e.urlPrefix}
                   onChange={ev => handleEditEnv(e.id, 'urlPrefix', ev.target.value)}

@@ -58,7 +58,7 @@ export default function CompareView({ entry, conversation }: Props) {
     <div className="flex h-full min-h-0 divide-x divide-border">
       {/* 左侧：归一化 IR */}
       <div className="flex-1 min-w-0 overflow-y-auto">
-        <div className="sticky top-0 z-10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-surface-base/80 backdrop-blur-sm border-b border-border">
+        <div className="sticky top-0 z-10 px-3 py-1.5 text-ui-xs font-semibold uppercase tracking-wider text-muted-foreground bg-surface-base/80 backdrop-blur-sm border-b border-border">
           {t('detail.compareIR', '归一化 IR')}
           {conversation.streaming && (
             <span className="ml-1.5 text-amber-500 animate-pulse">● streaming</span>
@@ -73,18 +73,18 @@ export default function CompareView({ entry, conversation }: Props) {
             conversation.turns.map((turn, i) => (
               <div
                 key={i}
-                className={`rounded border px-2.5 py-1.5 text-xs ${roleColor(turn)}`}
+                className={`rounded border px-2.5 py-1.5 text-prose-md ${roleColor(turn)}`}
               >
                 <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-[10px] font-semibold text-muted-foreground/70 uppercase">
+                  <span className="text-ui-xs font-semibold text-muted-foreground/70 uppercase">
                     {roleLabel(turn)}
                   </span>
                   {i === 0 && (
-                    <span className="text-[9px] text-muted-foreground/40">(#{i + 1})</span>
+                    <span className="text-ui-2xs text-muted-foreground/40">(#{i + 1})</span>
                   )}
                 </div>
                 {turn.content.map((block, j) => (
-                  <div key={j} className="text-[11px] leading-relaxed whitespace-pre-wrap break-all text-foreground/80">
+                  <div key={j} className="text-prose-sm leading-relaxed whitespace-pre-wrap break-all text-foreground/80">
                     {blockSummary(block)}
                   </div>
                 ))}
@@ -96,14 +96,14 @@ export default function CompareView({ entry, conversation }: Props) {
 
       {/* 右侧：原始 JSON */}
       <div className="flex-1 min-w-0 overflow-y-auto">
-        <div className="sticky top-0 z-10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-surface-base/80 backdrop-blur-sm border-b border-border">
+        <div className="sticky top-0 z-10 px-3 py-1.5 text-ui-xs font-semibold uppercase tracking-wider text-muted-foreground bg-surface-base/80 backdrop-blur-sm border-b border-border">
           {t('detail.compareRaw', '原始 JSON')}
         </div>
         <div className="p-2">
           {rawJson != null ? (
             <JsonTreeView data={rawJson} defaultExpanded depth={0} wrapped />
           ) : entry.responseBody ? (
-            <pre className="text-[11px] font-mono text-foreground/70 whitespace-pre-wrap break-all px-2 py-1">
+            <pre className="text-prose-sm font-mono text-foreground/70 whitespace-pre-wrap break-all px-2 py-1">
               {entry.responseBody}
             </pre>
           ) : (

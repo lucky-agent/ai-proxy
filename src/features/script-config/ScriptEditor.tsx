@@ -166,7 +166,7 @@ export default function ScriptEditor({ tab, mode, onUpdateDraft, onSaved, onClos
             onChange={(e) => onDomainChange?.(e.target.value)}
           />
           {tab.dirty && (
-            <span className="text-[10px] text-muted-foreground">● 未保存</span>
+            <span className="text-ui-xs text-muted-foreground">● 未保存</span>
           )}
         </div>
         <div className="flex items-center gap-2">

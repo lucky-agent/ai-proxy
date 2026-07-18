@@ -140,7 +140,7 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
             <Input
               value={url}
               onChange={e => setUrl(e.target.value)}
-              className="flex-1 h-auto py-1 text-xs font-mono"
+              className="flex-1 h-auto py-1 text-prose-md font-mono"
               placeholder="https://api.example.com/v1/endpoint"
             />
           </div>
@@ -163,13 +163,13 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
                   <Input
                     value={pair.key}
                     onChange={e => handleHeaderChange(i, 'key', e.target.value)}
-                    className="flex-1 h-auto py-1 text-[11px] font-mono"
+                    className="flex-1 h-auto py-1 text-prose-sm font-mono"
                     placeholder="Key"
                   />
                   <Input
                     value={pair.value}
                     onChange={e => handleHeaderChange(i, 'value', e.target.value)}
-                    className="flex-[2] h-auto py-1 text-[11px] font-mono"
+                    className="flex-[2] h-auto py-1 text-prose-sm font-mono"
                     placeholder="Value"
                   />
                   <button
@@ -189,7 +189,7 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
             <Textarea
               value={body}
               onChange={e => setBody(e.target.value)}
-              className="w-full min-h-[120px] h-auto py-1.5 text-xs font-mono resize-y"
+              className="w-full min-h-[120px] h-auto py-1.5 text-prose-md font-mono resize-y"
               placeholder="{ &quot;key&quot;: &quot;value&quot; }"
             />
           </div>

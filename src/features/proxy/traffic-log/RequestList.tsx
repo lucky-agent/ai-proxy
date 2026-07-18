@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { VList, type VListHandle } from 'virtua'
 import { useTranslation } from 'react-i18next'
-import { ArrowDownIcon, ArrowUpIcon, CopyIcon, CheckIcon, RefreshCwIcon, PencilIcon, LockKeyholeIcon, LockOpenIcon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, CopyIcon, CheckIcon, RefreshCwIcon, PencilIcon, LockKeyholeIcon, LockKeyholeOpenIcon } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -224,9 +224,9 @@ export default function RequestList({
         } as React.CSSProperties
       }>
       <div
-        className="group/grid grid shrink-0 z-10 bg-surface-base/50 text-[11px] font-bold text-muted-foreground uppercase tracking-wide border-b border-surface-elevated overflow-hidden h-7"
+        className="group/grid grid shrink-0 z-10 bg-surface-base/50 text-ui-xs font-bold text-muted-foreground tracking-wide border-b border-surface-elevated overflow-hidden h-7"
         style={rowStyle}>
-        {renderHeaderCell('id', 'requestList.id', 'font-normal normal-case')}
+        {renderHeaderCell('id', 'requestList.id', 'font-normal')}
         {renderHeaderCell('url', 'requestList.url')}
         {renderHeaderCell('method', 'requestList.method')}
         {renderHeaderCell('status', 'requestList.status')}
@@ -248,27 +248,27 @@ export default function RequestList({
               <ContextMenuTrigger>
                 <div
                   className={cn(
-                    'grid text-xs border-b border-surface-elevated/50 cursor-pointer transition-colors hover:bg-surface-elevated/50 border-l-2',
+                    'grid text-prose-md border-b border-surface-elevated/50 cursor-pointer transition-colors hover:bg-surface-elevated/50 border-l-2',
                     entry.id === selectedId
                       ? 'bg-primary/10 border-primary'
                       : 'border-transparent'
                   )}
                   style={rowStyle}
                   onClick={() => onSelectEntry(entry.id)}>
-                  <div className="px-1 py-2 min-w-0 tabular-nums text-[10px] text-muted-foreground text-left">
+                  <div className="px-2 py-2 min-w-0 tabular-nums text-ui-xs text-muted-foreground text-left">
                     {entry.requestNumber}
                   </div>
-                  <div className="px-1 py-2 text-foreground/80 font-mono min-w-0 overflow-hidden">
+                  <div className="px-2 py-2 text-foreground/80 font-mono min-w-0 overflow-hidden">
                     <Tooltip>
-                      <TooltipTrigger className="block w-full min-w-0">
+                      <TooltipTrigger className="block w-full min-w-0 text-left">
                         <span className="block truncate">{entry.uri}</span>
                       </TooltipTrigger>
-                      <TooltipContent side="top" align="start" className="max-w-[500px] bg-popover text-popover-foreground font-mono text-[11px]">
+                      <TooltipContent side="top" align="start" className="max-w-[500px] bg-popover text-popover-foreground font-mono text-ui-sm">
                         {entry.uri}
                       </TooltipContent>
                     </Tooltip>
                   </div>
-                  <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
+                  <div className="px-2 py-2 min-w-0 overflow-hidden whitespace-nowrap">
                     <Badge
                       className="rounded font-semibold uppercase"
                       style={{
@@ -279,7 +279,7 @@ export default function RequestList({
                       {entry.method}
                     </Badge>
                   </div>
-                  <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap">
+                  <div className="px-2 py-2 min-w-0 overflow-hidden whitespace-nowrap">
                     <Badge
                       className="rounded font-semibold"
                       style={{ color: `var(--badge-${statusCategory(entry.status)})` }}>
@@ -291,17 +291,17 @@ export default function RequestList({
                       {entry.status ?? t('requestList.pending')}
                     </Badge>
                   </div>
-                  <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground">
+                  <div className="px-2 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground">
                     {formatDuration(entry.durationMs)}
                   </div>
-                  <div className="px-1 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground/60 text-left">
+                  <div className="px-2 py-2 min-w-0 overflow-hidden whitespace-nowrap text-muted-foreground/60 text-left">
                     {formatTime(entry.requestTimestamp)}
                   </div>
-                  <div className="px-1 py-2 min-w-0 overflow-hidden flex items-center justify-center">
+                  <div className="px-2 py-2 min-w-0 overflow-hidden flex items-center justify-center">
                     {entry.decrypted === false ? (
                       <LockKeyholeIcon className="size-3.5 text-muted-foreground/70 shrink-0" />
                     ) : entry.decrypted === true ? (
-                      <LockOpenIcon className="size-3.5 text-muted-foreground/70 shrink-0" />
+                      <LockKeyholeOpenIcon className="size-3.5 text-emerald-500 shrink-0" />
                     ) : null}
                   </div>
                 </div>

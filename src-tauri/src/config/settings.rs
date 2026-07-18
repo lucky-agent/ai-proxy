@@ -337,6 +337,9 @@ pub struct UiConfig {
     /// 界面语言: "en" / "zh" / "system"
     #[serde(default = "default_language")]
     pub language: String,
+    /// 内容字号档位: "small" / "normal" / "large"（仅影响数据内容区，不影响 UI 骨架）
+    #[serde(default = "default_prose_font_size")]
+    pub prose_font_size: String,
 }
 
 fn default_theme() -> String {
@@ -347,11 +350,16 @@ fn default_language() -> String {
     "system".to_string()
 }
 
+fn default_prose_font_size() -> String {
+    "normal".to_string()
+}
+
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
             theme: default_theme(),
             language: default_language(),
+            prose_font_size: default_prose_font_size(),
         }
     }
 }

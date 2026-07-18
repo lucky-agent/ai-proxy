@@ -57,6 +57,20 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* ═══ 字体：UI 骨架（固定，设计定稿） ═══ */
+  --text-ui-2xs: 0.5625rem;    /* 9px  — 极小徽章/角标 */
+  --text-ui-xs:  0.625rem;     /* 10px — 表头、辅助文字、计数 */
+  --text-ui-sm:  0.6875rem;    /* 11px — Tooltip、TabBar、筛选栏 */
+  --text-ui-md:  0.75rem;      /* 12px — 按钮小号、设置项 */
+  --text-ui-lg:  0.8125rem;    /* 13px — 导航项、菜单 */
+
+  /* ═══ 字体：数据内容（跟随 --prose-scale 等比缩放，注释为 scale=1 时的值） ═══ */
+  --text-prose-xs:  calc(0.6875rem * var(--prose-scale)); /* 11px */
+  --text-prose-sm:  calc(0.75rem * var(--prose-scale));   /* 12px */
+  --text-prose-md:  calc(0.8125rem * var(--prose-scale)); /* 13px — 代码/JSON/Body 默认 */
+  --text-prose-lg:  calc(0.875rem * var(--prose-scale));  /* 14px — CodeMirror 编辑器 */
+  --text-prose-xl:  calc(0.9375rem * var(--prose-scale)); /* 15px — AI 对话正文 */
 }
 
 :root {
@@ -117,6 +131,10 @@
   --ai-user-bubble-text: oklch(0.99 0 0);
   --ai-provider-openai: oklch(0.55 0.22 150);
   --ai-provider-anthropic: oklch(0.62 0.15 45);
+
+  /* 内容字号等比缩放系数：small=0.8462(11/13) normal=1 large=1.1538(15/13)，
+     由 useProseFontSize hook 运行时写入，UI 骨架（--text-ui-*）不受影响 */
+  --prose-scale: 1;
 }
 
 .dark {
@@ -260,7 +278,7 @@
 
 /* shiki 代码高亮 */
 .shiki-root {
-  font-size: 0.75rem;
+  font-size: var(--text-prose-md, 0.8125rem);
   line-height: 1.5;
 }
 .shiki-root .shiki {
@@ -396,7 +414,7 @@
   padding: 0.1em 0.35em;
   font-size: 0.9em;
 }
-.md-content pre { font-size: 12px; }
+.md-content pre { font-size: var(--text-prose-md, 0.8125rem); }
 /* streamdown 代码块 pre 自带 shiki 主题背景（github-dark 为蓝灰 #24292e），与中性灰的
    wrapper/工具栏浮块色调冲突。与 .shiki-root 同约定：背景强制透明，继承 code-block-body
    的 bg-background（蓝底暗色气泡则继承半透明黑叠蓝的深蓝卡片） */

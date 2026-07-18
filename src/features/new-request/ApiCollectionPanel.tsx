@@ -51,7 +51,7 @@ export function ApiCollectionPanel({
     <div className="flex h-full flex-col bg-surface-base/30">
       {/* 标题栏 */}
       <div className="flex items-center px-3 py-2">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex-1">
+        <span className="text-ui-xs font-bold uppercase tracking-wider text-muted-foreground flex-1">
           {t('collection.title')}
         </span>
         <button

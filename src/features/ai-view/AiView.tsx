@@ -23,7 +23,7 @@ function MetaPanel({ session }: { session: AiSessionState }) {
           <TooltipTrigger className="break-all text-left">
             <span>{session.matchReason || '—'}</span>
           </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-[360px] bg-popover text-popover-foreground text-[11px]">
+          <TooltipContent side="top" className="max-w-[360px] bg-popover text-popover-foreground text-ui-sm">
             {session.matchReason || '—'}
           </TooltipContent>
         </Tooltip>

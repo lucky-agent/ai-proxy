@@ -40,7 +40,7 @@ export function TypeFilterBar({ active, counts, onChange, running, status }: Typ
               type="button"
               onClick={() => onChange(f)}
               className={cn(
-                'relative px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap',
+                'relative px-2 py-1 text-ui-sm font-medium transition-colors whitespace-nowrap',
                 active === f
                   ? 'text-foreground'
                   : 'text-muted-foreground hover:text-foreground'
@@ -51,8 +51,8 @@ export function TypeFilterBar({ active, counts, onChange, running, status }: Typ
               )}
               {count > 0 && (
                 <span className={cn(
-                  'text-[10px] tabular-nums',
-                  active === f ? 'text-foreground/50' : 'text-muted-foreground/60'
+                  'text-ui-xs tabular-nums',
+                  active === f ? 'text-foreground' : 'text-muted-foreground/60'
                 )}>
                   {count}
                 </span>
@@ -63,12 +63,12 @@ export function TypeFilterBar({ active, counts, onChange, running, status }: Typ
       </div>
       <div className="ml-auto shrink-0" />
       {running ? (
-        <span className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium bg-emerald-500/10 text-emerald-400 shrink-0">
+        <span className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-ui-sm font-medium bg-emerald-500/10 text-emerald-400 shrink-0">
           <span className="inline-block size-1.5 rounded-full bg-emerald-400 animate-pulse" />
           {status.replace('Running on ', '')}
         </span>
       ) : (
-        <span className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium bg-muted text-muted-foreground shrink-0">
+        <span className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-ui-sm font-medium bg-muted text-muted-foreground shrink-0">
           <span className="inline-block size-1.5 rounded-full bg-muted-foreground" />
           {t('app.stopped')}
         </span>

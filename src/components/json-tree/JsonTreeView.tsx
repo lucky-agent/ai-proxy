@@ -99,7 +99,7 @@ function TreeNode({
           </span>
         )}
         {expanded && (
-          <span className="text-muted-foreground/40 text-[10px] ml-1 shrink-0">
+          <span className="text-muted-foreground/40 text-ui-xs ml-1 shrink-0">
             {isArray ? `${count} items` : `${count} keys`}
           </span>
         )}
@@ -137,7 +137,7 @@ export default function JsonTreeView({
 }) {
   return (
     <div
-      className={`font-mono text-xs leading-5 ${wrapped ? 'whitespace-pre-wrap break-all' : 'whitespace-nowrap overflow-x-auto'}`}>
+      className={`font-mono text-prose-md leading-5 ${wrapped ? 'whitespace-pre-wrap break-all' : 'whitespace-nowrap overflow-x-auto'}`}>
       <TreeNode value={data} defaultExpanded={defaultExpanded} depth={depth} />
     </div>
   )

@@ -40,7 +40,7 @@ export default function SidePanel({
                 {title}
               </span>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+            <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-ui-sm">
               Click to toggle full width
             </TooltipContent>
           </Tooltip>
@@ -51,7 +51,7 @@ export default function SidePanel({
         )}
         <TabsList variant="line" className="px-0 rounded-none bg-transparent h-auto">
           {tabs.map(x => (
-            <TabsTrigger key={x.id} value={x.id} className="relative px-2.5 py-1.5 text-[11px]">
+            <TabsTrigger key={x.id} value={x.id} className="relative px-2.5 py-1.5 text-ui-sm">
               {t(x.labelKey)}
             </TabsTrigger>
           ))}

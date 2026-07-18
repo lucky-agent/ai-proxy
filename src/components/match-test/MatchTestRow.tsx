@@ -45,7 +45,7 @@ export function MatchTestRow({ value, onChange, placeholder, runLabel, onRun, hi
               )}
             </span>
           </TooltipTrigger>
-          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+          <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
             {title}
           </TooltipContent>
         </Tooltip>

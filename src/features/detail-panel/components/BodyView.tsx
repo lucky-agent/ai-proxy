@@ -37,7 +37,7 @@ const SyntaxHighlightedBody = memo(function SyntaxHighlightedBody({
   if (!html) {
     return (
       <pre
-        className={`px-3 py-2 text-xs text-foreground/80 font-mono overflow-y-auto ${
+        className={`px-3 py-2 text-prose-md text-foreground/80 font-mono overflow-y-auto ${
           wrapped ? 'whitespace-pre-wrap break-all' : 'whitespace-pre overflow-x-auto'
         }`}>
         {content}
@@ -147,7 +147,7 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
                 {wrapped ? <ArrowLeftToLine className="size-3" /> : <TextWrap className="size-3" />}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
+            <TooltipContent side="left" className="bg-popover text-popover-foreground text-ui-sm">
               {wrapped ? 'Disable wrap' : 'Enable wrap'}
             </TooltipContent>
           </Tooltip>
@@ -165,7 +165,7 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
                   )}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
+              <TooltipContent side="left" className="bg-popover text-popover-foreground text-ui-sm">
                 {allExpanded ? 'Collapse all' : 'Expand all'}
               </TooltipContent>
             </Tooltip>
@@ -183,7 +183,7 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
                 )}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
+            <TooltipContent side="left" className="bg-popover text-popover-foreground text-ui-sm">
               {copied ? 'Copied' : 'Copy body'}
             </TooltipContent>
           </Tooltip>

@@ -27,7 +27,7 @@ export default function BodyTab({ body, bodyType, onBodyChange, onBodyTypeChange
           <select
             value={bodyType}
             onChange={e => onBodyTypeChange(e.target.value as BodyType)}
-            className="appearance-none rounded bg-surface-elevated/30 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors cursor-pointer outline-none border border-surface-elevated/30"
+            className="appearance-none rounded bg-surface-elevated/30 px-1.5 py-0.5 text-ui-xs text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors cursor-pointer outline-none border border-surface-elevated/30"
           >
             {BODY_FORMATS.map(fmt => (
               <option key={fmt.value} value={fmt.value}>{t(fmt.labelKey)}</option>

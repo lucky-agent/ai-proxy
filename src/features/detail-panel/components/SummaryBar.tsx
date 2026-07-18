@@ -11,7 +11,7 @@ export default function SummaryBar({ entry, onClose, showUriTooltip = true }: { 
   const { copied, copy } = useCopyToClipboard()
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-surface-elevated px-3 py-1.5 text-xs">
+    <div className="flex shrink-0 items-center gap-2 border-b border-surface-elevated px-3 py-1.5 text-prose-md">
       <Badge
         className="shrink-0 rounded font-semibold uppercase"
         style={{
@@ -38,7 +38,7 @@ export default function SummaryBar({ entry, onClose, showUriTooltip = true }: { 
           <TooltipTrigger className="min-w-0 flex-1 truncate text-left">
             <span className="truncate text-foreground">{entry.uri}</span>
           </TooltipTrigger>
-          <TooltipContent side="top" align="start" className="max-w-[500px] bg-popover text-popover-foreground font-mono text-[11px]">
+          <TooltipContent side="top" align="start" className="max-w-[500px] bg-popover text-popover-foreground font-mono text-ui-sm">
             {entry.uri}
           </TooltipContent>
         </Tooltip>
@@ -55,7 +55,7 @@ export default function SummaryBar({ entry, onClose, showUriTooltip = true }: { 
               <XIcon className="size-3" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+          <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-ui-sm">
             关闭详情
           </TooltipContent>
         </Tooltip>
@@ -69,7 +69,7 @@ export default function SummaryBar({ entry, onClose, showUriTooltip = true }: { 
             {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+        <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-ui-sm">
           {copied ? t('detail.copied') : t('detail.copyUri')}
         </TooltipContent>
       </Tooltip>

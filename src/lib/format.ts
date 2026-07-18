@@ -68,6 +68,15 @@ const IMG_EXTS = /\.(png|jpe?g|gif|svg|webp|ico|bmp|avif|tiff?)($|\?)/i
 const FONT_EXTS = /\.(woff2?|ttf|otf|eot)($|\?)/i
 const MEDIA_EXTS = /\.(mp4|webm|ogg|mp3|m4a|wav|flac|aac|avi|mov)($|\?)/i
 
+/** 请求头中是否携带 Upgrade: websocket（header 名与值均不区分大小写） */
+function isWsUpgrade(headers?: Record<string, string>): boolean {
+  if (!headers) return false
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === 'upgrade' && v.toLowerCase().includes('websocket')) return true
+  }
+  return false
+}
+
 /**
  * 根据 URI、scheme 和响应 Content-Type 对请求进行分类。
  * 优先使用 Content-Type（更精确），回退到 URI 扩展名。
@@ -75,6 +84,8 @@ const MEDIA_EXTS = /\.(mp4|webm|ogg|mp3|m4a|wav|flac|aac|avi|mov)($|\?)/i
 export function classifyEntry(entry: {
   uri: string
   decrypted?: boolean
+  requestHeaders?: Record<string, string>
+  status?: number | null
   responseHeaders: Record<string, string> | null
 }): TypeFilter {
   const uri = entry.uri
@@ -82,8 +93,14 @@ export function classifyEntry(entry: {
     ? (entry.responseHeaders['content-type'] ?? entry.responseHeaders['Content-Type'] ?? '').toLowerCase()
     : ''
 
-  // WebSocket 升级
-  if (ct.includes('text/event-stream') || uri.startsWith('ws://') || uri.startsWith('wss://')) {
+  // WebSocket：ws(s) scheme / Upgrade: websocket 请求头 / 101 响应。
+  // 注意 SSE（text/event-stream）不是 WebSocket，按普通 HTTP(S) 分类。
+  if (
+    uri.startsWith('ws://') ||
+    uri.startsWith('wss://') ||
+    entry.status === 101 ||
+    isWsUpgrade(entry.requestHeaders)
+  ) {
     return 'websocket'
   }
 

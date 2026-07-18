@@ -98,7 +98,7 @@ export default function CodeEditor({ value, language, onChange }: CodeEditorProp
           },
           '.cm-scroller': {
             fontFamily: 'var(--font-sans, "Geist Variable", "Menlo", monospace)',
-            fontSize: '13px',
+            fontSize: 'var(--text-prose-lg, 0.875rem)', // 14px @scale=1，随「内容字号」设置缩放
           },
         },
         { dark: true },

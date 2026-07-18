@@ -156,6 +156,20 @@ import { TitleBar } from '@/features/title-bar'
 1. `@theme inline {}`（第 8–52 行）：把 `--xxx` 桥接为 Tailwind 的 `--color-xxx`，使 `bg-card`、`text-muted-foreground` 等语义类可用；同时定义字体与 `--radius-*` 阶梯
 2. `:root {}`（亮色）与 `.dark {}`（暗色）：**两处必须成对维护**，改一个变量记得改另一个
 
+### 字体大小令牌（禁止再写 `text-[Npx]` 任意值）
+
+字号分两套阶梯，定义在 `@theme inline` 的 `--text-ui-*` / `--text-prose-*`，按内容性质选用：
+
+| 阶梯 | 场景 | 档位 |
+| --- | --- | --- |
+| `text-ui-*` | **UI 骨架**（固定界面文本）：工具栏、TabBar、Tooltip、表头、徽章、菜单、筛选栏 | `ui-2xs`(9px) `ui-xs`(10px) `ui-sm`(11px) `ui-md`(12px) `ui-lg`(13px) |
+| `text-prose-*` | **数据内容**（后端返回/用户输入）：Body/Raw/JSON 树、SSE chunk、AI 对话、表单数据、请求编辑输入框 | `prose-xs`(11px) `prose-sm`(12px) `prose-md`(13px) `prose-lg`(14px) `prose-xl`(15px) |
+
+- 新增 UI 文本时从上表选档位，**不要写 `text-[11px]` 这类任意值**；shadcn 组件内部的 `text-xs`/`text-sm` 标准类保持原样
+- **新增字号档位必须同步注册到 `src/lib/utils.ts` 的 `extendTailwindMerge` 配置**——tailwind-merge 不认识自定义 `text-*` 字号类，会把它误判为文字颜色，在 `cn(字号类, ..., text-颜色类)` 中静默丢弃字号类（症状：元素落回 16px 默认字号，且只有经过 `cn()` 的元素中招）
+- 纯 CSS 场景（如 `.shiki-root`、`.md-content pre`）用 `var(--text-prose-md, 0.8125rem)` 引用（带回退值）
+- **内容字号设置项已接线**：`--text-prose-*` 全部定义为 `calc(base * var(--prose-scale))`，`useProseFontSize` hook 运行时把档位（small=0.8462 / normal=1 / large=1.1538，以 prose-md 为锚即 11px / 13px / 15px）写入 `--prose-scale`，持久化走 `get_prose_font_size` / `set_prose_font_size` command → `setting.json` 的 `ui.prose_font_size`。UI 骨架（`--text-ui-*`）不参与缩放
+
 ### 语义变量分组（改 UI 优先复用这些）
 
 | 分组 | 变量 | 用途 |

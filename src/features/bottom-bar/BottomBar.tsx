@@ -85,7 +85,7 @@ export function BottomBar({
               )}
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+          <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
             {t('layout.hostSidebar')}
           </TooltipContent>
         </Tooltip>
@@ -112,7 +112,7 @@ export function BottomBar({
               <ScriptIcon className="size-4" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+          <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
             {t('scriptConfig.globalToggle')}
           </TooltipContent>
         </Tooltip>
@@ -136,7 +136,7 @@ export function BottomBar({
               <ShieldMinusIcon className="size-4" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+          <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
             {t('sslConfig.globalToggle')}
           </TooltipContent>
         </Tooltip>
@@ -164,7 +164,7 @@ export function BottomBar({
             )}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
           {t(detailTitleKey)}
         </TooltipContent>
       </Tooltip>

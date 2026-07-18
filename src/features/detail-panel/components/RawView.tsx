@@ -18,14 +18,14 @@ export default function RawView({ content }: { content: string }) {
                 {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
+            <TooltipContent side="left" className="bg-popover text-popover-foreground text-ui-sm">
               {copied ? 'Copied' : 'Copy'}
             </TooltipContent>
           </Tooltip>
         </div>
         <div className="absolute inset-0 overflow-auto">
           {content ? (
-            <pre className="whitespace-pre-wrap break-all px-3 py-2 text-xs text-foreground/80 font-mono">
+            <pre className="whitespace-pre-wrap break-all px-3 py-2 text-prose-md text-foreground/80 font-mono">
               {content}
             </pre>
           ) : null}

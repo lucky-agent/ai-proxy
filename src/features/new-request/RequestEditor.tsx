@@ -41,7 +41,7 @@ export default function RequestEditor(props: RequestEditorProps) {
           <TabsTrigger
             key={x.id}
             value={x.id}
-            className="text-[11px]"
+            className="text-ui-sm"
           >
             {t(x.labelKey)}
           </TabsTrigger>

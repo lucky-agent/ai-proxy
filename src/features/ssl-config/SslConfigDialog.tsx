@@ -39,7 +39,7 @@ const ACCENT_CHECKBOX =
   'after:-inset-1 data-checked:border-ai-user-bubble data-checked:bg-ai-user-bubble data-checked:text-ai-user-bubble-text dark:data-checked:bg-ai-user-bubble'
 
 const HEADER_CELL =
-  'overflow-visible text-[10px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase'
+  'overflow-visible text-ui-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase'
 
 /** 行内域名输入：静止时如纯文本，hover 现边框，聚焦细环 */
 const ROW_INPUT =
@@ -234,7 +234,7 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
                             />
                           }
                         />
-                        <TooltipContent side="top" align="start" className="max-w-[360px] bg-popover text-popover-foreground font-mono text-[11px]">
+                        <TooltipContent side="top" align="start" className="max-w-[360px] bg-popover text-popover-foreground font-mono text-ui-sm">
                           {item.domain}
                         </TooltipContent>
                       </Tooltip>
@@ -259,7 +259,7 @@ export default function SslConfigDialog({ open, onOpenChange }: Props) {
                         >
                           <Trash2Icon className="size-3.5" />
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
                           {t('sslConfig.delete')}
                         </TooltipContent>
                       </Tooltip>

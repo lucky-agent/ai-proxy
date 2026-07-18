@@ -88,7 +88,7 @@ export default function AuthTab({ headers, onHeadersChange }: Props) {
                 const cred = `${e.target.value}:${pwd}`
                 setAuthValue('Basic ', btoa(cred))
               }}
-              className="flex-1 h-auto py-1 text-xs font-mono"
+              className="flex-1 h-auto py-1 text-prose-sm font-mono"
               placeholder="user"
             />
           </div>
@@ -102,7 +102,7 @@ export default function AuthTab({ headers, onHeadersChange }: Props) {
                 const cred = `${usr}:${e.target.value}`
                 setAuthValue('Basic ', btoa(cred))
               }}
-              className="flex-1 h-auto py-1 text-xs font-mono"
+              className="flex-1 h-auto py-1 text-prose-sm font-mono"
               placeholder="••••••••"
             />
           </div>
@@ -115,7 +115,7 @@ export default function AuthTab({ headers, onHeadersChange }: Props) {
           <Input
             value={auth.token}
             onChange={e => setAuthValue('Bearer ', e.target.value)}
-            className="flex-1 h-auto py-1 text-xs font-mono"
+            className="flex-1 h-auto py-1 text-prose-sm font-mono"
             placeholder="eyJhbGciOi..."
           />
         </div>

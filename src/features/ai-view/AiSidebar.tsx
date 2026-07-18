@@ -82,22 +82,22 @@ function SessionGroup({
               >
                 {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
               </span>
-              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400 border-violet-500/20">
+              <span className="text-ui-2xs font-semibold px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400 border-violet-500/20">
                 {reasonLabel(session.matchReason)}
               </span>
               {session.source && (
                 <Tooltip>
                   <TooltipTrigger className="inline-flex">
-                    <span className="max-w-24 truncate text-[9px] px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-500 border-sky-500/20 dark:text-sky-400">
+                    <span className="max-w-24 truncate text-ui-2xs px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-500 border-sky-500/20 dark:text-sky-400">
                       {session.source}
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[320px] bg-popover text-popover-foreground text-[11px]">
+                  <TooltipContent side="top" className="max-w-[320px] bg-popover text-popover-foreground text-ui-sm">
                     {session.source}
                   </TooltipContent>
                 </Tooltip>
               )}
-              <span className="text-[10px] text-muted-foreground/60">{session.requestIds.length} 轮</span>
+              <span className="text-ui-xs text-muted-foreground/60">{session.requestIds.length} 轮</span>
               <span
                 onClick={(e) => {
                   e.stopPropagation()
@@ -111,10 +111,10 @@ function SessionGroup({
                 {mdSessions[session.sessionId] ? <CodeIcon className="size-3" /> : <TextIcon className="size-3" />}
               </span>
             </div>
-            <p className="text-[11px] text-foreground/80 truncate leading-tight">
+            <p className="text-ui-sm text-foreground/80 truncate leading-tight">
               {session.title || session.scopeHost || session.sessionId}
             </p>
-            <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+            <p className="text-ui-xs text-muted-foreground/50 mt-0.5">
               {total != null ? `Σ ${total} tokens` : '— tokens'}
             </p>
           </button>
@@ -137,7 +137,7 @@ function SessionGroup({
                 <ContextMenuTrigger>
                   <button
                     className={cn(
-                      'w-full text-left pl-8 pr-3 py-1.5 text-[10px] font-mono transition-colors',
+                      'w-full text-left pl-8 pr-3 py-1.5 text-ui-xs font-mono transition-colors',
                       sel ? 'bg-accent/40 text-foreground' : 'text-muted-foreground hover:bg-surface-base/40',
                     )}
                     onClick={() => onSelect({ sessionId: session.sessionId, requestId: rid })}
@@ -166,10 +166,10 @@ export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDe
   return (
     <div className="flex h-full flex-col bg-surface-base/30">
       <div className="flex items-center px-3 py-2">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <span className="text-ui-xs font-bold uppercase tracking-wider text-muted-foreground">
           {t('aiSidebar.title', 'AI 会话')}
         </span>
-        <span className="ml-auto text-[10px] text-muted-foreground/50">{sessions.length}</span>
+        <span className="ml-auto text-ui-xs text-muted-foreground/50">{sessions.length}</span>
       </div>
 
       <Separator />

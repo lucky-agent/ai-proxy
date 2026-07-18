@@ -61,7 +61,7 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
     return (
       <div className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 overflow-hidden">
         <button
-          className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
+          className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-ui-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors"
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
@@ -70,7 +70,7 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
           {headerActions}
         </button>
         {expanded && (
-          <pre className="max-h-48 overflow-y-auto border-t border-amber-500/15 px-3 py-2 text-[11px] font-mono text-foreground/80 whitespace-pre-wrap break-all">
+          <pre className="max-h-48 overflow-y-auto border-t border-amber-500/15 px-3 py-2 text-prose-sm font-mono text-foreground/80 whitespace-pre-wrap break-all">
             {JSON.stringify(block.input, null, 2)}
           </pre>
         )}
@@ -82,7 +82,7 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
     return (
       <div className="mt-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
         <button
-          className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+          className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-ui-sm font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
@@ -91,7 +91,7 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
           {headerActions}
         </button>
         {expanded && (
-          <div className="max-h-48 overflow-y-auto border-t border-emerald-500/15 px-3 py-2 text-xs">
+          <div className="max-h-48 overflow-y-auto border-t border-emerald-500/15 px-3 py-2 text-prose-md">
             {block.content.map((innerBlock, i) => (
               <ContentBlock key={i} block={innerBlock} showMd={showMd} />
             ))}
@@ -110,7 +110,7 @@ function ToolTurn({ turn, showMd }: { turn: AiTurn; showMd: boolean }) {
   return (
     <div>
       <button
-        className="flex w-full items-center gap-1.5 text-left text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 transition-colors"
+        className="flex w-full items-center gap-1.5 text-left text-ui-sm font-medium text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
         {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
@@ -118,7 +118,7 @@ function ToolTurn({ turn, showMd }: { turn: AiTurn; showMd: boolean }) {
         <span>tool</span>
       </button>
       {expanded && (
-        <div className="mt-1.5 border-t border-emerald-500/15 pt-1.5 text-xs">
+        <div className="mt-1.5 border-t border-emerald-500/15 pt-1.5 text-prose-md">
           {turn.content.map((block, j) => (
             <ContentBlock key={j} block={block} showMd={showMd} />
           ))}
@@ -196,7 +196,7 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
                 <ExternalLinkIcon className="size-3" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+            <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
               {t('aiView.jumpToProxy', '在代理中查看')}
             </TooltipContent>
           </Tooltip>
@@ -223,7 +223,7 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
   if (isUser) {
     bubbleClass = 'bg-ai-user-bubble text-ai-user-bubble-text'
   } else if (isSystem) {
-    bubbleClass = 'bg-surface-base/50 text-muted-foreground text-xs'
+    bubbleClass = 'bg-surface-base/50 text-muted-foreground text-prose-md'
   } else if (isToolsDef) {
     bubbleClass = 'bg-violet-500/5 border border-violet-500/15 text-foreground'
   } else if (isTool) {
@@ -241,7 +241,7 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
 
   return (
     <div className={`group flex ${alignClass}`}>
-      <div className={`relative max-w-[80%] rounded-xl px-4 py-2.5 text-sm ${bubbleClass}`}>
+      <div className={`relative max-w-[80%] rounded-xl px-4 py-2.5 text-prose-xl ${bubbleClass}`}>
         <CopyButton copied={copied} onCopy={handleCopy} isUser={isUser} show={!toolsOnly} />
         {mdCapable && !toolsOnly && (
           <button
@@ -258,7 +258,7 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
           </button>
         )}
         {!toolsOnly && (reqLabel || onJump) && (
-          <div className={`mb-1 flex items-center gap-1 text-[9px] font-mono ${isUser ? 'text-white/60' : 'text-muted-foreground/50'}`}>
+          <div className={`mb-1 flex items-center gap-1 text-ui-2xs font-mono ${isUser ? 'text-white/60' : 'text-muted-foreground/50'}`}>
             {reqLabel && <span>{reqLabel}</span>}
             {onJump && (
               <button
@@ -276,14 +276,14 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
         {isSystem ? (
           <div>
             <button
-              className="flex w-full items-center gap-1.5 text-left text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className="flex w-full items-center gap-1.5 text-left text-ui-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setSystemExpanded(!systemExpanded)}
             >
               {systemExpanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
               <span className="italic">💬 {systemPreview}</span>
             </button>
             {systemExpanded && (
-              <div ref={contentRef} className="mt-1.5 border-t border-border/30 pt-1.5 text-xs whitespace-pre-wrap break-words">
+              <div ref={contentRef} className="mt-1.5 border-t border-border/30 pt-1.5 text-prose-md whitespace-pre-wrap break-words">
                 {turn.content.map((block, j) => (
                   block.type === 'text' ? <TextBlock key={j} text={block.text} showMd={showMd} inverted={false} /> : <ContentBlock key={j} block={block} showMd={showMd} />
                 ))}
@@ -302,7 +302,7 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
               }
               return (
                 <button
-                  className="flex w-full items-center gap-1.5 text-left text-[11px] font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 transition-colors"
+                  className="flex w-full items-center gap-1.5 text-left text-ui-sm font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 transition-colors"
                   onClick={() => setToolsExpanded(!toolsExpanded)}
                 >
                   {toolsExpanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
@@ -328,8 +328,8 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
                     ),
                   )}
                   <details className="mt-1">
-                    <summary className="text-[10px] text-muted-foreground/60 cursor-pointer">查看原始 JSON</summary>
-                    <pre className="mt-1 text-[10px] font-mono text-foreground/70 whitespace-pre-wrap break-all">
+                    <summary className="text-ui-xs text-muted-foreground/60 cursor-pointer">查看原始 JSON</summary>
+                    <pre className="mt-1 text-prose-xs font-mono text-foreground/70 whitespace-pre-wrap break-all">
                       {formatted}
                     </pre>
                   </details>

@@ -121,9 +121,9 @@ export default function RuleEditForm({
             }}
           />
           {error ? (
-            <span className="text-[11px] text-destructive">{error}</span>
+            <span className="text-ui-sm text-destructive">{error}</span>
           ) : (
-            <span className="text-[11px] text-muted-foreground/75">
+            <span className="text-ui-sm text-muted-foreground/75">
               {t('aiConfig.urlHint')}
             </span>
           )}
@@ -173,7 +173,7 @@ export default function RuleEditForm({
             </Button>
           </div>
           {sources.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground/75">
+            <p className="text-ui-sm text-muted-foreground/75">
               {t('aiConfig.sourcesEmpty')}
             </p>
           ) : (
@@ -246,7 +246,7 @@ export default function RuleEditForm({
                         <XIcon className="size-3.5" />
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+                    <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
                       {t('aiConfig.delete')}
                     </TooltipContent>
                   </Tooltip>

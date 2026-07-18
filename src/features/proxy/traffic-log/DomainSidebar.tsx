@@ -32,7 +32,7 @@ export default function DomainSidebar({
   return (
     <div className="flex flex-col h-full border-r border-surface-elevated overflow-hidden bg-surface-base">
       <div className="flex items-center px-3 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground select-none">
+        <span className="text-ui-xs font-semibold uppercase tracking-wide text-muted-foreground select-none">
           {t('hosts.title')}
         </span>
       </div>
@@ -49,7 +49,7 @@ export default function DomainSidebar({
             <span className="flex-1 truncate font-medium text-amber-500">
               {t('hosts.pinned')}
             </span>
-            <span className="text-muted-foreground tabular-nums text-[10px]">{pinned.length}</span>
+            <span className="text-muted-foreground tabular-nums text-ui-xs">{pinned.length}</span>
           </div>
           <CollapsibleContent>
           {pinned.map(([host, count]) => (
@@ -65,11 +65,11 @@ export default function DomainSidebar({
               <TooltipTrigger className="flex-1 truncate text-left">
                 <span>{host}</span>
               </TooltipTrigger>
-              <TooltipContent side="top" align="start" className="max-w-[320px] bg-popover text-popover-foreground text-[11px]">
+              <TooltipContent side="top" align="start" className="max-w-[320px] bg-popover text-popover-foreground text-ui-sm">
                 {host}
               </TooltipContent>
             </Tooltip>
-            <span className="text-muted-foreground tabular-nums text-[10px]">{count}</span>
+            <span className="text-muted-foreground tabular-nums text-ui-xs">{count}</span>
             <button
               className="shrink-0 p-0 rounded hover:bg-surface-elevated/50 text-amber-500 transition-colors"
               onClick={(e) => {
@@ -105,7 +105,7 @@ export default function DomainSidebar({
             >
               {t('hosts.all')}
             </span>
-            <span className="text-muted-foreground tabular-nums text-[10px]">{totalEntries}</span>
+            <span className="text-muted-foreground tabular-nums text-ui-xs">{totalEntries}</span>
           </div>
           <CollapsibleContent>
           {domains.map(([host, count]) => (
@@ -120,7 +120,7 @@ export default function DomainSidebar({
               <span className="flex-1 truncate" title={host}>
                 {host}
               </span>
-              <span className="text-muted-foreground tabular-nums text-[10px]">{count}</span>
+              <span className="text-muted-foreground tabular-nums text-ui-xs">{count}</span>
               <button
                 className="shrink-0 p-0 rounded hover:bg-surface-elevated/50 text-muted-foreground hover:text-amber-500 opacity-0 group-hover:opacity-100 transition-all"
                 onClick={(e) => {

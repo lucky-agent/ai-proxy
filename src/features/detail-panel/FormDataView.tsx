@@ -114,12 +114,12 @@ export default function FormDataView({ body, contentType }: { body: string; cont
 function UrlEncodedView({ parts }: { parts: FormField[] }) {
   const { t } = useTranslation()
   return (
-    <Table className='table-fixed text-xs'>
+    <Table className='table-fixed text-prose-md'>
       <colgroup><col style={{ width: '30%' }} /><col style={{ width: '70%' }} /></colgroup>
       <TableHeader>
-        <TableRow className='border-b border-surface-elevated bg-surface-elevated/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'>
-          <TableHead className='py-1.5 pl-3 pr-2 h-auto text-left font-semibold text-[10px]'>Key</TableHead>
-          <TableHead className='py-1.5 pr-3 h-auto text-left font-semibold text-[10px]'>Value</TableHead>
+        <TableRow className='border-b border-surface-elevated bg-surface-elevated/30 text-ui-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+          <TableHead className='py-1.5 pl-3 pr-2 h-auto text-left font-semibold text-ui-xs'>Key</TableHead>
+          <TableHead className='py-1.5 pr-3 h-auto text-left font-semibold text-ui-xs'>Value</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -146,8 +146,8 @@ function UrlEncodedRow({ part }: { part: FormField }) {
           <TooltipTrigger className='block w-full cursor-pointer text-left min-w-0'>
             <span className='line-clamp-2 break-all'>{part.value}</span>
           </TooltipTrigger>
-          <TooltipContent side='top' align='start' className='max-w-[420px] bg-popover text-popover-foreground text-[11px]'>
-            <div className='max-h-[200px] overflow-auto whitespace-pre-wrap break-all font-mono text-[11px]'>{part.value}</div>
+          <TooltipContent side='top' align='start' className='max-w-[420px] bg-popover text-popover-foreground text-ui-sm'>
+            <div className='max-h-[200px] overflow-auto whitespace-pre-wrap break-all font-mono text-ui-sm'>{part.value}</div>
           </TooltipContent>
         </Tooltip>
         <button
@@ -184,15 +184,15 @@ function MultipartPartCard({ part }: { part: FormField }) {
         <CollapsibleTrigger className="shrink-0 p-0 rounded">
           {expanded ? <ChevronDown className='size-3 shrink-0 text-muted-foreground/60' /> : <ChevronRight className='size-3 shrink-0 text-muted-foreground/60' />}
         </CollapsibleTrigger>
-        <span className='text-xs font-medium text-foreground/90 truncate min-w-0'>{part.name}</span>
-        {fileInfo ? <span className='text-[10px] text-muted-foreground/70 truncate min-w-0 shrink-0'>{fileInfo}</span> : <span className='text-[10px] text-muted-foreground/50 shrink-0'>{part.value.length}B</span>}
+        <span className='text-prose-md font-medium text-foreground/90 truncate min-w-0'>{part.name}</span>
+        {fileInfo ? <span className='text-ui-xs text-muted-foreground/70 truncate min-w-0 shrink-0'>{fileInfo}</span> : <span className='text-ui-xs text-muted-foreground/50 shrink-0'>{part.value.length}B</span>}
       </div>
       <CollapsibleContent>
-        <div className='text-xs'>
+        <div className='text-prose-md'>
           {headerCount > 0 && (
             <div className='border-b border-surface-elevated/30 bg-surface-elevated/10 px-2.5 py-1'>
               {Object.entries(part.headers).map(([key, value]) => (
-                <div key={key} className='flex gap-2 text-[10px] text-muted-foreground'>
+                <div key={key} className='flex gap-2 text-prose-xs text-muted-foreground'>
                   <span className='font-medium shrink-0'>{key}:</span><span className='break-all'>{value}</span>
                 </div>
               ))}
@@ -204,7 +204,7 @@ function MultipartPartCard({ part }: { part: FormField }) {
                 <TooltipTrigger className="inline-flex">
                   <button onClick={() => copy(part.value)} className='rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors'>{copied ? <CheckIcon className='size-3 text-emerald-500' /> : <CopyIcon className='size-3' />}</button>
                 </TooltipTrigger>
-                <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
+                <TooltipContent side="left" className="bg-popover text-popover-foreground text-ui-sm">
                   {copied ? 'Copied' : 'Copy'}
                 </TooltipContent>
               </Tooltip>

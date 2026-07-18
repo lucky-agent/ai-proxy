@@ -91,7 +91,7 @@ function TitleBarMenu({
         onMouseDown={stopTitleBarDrag}
         onPointerDown={stopTitleBarDrag}
         className={cn(
-          'inline-flex h-8 items-center rounded-none border-0 px-2.5 text-xs text-foreground/80 shadow-none outline-none transition-colors hover:bg-surface-elevated/50 hover:text-foreground focus:outline-none focus-visible:outline-none',
+          'inline-flex h-8 items-center rounded-none border-0 px-2.5 text-ui-md text-foreground/80 shadow-none outline-none transition-colors hover:bg-surface-elevated/50 hover:text-foreground focus:outline-none focus-visible:outline-none',
           open && 'bg-surface-elevated/50 text-foreground'
         )}>
         {label}
@@ -308,11 +308,11 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
               onMouseDown={stopTitleBarDrag}
               onPointerDown={stopTitleBarDrag}
               onClick={onClearTraffic}
-              className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-surface-elevated text-muted-foreground border border-border hover:bg-muted transition-colors"
+              className="inline-flex items-center rounded-md px-2 py-1 text-ui-sm font-medium bg-surface-elevated text-muted-foreground border border-border hover:bg-muted transition-colors"
             >
               <Trash2Icon className="size-3" />
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+            <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-ui-sm">
               {t('traffic.clear')}
             </TooltipContent>
           </Tooltip>
@@ -323,11 +323,11 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
                 onMouseDown={stopTitleBarDrag}
                 onPointerDown={stopTitleBarDrag}
                 onClick={onStopProxy}
-                className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-colors"
+                className="inline-flex items-center rounded-md px-2 py-1 text-ui-sm font-medium bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20 transition-colors"
               >
                 <SquareIcon className="size-3" />
               </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+              <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-ui-sm">
                 {t('app.stop')}
               </TooltipContent>
             </Tooltip>
@@ -338,11 +338,11 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
                 onMouseDown={stopTitleBarDrag}
                 onPointerDown={stopTitleBarDrag}
                 onClick={onStartProxy}
-                className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                className="inline-flex items-center rounded-md px-2 py-1 text-ui-sm font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
               >
                 <PlayIcon className="size-3" />
               </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+              <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-ui-sm">
                 {t('app.start')}
               </TooltipContent>
             </Tooltip>

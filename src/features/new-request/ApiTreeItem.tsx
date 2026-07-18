@@ -141,7 +141,7 @@ export function ApiTreeItem({
           {/* 请求：Method badge + 名称 */}
           {!isFolder && !renaming && (
             <>
-              <span className={cn('shrink-0 text-[10px] font-bold', `text-${METHOD_COLORS[(node as ApiRequestNode).method]}`)}>
+              <span className={cn('shrink-0 text-ui-xs font-bold', `text-${METHOD_COLORS[(node as ApiRequestNode).method]}`)}>
                 {(node as ApiRequestNode).method}
               </span>
               <span className="truncate">{node.name}</span>
@@ -164,7 +164,7 @@ export function ApiTreeItem({
                 if (e.key === 'Enter') handleRenameSubmit()
                 if (e.key === 'Escape') { setRenaming(false); setRenameValue(node.name) }
               }}
-              className="flex-1 min-w-0 h-auto py-0 text-xs font-mono"
+              className="flex-1 min-w-0 h-auto py-0 text-prose-md font-mono"
             />
           )}
         </div>

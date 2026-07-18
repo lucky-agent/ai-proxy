@@ -50,15 +50,15 @@ export default function KeyValueTable({ data, emptyLabel }: { data: Record<strin
   return (
     <div className="relative" ref={containerRef}>
       <div className={dragging ? 'cursor-col-resize select-none' : ''}>
-        <Table className="table-fixed text-xs">
+        <Table className="table-fixed text-prose-md">
           <colgroup>
             <col style={{ width: keyPct }} />
             <col style={{ width: valPct }} />
           </colgroup>
           <TableHeader>
-            <TableRow className="border-b border-surface-elevated bg-surface-elevated/30 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <TableHead className="py-1.5 pl-3 pr-2 h-auto text-left font-semibold text-[10px] overflow-hidden">Key</TableHead>
-              <TableHead className="py-1.5 pr-3 h-auto text-left font-semibold text-[10px]">Value</TableHead>
+            <TableRow className="border-b border-surface-elevated bg-surface-elevated/30 text-ui-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <TableHead className="py-1.5 pl-3 pr-2 h-auto text-left font-semibold text-ui-xs overflow-hidden">Key</TableHead>
+              <TableHead className="py-1.5 pr-3 h-auto text-left font-semibold text-ui-xs">Value</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -97,18 +97,18 @@ function KeyValueRow({ entryKey, value }: { entryKey: string; value: string }) {
 
   return (
     <TableRow className="border-b border-surface-elevated/30 group hover:bg-surface-elevated/20 transition-colors">
-      <TableCell className="py-1.5 pl-3 pr-2 align-top font-mono text-xs text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
+      <TableCell className="py-1.5 pl-3 pr-2 align-top font-mono text-prose-md text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
         {entryKey}
       </TableCell>
-      <TableCell className="py-1.5 pr-2 align-top text-foreground/80 text-sm relative max-w-0">
+      <TableCell className="py-1.5 pr-2 align-top text-foreground/80 text-prose-xl relative max-w-0">
         <Tooltip>
           <TooltipTrigger className="block w-full cursor-pointer text-left min-w-0">
             <span className="line-clamp-2 break-all">
               {value}
             </span>
           </TooltipTrigger>
-          <TooltipContent side="top" align="start" className="max-w-[420px] bg-popover text-popover-foreground text-[11px]">
-            <div className="max-h-[200px] overflow-auto whitespace-pre-wrap break-all font-mono text-[11px]">{value}</div>
+          <TooltipContent side="top" align="start" className="max-w-[420px] bg-popover text-popover-foreground text-ui-sm">
+            <div className="max-h-[200px] overflow-auto whitespace-pre-wrap break-all font-mono text-ui-sm">{value}</div>
           </TooltipContent>
         </Tooltip>
         <button

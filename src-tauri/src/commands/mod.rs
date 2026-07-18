@@ -19,6 +19,6 @@ pub use settings::{get_ssl_config, save_ssl_config, set_ssl_enabled};
 pub use settings::{get_ai_config, save_ai_config};
 pub use settings::{get_script_config, save_script_config, set_script_enabled, get_script_content, save_script_content};
 pub use settings::test_rule_match;
-pub use theme::{get_theme, set_theme};
+pub use theme::{get_prose_font_size, get_theme, set_prose_font_size, set_theme};
 mod traffic;
 pub use traffic::{load_traffic_history, get_traffic_detail};

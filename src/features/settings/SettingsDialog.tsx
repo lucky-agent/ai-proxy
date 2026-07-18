@@ -26,6 +26,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useLocale } from '@/hooks/useLocale'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { Theme } from '@/hooks/useTheme'
+import type { ProseFontSize } from '@/hooks/useProseFontSize'
 import type { LocaleSetting } from '@/i18n'
 import type { ProxyConfig } from '@/types/settings'
 
@@ -34,6 +35,8 @@ interface Props {
   onOpenChange: (open: boolean) => void
   theme: Theme
   onThemeChange: (theme: Theme) => void
+  proseFontSize: ProseFontSize
+  onProseFontSizeChange: (size: ProseFontSize) => void
 }
 
 type SettingsTab = 'general' | 'proxy'
@@ -51,7 +54,7 @@ const NAV_ITEMS: NavItem[] = [
 
 const inputClass = 'h-auto w-full'
 
-export default function SettingsDialog({ open, onOpenChange, theme, onThemeChange }: Props) {
+export default function SettingsDialog({ open, onOpenChange, theme, onThemeChange, proseFontSize, onProseFontSizeChange }: Props) {
   const { t, setLocale } = useLocale()
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const [proxy, setProxy] = useState<ProxyConfig>({
@@ -119,7 +122,7 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
                 <TabsTrigger
                   key={value}
                   value={value}
-                  className="w-full justify-start gap-2.5 px-3 py-2 text-left text-[13px] font-medium"
+                  className="w-full justify-start gap-2.5 px-3 py-2 text-left text-ui-lg font-medium"
                 >
                   <Icon className="size-4 shrink-0" />
                   {t(labelKey)}
@@ -185,12 +188,45 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
                             <Icon className="size-3.5" />
                           </ToggleGroupItem>
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
                           {t(`theme.${value}`)}
                         </TooltipContent>
                       </Tooltip>
                     ))}
                   </ToggleGroup>
+                </div>
+
+                <div className="grid gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t('settings.proseFontSize')}
+                  </span>
+                  <ToggleGroup
+                    value={[proseFontSize]}
+                    onValueChange={(value) => {
+                      if (value && value.length > 0) onProseFontSizeChange(value[0] as ProseFontSize)
+                    }}
+                    size="sm"
+                    className="w-fit rounded-md border border-border bg-surface-elevated/50 p-0.5"
+                  >
+                    {(
+                      [
+                        { value: 'small' as ProseFontSize, labelKey: 'settings.proseFontSizeSmall' },
+                        { value: 'normal' as ProseFontSize, labelKey: 'settings.proseFontSizeNormal' },
+                        { value: 'large' as ProseFontSize, labelKey: 'settings.proseFontSizeLarge' },
+                      ] as const
+                    ).map(({ value, labelKey }) => (
+                      <ToggleGroupItem
+                        key={value}
+                        value={value}
+                        className="inline-flex h-7 items-center justify-center rounded-[4px] border border-transparent px-2.5 text-ui-md text-muted-foreground transition-colors cursor-pointer hover:text-foreground aria-pressed:border-ring/60 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm aria-pressed:hover:bg-background"
+                      >
+                        {t(labelKey)}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                  <p className="text-ui-sm text-muted-foreground/70">
+                    {t('settings.proseFontSizeHint')}
+                  </p>
                 </div>
               </TabsContent>
 

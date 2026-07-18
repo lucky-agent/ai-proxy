@@ -27,7 +27,7 @@ export function KeyValueEditor({ entries, onChange, title, addLabel, emptyLabel 
   return (
     <div className="p-4 space-y-1 min-h-0 flex flex-col">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="text-ui-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
         </span>
         <button
@@ -49,13 +49,13 @@ export function KeyValueEditor({ entries, onChange, title, addLabel, emptyLabel 
               <Input
                 value={pair.key}
                 onChange={e => handleChange(i, 'key', e.target.value)}
-                className="flex-1 h-auto py-1 text-[11px] font-mono"
+                className="flex-1 h-auto py-1 text-prose-sm font-mono"
                 placeholder="Key"
               />
               <Input
                 value={pair.value}
                 onChange={e => handleChange(i, 'value', e.target.value)}
-                className="flex-[2] h-auto py-1 text-[11px] font-mono"
+                className="flex-[2] h-auto py-1 text-prose-sm font-mono"
                 placeholder="Value"
               />
               <button

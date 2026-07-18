@@ -53,7 +53,7 @@ const ACCENT_CHECKBOX =
   'after:-inset-1 data-checked:border-ai-user-bubble data-checked:bg-ai-user-bubble data-checked:text-ai-user-bubble-text dark:data-checked:bg-ai-user-bubble'
 
 const HEADER_CELL =
-  'overflow-visible text-[10px] font-medium tracking-wider whitespace-nowrap text-muted-foreground'
+  'overflow-visible text-ui-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground'
 
 const ROW_INPUT =
   'h-6 rounded-sm border-transparent px-1.5 text-xs md:text-xs transition-colors hover:border-input/60 focus-visible:ring-1 dark:bg-transparent'
@@ -285,7 +285,7 @@ export default function ScriptConfigDialog({ open, onOpenChange, onEditScript }:
                               </span>
                             }
                           />
-                          <TooltipContent side="top" align="start" className="max-w-[320px] bg-popover text-popover-foreground text-[11px]">
+                          <TooltipContent side="top" align="start" className="max-w-[320px] bg-popover text-popover-foreground text-ui-sm">
                             {item.name || t('scriptConfig.placeholderName')}
                           </TooltipContent>
                         </Tooltip>
@@ -360,7 +360,7 @@ export default function ScriptConfigDialog({ open, onOpenChange, onEditScript }:
                               </span>
                             }
                           />
-                          <TooltipContent side="top" align="start" className="max-w-[360px] bg-popover text-popover-foreground font-mono text-[11px]">
+                          <TooltipContent side="top" align="start" className="max-w-[360px] bg-popover text-popover-foreground font-mono text-ui-sm">
                             {item.domain || t('scriptConfig.placeholderDomain')}
                           </TooltipContent>
                         </Tooltip>
@@ -383,7 +383,7 @@ export default function ScriptConfigDialog({ open, onOpenChange, onEditScript }:
                         >
                           <PencilIcon className="size-3.5" />
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
                           {t('scriptConfig.editScript')}
                         </TooltipContent>
                       </Tooltip>
@@ -394,7 +394,7 @@ export default function ScriptConfigDialog({ open, onOpenChange, onEditScript }:
                         >
                           <Trash2Icon className="size-3.5" />
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
                           {t('scriptConfig.delete')}
                         </TooltipContent>
                       </Tooltip>

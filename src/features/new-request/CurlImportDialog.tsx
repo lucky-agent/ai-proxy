@@ -47,7 +47,7 @@ export function CurlImportDialog({ open, onOpenChange, onConfirm }: CurlImportDi
         </DialogHeader>
 
         <textarea
-          className="w-full h-40 p-3 rounded-md border border-border bg-surface-deep text-xs font-mono
+          className="w-full h-40 p-3 rounded-md border border-border bg-surface-deep text-prose-md font-mono
                      text-foreground placeholder:text-muted-foreground/50 resize-none
                      focus:outline-none focus:ring-2 focus:ring-primary/30"
           value={value}

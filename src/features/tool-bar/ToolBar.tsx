@@ -42,7 +42,7 @@ export function ToolBar({ activeTabId, mountedViews, onViewChange }: ToolBarProp
               )}
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8} className="bg-popover text-popover-foreground text-[11px]">
+          <TooltipContent side="right" sideOffset={8} className="bg-popover text-popover-foreground text-ui-sm">
             {t(labelKey)}
           </TooltipContent>
         </Tooltip>

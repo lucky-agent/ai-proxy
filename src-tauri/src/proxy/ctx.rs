@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use rama::http::request::Parts;
 use rama::http::HeaderName;
 use rama::http::{HeaderMap, Method};
+use rama::net::address::HostWithOptPort;
 use rama::net::uri::Uri;
+use rama::net::{AuthorityInputExt, ProtocolInputExt};
 use tauri::ipc::Channel;
 
 use crate::config::Settings;
@@ -50,6 +52,27 @@ impl ProxyCtx {
         settings: Settings,
         start_ms: Option<i64>,
     ) -> Self {
+        // MITM 解密后的 HTTP/1.1 请求行是 origin-form（仅 /path?query）：用 rama 请求上下文
+        // API 补全为绝对地址，事件/DB/AI 检测统一拿到完整 URL。
+        // - scheme：ProtocolInputExt::protocol()（TLS 终结连接带 SecureTransport 标记 → https）
+        // - authority：AuthorityInputExt::authority()（uri host → TLS SNI → Forwarded → Host 头）
+        // 须在清空 extensions 之前执行；仅影响 ctx 这份记录用的克隆，不改真实转发的请求。
+        if !parts.uri.is_absolute()
+            && let Some(protocol) = parts.protocol()
+            && let Some(authority) = parts.authority()
+        {
+            let HostWithOptPort { host, port } = authority;
+            // 协议默认端口（443/80）不写入 URL，与浏览器地址栏一致
+            let authority = match port.as_u16() {
+                Some(p) if protocol.default_port() != Some(p) => format!("{host}:{p}"),
+                _ => host.to_string(),
+            };
+            if let Ok(uri) =
+                format!("{protocol}://{authority}{}", parts.uri.request_target()).parse()
+            {
+                parts.uri = uri;
+            }
+        }
         // extensions 携带 State 等运行时引用，ctx 只需要 method/uri/headers，清空避免多余持有。
         parts.extensions = Default::default();
         let start_ms = start_ms.unwrap_or_else(crate::utils::date::now_ms);

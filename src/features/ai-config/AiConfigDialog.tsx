@@ -228,7 +228,7 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
                           key={key}
                           className={cn(
                             colClass,
-                            'overflow-visible text-[10px] font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase'
+                            'overflow-visible text-ui-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase'
                           )}
                         >
                           {t(`aiConfig.${key}`)}
@@ -273,7 +273,7 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
                                 {rule.url}
                               </span>
                             </TooltipTrigger>
-                            <TooltipContent side="top" align="start" className="max-w-[420px] font-mono text-[11px] bg-popover text-popover-foreground">
+                            <TooltipContent side="top" align="start" className="max-w-[420px] font-mono text-ui-sm bg-popover text-popover-foreground">
                               {rule.url}
                             </TooltipContent>
                           </Tooltip>
@@ -281,7 +281,7 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
                         <span
                           className={cn(
                             COL.provider,
-                            'text-[11px] text-muted-foreground',
+                            'text-ui-sm text-muted-foreground',
                             !rule.enabled && 'opacity-40'
                           )}
                         >
@@ -298,7 +298,7 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
                         <span
                           className={cn(
                             COL.sources,
-                            'text-[11px] text-muted-foreground',
+                            'text-ui-sm text-muted-foreground',
                             !rule.enabled && 'opacity-40'
                           )}
                         >
@@ -310,14 +310,14 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
                                 <span className="flex items-center">
                                   <span className="truncate">{names[0]}</span>
                                   {names.length > 1 && (
-                                    <span className="ml-1 shrink-0 rounded-full bg-muted px-1 text-[9px]">
+                                    <span className="ml-1 shrink-0 rounded-full bg-muted px-1 text-ui-2xs">
                                       +{names.length - 1}
                                     </span>
                                   )}
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent side="top" align="start" className="max-w-[360px] bg-popover text-popover-foreground">
-                                <div className="space-y-1 text-[11px]">
+                                <div className="space-y-1 text-ui-sm">
                                   {rule.sources.map((s, si) => (
                                     <div key={si}>
                                       <span className="font-medium">{s.name.trim() || '—'}</span>
@@ -333,12 +333,12 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
                         <span
                           className={cn(
                             COL.mergeHeader,
-                            'truncate font-mono text-[11px]',
+                            'truncate font-mono text-ui-sm',
                             !rule.enabled && 'opacity-40'
                           )}
                         >
                           <Tooltip>
-                            <TooltipTrigger className="block min-w-0 truncate font-mono text-[11px] text-left w-full">
+                            <TooltipTrigger className="block min-w-0 truncate font-mono text-ui-sm text-left w-full">
                               {headers.length === 0 ? (
                                 <span className="text-muted-foreground opacity-60">—</span>
                               ) : headers.length === 1 ? (
@@ -349,7 +349,7 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
                             </TooltipTrigger>
                             <TooltipContent side="top" align="start" className="max-w-[360px] bg-popover text-popover-foreground">
                               {headers.length > 0 ? (
-                                <div className="space-y-1 text-[11px]">
+                                <div className="space-y-1 text-ui-sm">
                                   {rule.sources.map((s, si) => (
                                     <div key={si}>
                                       <span className="font-medium">{s.name.trim() || '—'}</span>
@@ -359,7 +359,7 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
                                   ))}
                                 </div>
                               ) : (
-                                <span className="text-[11px] opacity-70">{t('aiConfig.mergeHeaderGlobal')}</span>
+                                <span className="text-ui-sm opacity-70">{t('aiConfig.mergeHeaderGlobal')}</span>
                               )}
                             </TooltipContent>
                           </Tooltip>

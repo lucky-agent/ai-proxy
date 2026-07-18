@@ -13,10 +13,10 @@ use crate::commands::get_traffic_detail;
 use crate::commands::resend_request;
 use crate::commands::open_url;
 use crate::commands::{
-    get_collections, get_locale, get_script_config, get_script_content, get_settings, get_ssl_config, get_status,
+    get_collections, get_locale, get_prose_font_size, get_script_config, get_script_content, get_settings, get_ssl_config, get_status,
     get_theme, create_collection, create_folder, create_request, delete_node, rename_node,
     move_node, save_request, duplicate_request, save_script_config, save_script_content, save_settings, save_ssl_config, set_locale,
-    set_script_enabled, set_ssl_enabled,
+    set_prose_font_size, set_script_enabled, set_ssl_enabled,
     set_theme, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
     get_ai_config, save_ai_config, test_rule_match,
 };
@@ -153,6 +153,8 @@ pub fn run() {
             save_script_content,
             get_theme,
             set_theme,
+            get_prose_font_size,
+            set_prose_font_size,
             get_settings,
             save_settings,
             get_locale,

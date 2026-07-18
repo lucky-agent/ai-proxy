@@ -499,7 +499,7 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
                     <InputGroupInput
                       value={activeTab.url}
                       onChange={e => updateActiveTab({ url: e.target.value })}
-                      className="text-xs font-mono"
+                      className="text-prose-md font-mono"
                       placeholder="https://api.example.com/v1/endpoint"
                       disabled={activeTab.sending}
                     />

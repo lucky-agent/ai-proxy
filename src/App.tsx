@@ -20,6 +20,7 @@ import type { ProxyJumpTarget } from '@/types/proxy'
 import { useProxyEvents } from '@/hooks/useProxyEvents'
 import { useAiSessions } from '@/hooks/useAiSessions'
 import { useTheme } from '@/hooks/useTheme'
+import { useProseFontSize } from '@/hooks/useProseFontSize'
 import { classifyEntry, type TypeFilter } from '@/lib/format'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import ScriptEditor from '@/features/script-config/ScriptEditor'
@@ -201,6 +202,7 @@ function App() {
   const { entries, clear } = useProxyEvents()
   const { sessions: aiSessions, mergedTimeline, conversationOf, removeSession, removeRequest } = useAiSessions()
   const { theme, setTheme } = useTheme()
+  const { proseFontSize, setProseFontSize } = useProseFontSize()
 
   const typeCounts = useMemo(() => {
     const counts = new Map<TypeFilter, number>()
@@ -438,6 +440,8 @@ function App() {
         onOpenChange={setSettingsOpen}
         theme={theme}
         onThemeChange={setTheme}
+        proseFontSize={proseFontSize}
+        onProseFontSizeChange={setProseFontSize}
       />
     </div>
     </TooltipProvider>

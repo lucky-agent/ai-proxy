@@ -42,7 +42,7 @@ export function ScriptToolbar({ onOpenFullConfig }: Props) {
               onOpenFullConfig()
             }
           }}
-          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
+          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-ui-sm font-medium transition-colors ${
             scriptConfig.enabled
               ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
               : 'bg-surface-elevated text-muted-foreground hover:bg-surface-elevated/80'
@@ -52,7 +52,7 @@ export function ScriptToolbar({ onOpenFullConfig }: Props) {
           {t('scriptConfig.toolbarToggle')}
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">
+      <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-ui-sm">
         {t('scriptConfig.globalToggle')}
       </TooltipContent>
     </Tooltip>

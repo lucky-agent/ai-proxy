@@ -45,3 +45,29 @@ pub fn set_theme(
 
     Ok(theme)
 }
+
+#[tauri::command]
+pub fn get_prose_font_size(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    Ok(state.settings().ui.prose_font_size)
+}
+
+#[tauri::command]
+pub fn set_prose_font_size(
+    state: tauri::State<'_, AppState>,
+    size: String,
+) -> Result<String, String> {
+    if !["small", "normal", "large"].contains(&size.as_str()) {
+        return Err(format!(
+            "Invalid prose font size: {size}. Must be small, normal, or large."
+        ));
+    }
+
+    let data_dir = state.store().data_dir();
+    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    settings.ui.prose_font_size = size.clone();
+    settings.save_to_path(&data_dir).map_err(|e| e.to_string())?;
+
+    state.set_settings(settings);
+
+    Ok(size)
+}

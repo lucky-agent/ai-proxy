@@ -41,7 +41,7 @@ export function TabBar({ activeTabId, scriptTabs, mountedViews, onViewChange, on
           onPointerDown={stopTitleBarDrag}
           onClick={() => onViewChange(id)}
           className={cn(
-            'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors',
+            'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-ui-sm font-medium transition-colors',
             activeTabId === id
               ? 'bg-surface-elevated/50 text-foreground'
               : 'text-muted-foreground hover:text-foreground'
@@ -81,7 +81,7 @@ export function TabBar({ activeTabId, scriptTabs, mountedViews, onViewChange, on
           onPointerDown={stopTitleBarDrag}
           onClick={() => onSelectScriptTab(tab.fileKey)}
           className={cn(
-            'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors',
+            'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-ui-sm font-medium transition-colors',
             activeTabId === tab.fileKey
               ? 'bg-surface-elevated/50 text-foreground'
               : 'text-muted-foreground hover:text-foreground'
