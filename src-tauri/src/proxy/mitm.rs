@@ -116,7 +116,7 @@ async fn tunnel_connect_proxy<P>(
 ) where
     P: Io + ExtensionsRef + std::marker::Unpin,
 {
-    let request_id = uuid::Uuid::new_v4().to_string();
+    let request_id = crate::storage::id::next_request_id();
     let event_channel = state.event_channel();
     let uri = authority
         .as_ref()
@@ -133,7 +133,7 @@ async fn tunnel_connect_proxy<P>(
     // Emit Request event for tunnel connection
     if let Some(ref ch) = event_channel {
         ch.send(ProxyEvent::Request {
-            id: request_id.clone(),
+            id: request_id,
             method: Method::CONNECT.as_str().into(),
             uri: uri.clone(),
             timestamp: start_ts,
@@ -161,7 +161,7 @@ async fn tunnel_connect_proxy<P>(
         Ok(()) => {
             if let Some(ref ch) = event_channel {
                 ch.send(ProxyEvent::Response {
-                    id: request_id.clone(),
+                    id: request_id,
                     status: 200,
                     timestamp: end_ts,
                     duration_ms,
@@ -176,7 +176,7 @@ async fn tunnel_connect_proxy<P>(
             log::warn!("tunnel forwarding failed: {:?}", err);
             if let Some(ref ch) = event_channel {
                 ch.send(ProxyEvent::Error {
-                    id: request_id.clone(),
+                    id: request_id,
                     error: format!("{err:?}"),
                 })
                 .ok();

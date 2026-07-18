@@ -133,7 +133,7 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
   return (
     <div className="flex flex-col h-full">
       <div className="relative min-h-0 flex-1 group/mini">
-        <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 opacity-0 group-hover/mini:opacity-100 transition-all">
+        <div className={`absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover/mini:opacity-100'}`}>
           <Tooltip>
             <TooltipTrigger className="inline-flex">
               <button
@@ -177,7 +177,7 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
                 className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30 transition-colors"
               >
                 {copied ? (
-                  <CheckIcon className="size-3 text-primary" />
+                  <CheckIcon className="size-3 text-emerald-500" />
                 ) : (
                   <CopyIcon className="size-3" />
                 )}

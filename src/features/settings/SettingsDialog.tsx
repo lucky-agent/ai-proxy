@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
+import { MonitorIcon, MoonIcon, SunIcon, GlobeIcon, ServerIcon } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Select,
   SelectItem,
@@ -35,11 +36,24 @@ interface Props {
   onThemeChange: (theme: Theme) => void
 }
 
-const inputClass =
-  'h-auto w-full'
+type SettingsTab = 'general' | 'proxy'
+
+interface NavItem {
+  value: SettingsTab
+  icon: typeof GlobeIcon
+  labelKey: string
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { value: 'general', icon: GlobeIcon, labelKey: 'settings.generalTab' },
+  { value: 'proxy', icon: ServerIcon, labelKey: 'settings.proxyTab' },
+]
+
+const inputClass = 'h-auto w-full'
 
 export default function SettingsDialog({ open, onOpenChange, theme, onThemeChange }: Props) {
   const { t, setLocale } = useLocale()
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const [proxy, setProxy] = useState<ProxyConfig>({
     listen_host: '127.0.0.1',
     listen_port: 5201,
@@ -82,7 +96,7 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('settings.title')}</DialogTitle>
           <DialogDescription>{t('settings.description')}</DialogDescription>
@@ -91,99 +105,141 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
         {loading ? (
           <p className="text-sm text-muted-foreground">{t('settings.loading')}</p>
         ) : (
-          <div className="grid gap-3">
-            <label className="grid gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                {t('settings.language')}
-              </span>
-              <Select value={language} onValueChange={(v) => v && setLanguage(v as LocaleSetting)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPrimitive.Portal>
-                  <SelectPrimitive.Positioner side="bottom" sideOffset={4} alignItemWithTrigger={false} collisionAvoidance={{ side: 'none' }} className="isolate z-50">
-                    <SelectPrimitive.Popup className="relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
-                      <SelectPrimitive.List>
-                        <SelectItem value="system">{t('settings.languageSystem')}</SelectItem>
-                        <SelectItem value="en">{t('settings.languageEn')}</SelectItem>
-                        <SelectItem value="zh">{t('settings.languageZh')}</SelectItem>
-                      </SelectPrimitive.List>
-                    </SelectPrimitive.Popup>
-                  </SelectPrimitive.Positioner>
-                </SelectPrimitive.Portal>
-              </Select>
-            </label>
-            <div className="grid gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                {t('settings.theme')}
-              </span>
-              <ToggleGroup
-                value={[theme]}
-                onValueChange={(value) => {
-                  if (value && value.length > 0) onThemeChange(value[0] as Theme)
-                }}
-                size="sm"
-                className="w-fit rounded-md border border-border bg-surface-elevated/50 p-0.5">
-                {(
-                  [
-                    { value: 'light' as Theme, icon: SunIcon },
-                    { value: 'dark' as Theme, icon: MoonIcon },
-                    { value: 'system' as Theme, icon: MonitorIcon },
-                  ] as const
-                ).map(({ value, icon: Icon }) => (
-                  <Tooltip key={value}>
-                    <TooltipTrigger className="inline-flex">
-                      <ToggleGroupItem
-                        value={value}
-                        className="inline-flex size-7 items-center justify-center rounded-[4px] border border-transparent text-muted-foreground transition-colors cursor-pointer hover:text-foreground aria-pressed:border-ring/60 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm aria-pressed:hover:bg-background"
-                      >
-                        <Icon className="size-3.5" />
-                      </ToggleGroupItem>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
-                      {t(`theme.${value}`)}
-                    </TooltipContent>
-                  </Tooltip>
-                ))}
-              </ToggleGroup>
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as SettingsTab)}
+            orientation="vertical"
+            className="flex min-h-0 min-w-0 flex-1 flex-row"
+          >
+            <TabsList
+              variant="line"
+              className="h-auto w-[128px] shrink-0 flex-col items-start rounded-none border-r border-border py-2"
+            >
+              {NAV_ITEMS.map(({ value, icon: Icon, labelKey }) => (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  className="w-full justify-start gap-2.5 px-3 py-2 text-left text-[13px] font-medium"
+                >
+                  <Icon className="size-4 shrink-0" />
+                  {t(labelKey)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            <div className="min-h-0 min-w-0 flex-1 px-5 py-2">
+              <TabsContent value="general" className="grid gap-4">
+                <div className="grid gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t('settings.language')}
+                  </span>
+                  <Select value={language} onValueChange={(v) => v && setLanguage(v as LocaleSetting)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue>
+                        {(value: unknown) =>
+                          value === 'zh' ? t('settings.languageZh')
+                            : value === 'en' ? t('settings.languageEn')
+                            : t('settings.languageSystem')
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPrimitive.Portal>
+                      <SelectPrimitive.Positioner side="bottom" sideOffset={4} alignItemWithTrigger={false} collisionAvoidance={{ side: 'none' }} className="isolate z-50">
+                        <SelectPrimitive.Popup className="relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+                          <SelectPrimitive.List>
+                            <SelectItem value="system">{t('settings.languageSystem')}</SelectItem>
+                            <SelectItem value="en">{t('settings.languageEn')}</SelectItem>
+                            <SelectItem value="zh">{t('settings.languageZh')}</SelectItem>
+                          </SelectPrimitive.List>
+                        </SelectPrimitive.Popup>
+                      </SelectPrimitive.Positioner>
+                    </SelectPrimitive.Portal>
+                  </Select>
+                </div>
+
+                <div className="grid gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t('settings.theme')}
+                  </span>
+                  <ToggleGroup
+                    value={[theme]}
+                    onValueChange={(value) => {
+                      if (value && value.length > 0) onThemeChange(value[0] as Theme)
+                    }}
+                    size="sm"
+                    className="w-fit rounded-md border border-border bg-surface-elevated/50 p-0.5"
+                  >
+                    {(
+                      [
+                        { value: 'light' as Theme, icon: SunIcon },
+                        { value: 'dark' as Theme, icon: MoonIcon },
+                        { value: 'system' as Theme, icon: MonitorIcon },
+                      ] as const
+                    ).map(({ value, icon: Icon }) => (
+                      <Tooltip key={value}>
+                        <TooltipTrigger className="inline-flex">
+                          <ToggleGroupItem
+                            value={value}
+                            className="inline-flex size-7 items-center justify-center rounded-[4px] border border-transparent text-muted-foreground transition-colors cursor-pointer hover:text-foreground aria-pressed:border-ring/60 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm aria-pressed:hover:bg-background"
+                          >
+                            <Icon className="size-3.5" />
+                          </ToggleGroupItem>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
+                          {t(`theme.${value}`)}
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </ToggleGroup>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="proxy" className="grid gap-4">
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t('settings.listenHost')}
+                  </span>
+                  <Input
+                    className={inputClass}
+                    value={proxy.listen_host}
+                    onChange={(e) => setProxy((p) => ({ ...p, listen_host: e.target.value }))}
+                  />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t('settings.listenPort')}
+                  </span>
+                  <Input
+                    className={inputClass}
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={proxy.listen_port}
+                    onChange={(e) =>
+                      setProxy((p) => ({ ...p, listen_port: Number(e.target.value) || 0 }))
+                    }
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    id="upstream-proxy"
+                    checked={proxy.upstream_proxy}
+                    onCheckedChange={(checked) =>
+                      setProxy((p) => ({ ...p, upstream_proxy: !!checked }))
+                    }
+                  />
+                  <Label htmlFor="upstream-proxy">{t('settings.upstreamProxy')}</Label>
+                </label>
+              </TabsContent>
             </div>
-            <label className="grid gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                {t('settings.listenHost')}
-              </span>
-              <Input
-                className={inputClass}
-                value={proxy.listen_host}
-                onChange={(e) => setProxy((p) => ({ ...p, listen_host: e.target.value }))}
-              />
-            </label>
-            <label className="grid gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">
-                {t('settings.listenPort')}
-              </span>
-              <Input
-                className={inputClass}
-                type="number"
-                min={1}
-                max={65535}
-                value={proxy.listen_port}
-                onChange={(e) =>
-                  setProxy((p) => ({ ...p, listen_port: Number(e.target.value) || 0 }))
-                }
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                id="upstream-proxy"
-                checked={proxy.upstream_proxy}
-                onCheckedChange={(checked) => setProxy((p) => ({ ...p, upstream_proxy: !!checked }))}
-              />
-              <Label htmlFor="upstream-proxy">{t('settings.upstreamProxy')}</Label>
-            </label>
-          </div>
+          </Tabs>
         )}
 
-        {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

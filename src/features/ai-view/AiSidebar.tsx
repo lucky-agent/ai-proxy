@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 /** 选中项：仅 sessionId = 选中会话头（合并时间线）；带 requestId = 选中单次请求 */
 export interface AiSelection {
   sessionId: string
-  requestId?: string
+  requestId?: number
 }
 
 interface AiSidebarProps {
@@ -24,7 +24,7 @@ interface AiSidebarProps {
   selection: AiSelection | null
   onSelect: (sel: AiSelection) => void
   onDeleteSession: (sessionId: string) => void
-  onDeleteRequest: (sessionId: string, requestId: string) => void
+  onDeleteRequest: (sessionId: string, requestId: number) => void
   /** sessionId → 是否 md 渲染 */
   mdSessions: Record<string, boolean>
   onToggleMd: (sessionId: string) => void
@@ -51,7 +51,7 @@ function SessionGroup({
   selection: AiSelection | null
   onSelect: (sel: AiSelection) => void
   onDeleteSession: (sessionId: string) => void
-  onDeleteRequest: (sessionId: string, requestId: string) => void
+  onDeleteRequest: (sessionId: string, requestId: number) => void
   mdSessions: Record<string, boolean>
   onToggleMd: (sessionId: string) => void
 }) {

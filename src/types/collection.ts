@@ -71,7 +71,7 @@ export interface RequestTab {
   body: string
   authType: string
   authData: string
-  responseEntryId: string | null
+  responseEntryId: number | null
   sending: boolean
   error: string
 }

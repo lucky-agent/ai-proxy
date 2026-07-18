@@ -13,7 +13,7 @@ pub(crate) struct TrafficTable;
 /// A row / serialisable entry for the `traffic_logs` table.
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct TrafficLogEntry {
-    pub id: String,
+    pub id: u64,
     pub method: String,
     pub uri: String,
     #[serde(rename = "requestTimestamp")]
@@ -51,15 +51,17 @@ use crate::config::db::DbCmd;
 impl Db {
     pub(crate) fn upsert_traffic_log(
         &self,
+        id: i64,
         method: &str,
         uri: &str,
         timestamp: i64,
         headers_json: &str,
         query_json: &str,
         body: Option<&str>,
-    ) -> Result<i64, sqlite::Error> {
+    ) -> Result<(), sqlite::Error> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send(DbCmd::UpsertTrafficLog {
+            id,
             method: method.to_string(),
             uri: uri.to_string(),
             timestamp,
@@ -71,7 +73,8 @@ impl Db {
         reply_rx.recv().map_err(|_| sqlite::Error {
             code: None,
             message: Some("db writer thread disconnected".into()),
-        })?
+        })??;
+        Ok(())
     }
 
     pub(crate) fn update_traffic_response(
@@ -145,10 +148,33 @@ impl Db {
         })?
     }
 
+    /// 按 id 加载单条流量详情（含 response_chunks）。
+    pub(crate) fn load_traffic_detail(&self, id: i64) -> Result<TrafficLogEntry, sqlite::Error> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.send(DbCmd::LoadTrafficDetail {
+            id,
+            reply: reply_tx,
+        })?;
+        reply_rx.recv().map_err(|_| sqlite::Error {
+            code: None,
+            message: Some("db writer thread disconnected".into()),
+        })?
+    }
+
     #[allow(dead_code)]
     pub(crate) fn clear_traffic(&self) -> Result<(), sqlite::Error> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send(DbCmd::ClearTraffic { reply: reply_tx })?;
+        reply_rx.recv().map_err(|_| sqlite::Error {
+            code: None,
+            message: Some("db writer thread disconnected".into()),
+        })?
+    }
+
+    /// 查询 traffic_logs 表当前最大 id，用于启动时初始化计数器。
+    pub(crate) fn max_traffic_id(&self) -> Result<i64, sqlite::Error> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.send(DbCmd::MaxTrafficId { reply: reply_tx })?;
         reply_rx.recv().map_err(|_| sqlite::Error {
             code: None,
             message: Some("db writer thread disconnected".into()),
@@ -160,29 +186,29 @@ impl Db {
 
 pub(crate) fn do_upsert_traffic_log(
     conn: &sqlite::Connection,
+    id: i64,
     method: &str,
     uri: &str,
     timestamp: i64,
     headers_json: &str,
     query_json: &str,
     body: Option<&str>,
-) -> Result<i64, sqlite::Error> {
+) -> Result<(), sqlite::Error> {
     let mut stmt = conn.prepare(
-        "INSERT INTO traffic_logs (method, uri, request_timestamp, request_headers, request_query, request_body) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO traffic_logs (id, method, uri, request_timestamp, request_headers, request_query, request_body) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )?;
-    stmt.bind((1_usize, method))?;
-    stmt.bind((2_usize, uri))?;
-    stmt.bind((3_usize, timestamp as i64))?;
-    stmt.bind((4_usize, headers_json))?;
-    stmt.bind((5_usize, query_json))?;
+    stmt.bind((1_usize, id as i64))?;
+    stmt.bind((2_usize, method))?;
+    stmt.bind((3_usize, uri))?;
+    stmt.bind((4_usize, timestamp as i64))?;
+    stmt.bind((5_usize, headers_json))?;
+    stmt.bind((6_usize, query_json))?;
     match body {
-        Some(b) => stmt.bind((6_usize, b))?,
-        None => stmt.bind((6_usize, sqlite::Value::Null))?,
+        Some(b) => stmt.bind((7_usize, b))?,
+        None => stmt.bind((7_usize, sqlite::Value::Null))?,
     }
     stmt.next()?;
-    let mut id_stmt = conn.prepare("SELECT last_insert_rowid()")?;
-    id_stmt.next()?;
-    Ok(id_stmt.read::<i64, _>(0)?)
+    Ok(())
 }
 
 pub(crate) fn do_update_traffic_response(
@@ -247,7 +273,14 @@ pub(crate) fn do_insert_chunk(
     Ok(())
 }
 
+/// 将 DB 中的 JSON 字符串解析为 HashMap。
+/// 优先按纯 Map 解析（新格式 `{"k":"v"}`），失败则回退到 KV 数组（旧格式 `[{"key":"k","value":"v"}]`）。
 pub(crate) fn parse_kv_json(s: &str) -> HashMap<String, String> {
+    // 新格式：纯映射
+    if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(s) {
+        return map;
+    }
+    // 旧格式兼容：KV 数组
     if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(s) {
         let mut map = HashMap::new();
         for item in arr {
@@ -260,7 +293,7 @@ pub(crate) fn parse_kv_json(s: &str) -> HashMap<String, String> {
         }
         return map;
     }
-    serde_json::from_str(s).unwrap_or_default()
+    HashMap::new()
 }
 
 pub(crate) fn do_load_all_traffic(
@@ -277,10 +310,10 @@ pub(crate) fn do_load_all_traffic(
         let query: Option<HashMap<String, String>> = query_str.map(|s| parse_kv_json(&s));
         let resp_headers_str: Option<String> = stmt.read::<Option<String>, _>(10)?;
         let resp_headers: Option<HashMap<String, String>> =
-            resp_headers_str.and_then(|s| serde_json::from_str(&s).ok());
+            resp_headers_str.map(|s| parse_kv_json(&s));
 
         entries.push(TrafficLogEntry {
-            id: stmt.read::<i64, _>(0)?.to_string(),
+            id: stmt.read::<i64, _>(0)? as u64,
             method: stmt.read::<String, _>(1)?,
             uri: stmt.read::<String, _>(2)?,
             request_timestamp: stmt.read::<i64, _>(3)?,
@@ -315,6 +348,47 @@ pub(crate) fn do_load_chunks(
     Ok(chunks)
 }
 
+pub(crate) fn do_load_traffic_detail(
+    conn: &sqlite::Connection,
+    id: i64,
+) -> Result<TrafficLogEntry, sqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, method, uri, request_timestamp, request_headers, request_body, request_query, status, response_timestamp, duration_ms, response_headers, response_body, error FROM traffic_logs WHERE id = ?",
+    )?;
+    stmt.bind((1_usize, id as i64))?;
+    if let sqlite::State::Row = stmt.next()? {
+        let headers_str: String = stmt.read::<String, _>(4)?;
+        let headers: HashMap<String, String> = parse_kv_json(&headers_str);
+        let query_str: Option<String> = stmt.read::<Option<String>, _>(6)?;
+        let query: Option<HashMap<String, String>> = query_str.map(|s| parse_kv_json(&s));
+        let resp_headers_str: Option<String> = stmt.read::<Option<String>, _>(10)?;
+        let resp_headers: Option<HashMap<String, String>> =
+            resp_headers_str.and_then(|s| serde_json::from_str(&s).ok());
+
+        Ok(TrafficLogEntry {
+            id: stmt.read::<i64, _>(0)? as u64,
+            method: stmt.read::<String, _>(1)?,
+            uri: stmt.read::<String, _>(2)?,
+            request_timestamp: stmt.read::<i64, _>(3)?,
+            request_headers: headers,
+            request_body: stmt.read::<Option<String>, _>(5)?,
+            request_query: query,
+            status: stmt.read::<Option<i64>, _>(7)?.map(|v| v as u16),
+            response_timestamp: stmt.read::<Option<i64>, _>(8)?,
+            duration_ms: stmt.read::<Option<i64>, _>(9)?.map(|v| v as u64),
+            response_headers: resp_headers,
+            response_body: stmt.read::<Option<String>, _>(11)?,
+            error: stmt.read::<Option<String>, _>(12)?,
+            response_chunks: Vec::new(),
+        })
+    } else {
+        Err(sqlite::Error {
+            code: None,
+            message: Some(format!("traffic log id={id} not found").into()),
+        })
+    }
+}
+
 // ── Migration ─────────────────────────────────────────────────────────────────
 
 impl DbTable for TrafficTable {
@@ -325,9 +399,9 @@ impl DbTable for TrafficTable {
                 method            TEXT NOT NULL,
                 uri               TEXT NOT NULL,
                 request_timestamp INTEGER NOT NULL,
-                request_headers   TEXT NOT NULL DEFAULT '[]',
+                request_headers   TEXT NOT NULL DEFAULT '{}',
                 request_body      TEXT,
-                request_query     TEXT DEFAULT '[]',
+                request_query     TEXT DEFAULT '{}',
                 status            INTEGER,
                 response_timestamp INTEGER,
                 duration_ms       INTEGER,
@@ -345,6 +419,10 @@ impl DbTable for TrafficTable {
                 seq         INTEGER NOT NULL,
                 created_at  INTEGER NOT NULL DEFAULT 0
             )",
+        )?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_response_chunks_request_id ON response_chunks(request_id)",
         )?;
 
         Ok(())

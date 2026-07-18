@@ -1,16 +1,19 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TrafficEntry } from '@/types/proxy'
+import type { AiConversation } from '@/types/ai'
 import { isStreamingContentType } from '@/lib/sse'
 import SidePanel, { type PanelTab, type TabDef } from './components/SidePanel'
 import KeyValueTable from './components/KeyValueTable'
 import BodyView from './components/BodyView'
 import RawView from './components/RawView'
 import StreamingViewer from './StreamingViewer'
+import CompareView from './CompareView'
 import { Empty, EmptyTitle } from '@/components/ui/empty'
 
 interface Props {
   entry: TrafficEntry | undefined
+  conversation?: AiConversation
   onTitleClick?: () => void
 }
 
@@ -43,7 +46,7 @@ function formatResponseRaw(entry: TrafficEntry): string {
   return lines.join('\n')
 }
 
-export default function ResponsePanel({ entry, onTitleClick }: Props) {
+export default function ResponsePanel({ entry, conversation, onTitleClick }: Props) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<PanelTab>('header')
 
@@ -70,8 +73,11 @@ export default function ResponsePanel({ entry, onTitleClick }: Props) {
     if (hasError) {
       base.push({ id: 'console', labelKey: 'detail.console' })
     }
+    if (conversation) {
+      base.push({ id: 'compare', labelKey: 'detail.compare' })
+    }
     return base
-  }, [entry])
+  }, [entry, conversation])
 
   // 切换条目时如果 stream tab 不再可用，切回 header
   useEffect(() => {
@@ -88,7 +94,7 @@ export default function ResponsePanel({ entry, onTitleClick }: Props) {
       onTabChange={setTab}
       tabs={tabs}
       onTitleClick={onTitleClick}>
-      <ResponsePanelContent tab={tab} entry={entry} t={t} onCloseStream={() => setTab('header')} />
+      <ResponsePanelContent tab={tab} entry={entry} conversation={conversation} t={t} onCloseStream={() => setTab('header')} />
     </SidePanel>
   )
 }
@@ -96,11 +102,13 @@ export default function ResponsePanel({ entry, onTitleClick }: Props) {
 function ResponsePanelContent({
   tab,
   entry,
+  conversation,
   t,
   onCloseStream,
 }: {
   tab: PanelTab
   entry: TrafficEntry | undefined
+  conversation?: AiConversation
   t: (key: string) => string
   onCloseStream: () => void
 }) {
@@ -142,6 +150,13 @@ function ResponsePanelContent({
     ) : (
       <Empty><EmptyTitle>{t('detail.noConsole')}</EmptyTitle></Empty>
     )
+  }
+
+  if (tab === 'compare') {
+    if (!entry || !conversation) {
+      return <Empty><EmptyTitle>{t('detail.compareWaiting')}</EmptyTitle></Empty>
+    }
+    return <CompareView entry={entry} conversation={conversation} />
   }
 
   // raw

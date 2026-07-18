@@ -1,7 +1,7 @@
 import type { AiHint, AiConversation, AiUsage, AiTurn } from '@/types/ai'
 
 export interface RequestEvent {
-  id: string
+  id: number
   method: string
   uri: string
   timestamp: number
@@ -14,7 +14,7 @@ export interface RequestEvent {
 }
 
 export interface ResponseEvent {
-  id: string
+  id: number
   status: number
   timestamp: number
   duration_ms: number
@@ -24,24 +24,24 @@ export interface ResponseEvent {
 }
 
 export interface ResponseChunkEvent {
-  id: string
+  id: number
   chunk: string
 }
 
 export interface ErrorEvent {
-  id: string
+  id: number
   error: string
 }
 
 export interface RequestBodyChunkEvent {
-  id: string
+  id: number
   chunk: string
 }
 
 export type ProxyEvent =
   | {
       type: 'request'
-      id: string
+      id: number
       method: string
       uri: string
       timestamp: number
@@ -51,10 +51,10 @@ export type ProxyEvent =
       content_length?: number
       ai_hint?: AiHint
     }
-  | { type: 'request_chunk'; id: string; chunk: string }
+  | { type: 'request_chunk'; id: number; chunk: string }
   | {
       type: 'response'
-      id: string
+      id: number
       status: number
       timestamp: number
       duration_ms: number
@@ -62,11 +62,11 @@ export type ProxyEvent =
       content_type?: string
       content_length?: number
     }
-  | { type: 'response_chunk'; id: string; chunk: string }
-  | { type: 'error'; id: string; error: string }
+  | { type: 'response_chunk'; id: number; chunk: string }
+  | { type: 'error'; id: number; error: string }
   | {
       type: 'ai_normalized'
-      id: string
+      id: number
       session_id: string
       provider: string
       request_turns: AiTurn[]
@@ -77,7 +77,7 @@ export type ProxyEvent =
       type: 'ai_session'
       session_id: string
       scope_host: string
-      request_ids: string[]
+      request_ids: number[]
       usage_total: AiUsage
       turn_count: number
       match_reason: string
@@ -93,12 +93,12 @@ export interface ChunkRecord {
 
 /** 从 AI 视图跳转到代理视图时下发的指令。nonce 自增确保重复跳同一 id 也能重触发。 */
 export interface ProxyJumpTarget {
-  id: string
+  id: number
   nonce: number
 }
 
 export interface TrafficEntry {
-  id: string
+  id: number
   method: string
   uri: string
   requestNumber: number

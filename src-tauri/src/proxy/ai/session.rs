@@ -17,7 +17,7 @@ use super::Provider;
 pub(crate) struct SessionEntry {
     pub id: String,
     pub scope: (String, String),
-    pub request_ids: Vec<String>,
+    pub request_ids: Vec<u64>,
     /// 供前缀匹配用：该会话最近一次请求各 turn 的指纹链（不含响应 turn）。
     /// 前缀匹配只需相等性判定，无需原文——每 turn 一个哈希，
     /// 内存 O(轮次) 而非 O(内容)，比较为 u64 切片比较。
@@ -28,6 +28,9 @@ pub(crate) struct SessionEntry {
     /// 来源归属：规则内 (来源, 合并头) 对的头命中时写入对应来源名；
     /// 全局名单命中或前缀/新会话为 None。前缀续轮不清除已有归属。
     pub source: Option<String>,
+    /// 归组依据：`header:<name>` / `prefix` / `new`。随每次 assign 更新，
+    /// 供 usage 更新事件回传，避免覆盖为 "usage"。
+    pub match_reason: String,
     /// LRU 序号，越大越新。
     pub last_touched: u64,
 }
@@ -38,7 +41,7 @@ pub(crate) struct AssignResult {
     pub session_id: String,
     /// 归组依据：`header:<name>` / `prefix` / `new`。
     pub match_reason: String,
-    pub request_ids: Vec<String>,
+    pub request_ids: Vec<u64>,
     pub usage_total: AiUsage,
     pub title: Option<String>,
     /// 会话来源归属（见 [`SessionEntry::source`]）。
@@ -82,7 +85,7 @@ impl SessionStore {
         headers: &HashMap<String, String>,
         messages: &[AiTurn],
         prefix_fallback: bool,
-        request_id: &str,
+        request_id: u64,
     ) -> AssignResult {
         let scope = (provider.as_str().to_string(), host.to_string());
         let tick = self.next_tick();
@@ -92,6 +95,7 @@ impl SessionStore {
         for (name, source) in session_headers {
             if let Some(val) = headers.get(&name.to_ascii_lowercase()) {
                 let sid = session_key(&scope, val);
+                let reason = format!("header:{name}");
                 self.touch_or_create(
                     &sid,
                     &scope,
@@ -99,8 +103,9 @@ impl SessionStore {
                     request_id,
                     tick,
                     source.as_deref(),
+                    &reason,
                 );
-                return self.result(sid, format!("header:{name}"));
+                return self.result(sid, reason);
             }
         }
 
@@ -119,14 +124,14 @@ impl SessionStore {
                 }
             }
             if let Some((sid, _)) = best {
-                self.touch_or_create(&sid, &scope, fingerprints, request_id, tick, None);
+                self.touch_or_create(&sid, &scope, fingerprints, request_id, tick, None, "prefix");
                 return self.result(sid, "prefix".to_string());
             }
         }
 
         // ③ 新会话
         let sid = format!("sess-{}", Uuid::new_v4());
-        self.touch_or_create(&sid, &scope, fingerprints, request_id, tick, None);
+        self.touch_or_create(&sid, &scope, fingerprints, request_id, tick, None, "new");
         self.result(sid, "new".to_string())
     }
 
@@ -148,17 +153,19 @@ impl SessionStore {
         sid: &str,
         scope: &(String, String),
         fingerprints: Vec<u64>,
-        request_id: &str,
+        request_id: u64,
         tick: u64,
         source: Option<&str>,
+        match_reason: &str,
     ) {
         match self.sessions.get_mut(sid) {
             Some(entry) => {
-                if !entry.request_ids.iter().any(|r| r == request_id) {
-                    entry.request_ids.push(request_id.to_string());
+                if !entry.request_ids.iter().any(|&r| r == request_id) {
+                    entry.request_ids.push(request_id);
                 }
                 entry.last_fingerprints = fingerprints;
                 entry.last_touched = tick;
+                entry.match_reason = match_reason.to_string();
                 // 仅在本次确认了来源时覆写；前缀/全局命中（None）不清除已有归属
                 if let Some(src) = source {
                     entry.source = Some(src.to_string());
@@ -170,11 +177,12 @@ impl SessionStore {
                     SessionEntry {
                         id: sid.to_string(),
                         scope: scope.clone(),
-                        request_ids: vec![request_id.to_string()],
+                        request_ids: vec![request_id],
                         last_fingerprints: fingerprints,
                         usage_total: AiUsage::default(),
                         title: None,
                         source: source.map(str::to_string),
+                        match_reason: match_reason.to_string(),
                         last_touched: tick,
                     },
                 );
@@ -195,14 +203,14 @@ impl SessionStore {
     pub(crate) fn set_title_if_first(
         &mut self,
         session_id: &str,
-        request_id: &str,
+        request_id: u64,
         conv: &AiConversation,
     ) {
         let Some(entry) = self.sessions.get_mut(session_id) else {
             return;
         };
         if entry.title.is_some()
-            || entry.request_ids.first().map(String::as_str) != Some(request_id)
+            || entry.request_ids.first().copied() != Some(request_id)
         {
             return;
         }
@@ -276,22 +284,22 @@ mod tests {
         let session_headers = vec![("x-session-id".to_string(), None)];
         let msgs = vec![AiTurn::new("user", vec![AiContentBlock::text("hi")])];
         let r1 = store.assign(
-            Provider::OpenAi,
+            Provider::OpenAiChat,
             "api.test",
             &session_headers,
             &headers,
             &msgs,
             false,
-            "req-1",
+            1,
         );
         let r2 = store.assign(
-            Provider::OpenAi,
+            Provider::OpenAiChat,
             "api.test",
             &session_headers,
             &headers,
             &msgs,
             false,
-            "req-2",
+            2,
         );
         assert_eq!(r1.session_id, r2.session_id);
         (store, r1.session_id)
@@ -302,22 +310,22 @@ mod tests {
         let (mut store, sid) = store_with_two_requests();
 
         // 非首请求命中 title JSON → 不写入
-        store.set_title_if_first(&sid, "req-2", &conv_with_text(r#"{"title": "不该写入"}"#));
+        store.set_title_if_first(&sid, 2, &conv_with_text(r#"{"title": "不该写入"}"#));
         assert_eq!(store.get(&sid).unwrap().title, None);
 
         // 首请求 → 写入
-        store.set_title_if_first(&sid, "req-1", &conv_with_text(r#"{"title": "会话标题"}"#));
+        store.set_title_if_first(&sid, 1, &conv_with_text(r#"{"title": "会话标题"}"#));
         assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("会话标题"));
 
         // 已有标题 → 不覆盖
-        store.set_title_if_first(&sid, "req-1", &conv_with_text(r#"{"title": "另一个"}"#));
+        store.set_title_if_first(&sid, 1, &conv_with_text(r#"{"title": "另一个"}"#));
         assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("会话标题"));
     }
 
     #[test]
     fn non_title_response_leaves_title_none() {
         let (mut store, sid) = store_with_two_requests();
-        store.set_title_if_first(&sid, "req-1", &conv_with_text("普通回复文本"));
+        store.set_title_if_first(&sid, 1, &conv_with_text("普通回复文本"));
         assert_eq!(store.get(&sid).unwrap().title, None);
     }
 
@@ -325,7 +333,7 @@ mod tests {
     fn unknown_session_is_noop() {
         let (mut store, _) = store_with_two_requests();
         // 不 panic 即可
-        store.set_title_if_first("sess-missing", "req-1", &conv_with_text(r#"{"title": "x"}"#));
+        store.set_title_if_first("sess-missing", 1, &conv_with_text(r#"{"title": "x"}"#));
     }
 
     /// 无 session header 时，续轮请求（历史为前一轮的前缀扩展）经指纹链归入同一会话。
@@ -337,13 +345,13 @@ mod tests {
 
         let msgs1 = vec![AiTurn::new("user", vec![AiContentBlock::text("hi")])];
         let r1 = store.assign(
-            Provider::OpenAi,
+            Provider::OpenAiChat,
             "api.test",
             &no_headers,
             &headers,
             &msgs1,
             true,
-            "req-1",
+            1,
         );
         assert_eq!(r1.match_reason, "new");
 
@@ -353,17 +361,17 @@ mod tests {
             AiTurn::new("user", vec![AiContentBlock::text("介绍一下Rust")]),
         ];
         let r2 = store.assign(
-            Provider::OpenAi,
+            Provider::OpenAiChat,
             "api.test",
             &no_headers,
             &headers,
             &msgs2,
             true,
-            "req-2",
+            2,
         );
         assert_eq!(r2.match_reason, "prefix");
         assert_eq!(r1.session_id, r2.session_id);
-        assert_eq!(r2.request_ids, vec!["req-1", "req-2"]);
+        assert_eq!(r2.request_ids, vec![1, 2]);
 
         // 历史不匹配（首 turn 内容不同）→ 新会话
         let msgs3 = vec![
@@ -371,13 +379,13 @@ mod tests {
             AiTurn::new("user", vec![AiContentBlock::text("hi")]),
         ];
         let r3 = store.assign(
-            Provider::OpenAi,
+            Provider::OpenAiChat,
             "api.test",
             &no_headers,
             &headers,
             &msgs3,
             true,
-            "req-3",
+            3,
         );
         assert_eq!(r3.match_reason, "new");
         assert_ne!(r3.session_id, r1.session_id);
@@ -392,13 +400,13 @@ mod tests {
         let session_headers = vec![("x-cursor-session".to_string(), Some("Cursor".to_string()))];
         let msgs = vec![AiTurn::new("user", vec![AiContentBlock::text("hi")])];
         let r1 = store.assign(
-            Provider::OpenAi,
+            Provider::OpenAiChat,
             "api.test",
             &session_headers,
             &headers,
             &msgs,
             false,
-            "req-1",
+            1,
         );
         assert_eq!(r1.match_reason, "header:x-cursor-session");
         assert_eq!(r1.source.as_deref(), Some("Cursor"));
@@ -411,13 +419,13 @@ mod tests {
         ];
         let no_headers: HashMap<String, String> = HashMap::new();
         let r2 = store.assign(
-            Provider::OpenAi,
+            Provider::OpenAiChat,
             "api.test",
             &session_headers,
             &no_headers,
             &msgs2,
             true,
-            "req-2",
+            2,
         );
         assert_eq!(r2.session_id, r1.session_id);
         assert_eq!(r2.match_reason, "prefix");
@@ -433,26 +441,26 @@ mod tests {
         let session_headers = vec![("x-session-id".to_string(), None)];
         let msgs = vec![AiTurn::new("user", vec![AiContentBlock::text("hi")])];
         let r1 = store.assign(
-            Provider::OpenAi,
+            Provider::OpenAiChat,
             "api.test",
             &session_headers,
             &headers,
             &msgs,
             false,
-            "req-1",
+            1,
         );
         assert_eq!(r1.match_reason, "header:x-session-id");
         assert!(r1.source.is_none());
 
         let no_match: HashMap<String, String> = HashMap::new();
         let r2 = store.assign(
-            Provider::OpenAi,
+            Provider::OpenAiChat,
             "api.test",
             &session_headers,
             &no_match,
             &msgs,
             false,
-            "req-2",
+            2,
         );
         assert_eq!(r2.match_reason, "new");
         assert!(r2.source.is_none());

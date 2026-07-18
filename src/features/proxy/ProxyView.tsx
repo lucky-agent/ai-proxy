@@ -3,6 +3,7 @@ import { TrafficLog } from './traffic-log'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { TypeFilterBar } from './TypeFilterBar'
 import type { TrafficEntry, ProxyJumpTarget } from '@/types/proxy'
+import type { AiConversation } from '@/types/ai'
 import type { DetailPosition } from '@/features/bottom-bar'
 
 interface ProxyViewProps {
@@ -17,6 +18,7 @@ interface ProxyViewProps {
   running: boolean
   status: string
   jumpTarget?: ProxyJumpTarget | null
+  conversationOf?: (id: number) => AiConversation | undefined
 }
 
 export function ProxyView({
@@ -31,6 +33,7 @@ export function ProxyView({
   running,
   status,
   jumpTarget,
+  conversationOf,
 }: ProxyViewProps) {
   return (
     <>
@@ -53,6 +56,7 @@ export function ProxyView({
         onAutoOpenDetail={onAutoOpenDetail}
         typeFilter={typeFilter}
         jumpTarget={jumpTarget}
+        conversationOf={conversationOf}
       />
     </>
   )

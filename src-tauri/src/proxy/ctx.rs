@@ -7,16 +7,16 @@ use rama::http::HeaderName;
 use rama::http::{HeaderMap, Method};
 use rama::net::uri::Uri;
 use tauri::ipc::Channel;
-use uuid::Uuid;
 
 use crate::config::Settings;
 use crate::config::db::Db;
 use crate::proxy::ai::session::SessionStore;
 use crate::proxy::events::ProxyEvent;
+use crate::storage::id;
 
 /// Shared context for a single proxy request.
 pub(crate) struct ProxyCtx {
-    request_id: String,
+    request_id: u64,
     /// 请求行/头部定稿（脚本执行后）；extensions 已清空，仅保留 method/uri/version/headers。
     parts: Parts,
     /// 惰性解析缓存：解码后的查询参数（首次访问时解析一次）。
@@ -31,6 +31,7 @@ pub(crate) struct ProxyCtx {
     /// 请求侧归一化判定出的 (provider, session_id, 请求 turns)，供响应侧消费。
     /// 每请求最多写一次（请求侧），之后只读（响应侧），故用 OnceLock 而非 Mutex。
     /// turns 用 Arc 共享：响应侧 body 流闭包克隆时只复制指针，不深拷贝对话历史。
+    /// Provider 变体自带协议解析逻辑——调用方无需知道 Chat/Responses 区分。
     ai_req: OnceLock<(
         crate::proxy::ai::Provider,
         String,
@@ -53,7 +54,7 @@ impl ProxyCtx {
         parts.extensions = Default::default();
         let start_ms = start_ms.unwrap_or_else(crate::utils::date::now_ms);
         Self {
-            request_id: Uuid::new_v4().to_string(),
+            request_id: id::next_request_id(),
             parts,
             query_params: OnceLock::new(),
             header_map: OnceLock::new(),
@@ -117,8 +118,8 @@ impl ProxyCtx {
         self.ai_req.get().cloned()
     }
 
-    pub(crate) fn request_id(&self) -> &str {
-        &self.request_id
+    pub(crate) fn request_id(&self) -> u64 {
+        self.request_id
     }
 
     pub(crate) fn method(&self) -> &Method {
@@ -192,13 +193,9 @@ impl ProxyCtx {
 
 // ── 解析辅助（供上面的惰性缓存初始化调用）──
 
-/// 将 KV Map（请求/响应头、查询参数）转为 KV 数组 JSON（入库格式）。
+/// 将 KV Map 转为纯 JSON 对象（入库格式）。
 pub(crate) fn map_to_kv_json(map: &HashMap<String, String>) -> String {
-    let pairs: Vec<serde_json::Value> = map
-        .iter()
-        .map(|(k, v)| serde_json::json!({"key": k, "value": v}))
-        .collect();
-    serde_json::to_string(&pairs).unwrap_or_else(|_| "[]".to_string())
+    serde_json::to_string(map).unwrap_or_else(|_| "{}".to_string())
 }
 
 /// 简易 URL 百分号解码。
@@ -254,7 +251,7 @@ pub(crate) fn collect_headers(headers: &HeaderMap) -> HashMap<String, String> {
     headers
         .iter()
         .filter_map(|(name, value)| {
-            let key = name.to_string();
+            let key = name.as_str().to_ascii_lowercase();
             let val = value.to_str().ok()?.to_string();
             Some((key, val))
         })

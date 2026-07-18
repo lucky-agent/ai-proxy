@@ -79,12 +79,18 @@
     "mergeFormatOpenai": "OpenAI",
     "errorStatus": "错误",
     "console": "控制台",
-    "noConsole": "控制台无输出"
+    "noConsole": "控制台无输出",
+    "compare": "AI 对比",
+    "compareIR": "归一化 IR",
+    "compareRaw": "原始 JSON",
+    "compareWaiting": "等待归一化数据…"
   },
   "settings": {
     "title": "设置",
-    "description": "配置代理监听地址与上游行为。",
+    "description": "配置界面偏好与代理行为。",
     "loading": "加载中...",
+    "generalTab": "通用",
+    "proxyTab": "代理",
     "listenHost": "监听地址",
     "listenPort": "监听端口",
     "upstreamProxy": "上游请求使用系统代理",

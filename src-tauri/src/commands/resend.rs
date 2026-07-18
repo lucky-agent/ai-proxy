@@ -17,7 +17,7 @@ pub async fn resend_request(
     url: String,
     headers: HashMap<String, String>,
     body: Option<String>,
-) -> Result<String, String> {
+) -> Result<u64, String> {
     let method = Method::from_bytes(method.as_bytes()).unwrap_or(Method::GET);
     let full_uri: Uri = url.parse().map_err(|_| "invalid url")?;
 
@@ -66,12 +66,12 @@ pub async fn resend_request(
             let resp_body = String::from_utf8_lossy(&resp_bytes);
 
             ctx.send(ProxyEvent::ResponseChunk {
-                id: ctx.request_id().to_string(),
+                id: ctx.request_id(),
                 chunk: resp_body.to_string(),
             });
 
             ctx.send(ProxyEvent::Response {
-                id: ctx.request_id().to_string(),
+                id: ctx.request_id(),
                 status: parts.status.as_u16(),
                 timestamp: crate::utils::date::now_ms(),
                 duration_ms: ctx.duration_ms(),
@@ -92,15 +92,15 @@ pub async fn resend_request(
                     .and_then(|s| s.parse::<u64>().ok()),
             });
 
-            Ok(ctx.request_id().to_string())
+            Ok(ctx.request_id())
         }
         Err(err) => {
             let msg = format!("{err}");
             ctx.send(ProxyEvent::Error {
-                id: ctx.request_id().to_string(),
+                id: ctx.request_id(),
                 error: msg,
             });
-            Ok(ctx.request_id().to_string())
+            Ok(ctx.request_id())
         }
     }
 }

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { VList, type VListHandle } from 'virtua'
 import { useTranslation } from 'react-i18next'
-import { ArrowDownIcon, ArrowUpIcon, CopyIcon, RefreshCwIcon, PencilIcon, LockKeyholeIcon, LockOpenIcon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, CopyIcon, CheckIcon, RefreshCwIcon, PencilIcon, LockKeyholeIcon, LockOpenIcon } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -105,15 +105,15 @@ const Grip = ({
 
 interface Props {
   entries: ListEntry[]
-  selectedId: string | null
-  onSelectEntry: (id: string) => void
+  selectedId: number | null
+  onSelectEntry: (id: number) => void
   sortColumn: SortColumn
   sortOrder: SortOrder
   onSortChange: (column: SortColumn, order: SortOrder) => void
   onResendRequest: (entry: TrafficEntry) => void
   onEditRequest: (entry: TrafficEntry) => void
   /** 跳转定位：目标请求 id 与自增 nonce（由 AI 视图触发）。 */
-  scrollToId?: string
+  scrollToId?: number
   scrollNonce?: number
 }
 
@@ -130,7 +130,7 @@ export default function RequestList({
   scrollNonce,
 }: Props) {
   const { t } = useTranslation()
-  const { copy } = useCopyToClipboard()
+  const { copied, copy } = useCopyToClipboard()
   const {
     gridRef,
     columnWidths,
@@ -316,7 +316,7 @@ export default function RequestList({
                   <span>{t('requestList.repeat')}</span>
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => copy(formatCurl({ method: entry.method, url: entry.uri, headers: entry.requestHeaders, body: entry.requestBody }))}>
-                  <CopyIcon className="size-3.5" />
+                  {copied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <CopyIcon className="size-3.5" />}
                   <span>{t('requestList.copyCurl')}</span>
                 </ContextMenuItem>
               </ContextMenuContent>

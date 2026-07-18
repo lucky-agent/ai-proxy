@@ -127,14 +127,37 @@ function UrlEncodedView({ parts }: { parts: FormField[] }) {
           <TableRow><TableCell colSpan={2} className='py-4 text-center text-muted-foreground'>{t('detail.noFormData')}</TableCell></TableRow>
         ) : (
           parts.map((part) => (
-            <TableRow key={part.name} className='border-b border-surface-elevated/30 hover:bg-surface-elevated/20 transition-colors'>
-              <TableCell className='py-1.5 pl-3 pr-2 align-top font-medium text-foreground/90 whitespace-nowrap overflow-hidden text-ellipsis'>{part.name}</TableCell>
-              <TableCell className='py-1.5 pr-3 align-top text-foreground/70 break-all'>{part.value}</TableCell>
-            </TableRow>
+            <UrlEncodedRow key={part.name} part={part} />
           ))
         )}
       </TableBody>
     </Table>
+  )
+}
+
+function UrlEncodedRow({ part }: { part: FormField }) {
+  const { copied, copy } = useCopyToClipboard()
+
+  return (
+    <TableRow className='border-b border-surface-elevated/30 hover:bg-surface-elevated/20 transition-colors group'>
+      <TableCell className='py-1.5 pl-3 pr-2 align-top font-medium text-foreground/90 overflow-hidden text-ellipsis whitespace-nowrap'>{part.name}</TableCell>
+      <TableCell className='py-1.5 pr-3 align-top text-foreground/70 max-w-0 relative'>
+        <Tooltip>
+          <TooltipTrigger className='block w-full cursor-pointer text-left min-w-0'>
+            <span className='line-clamp-2 break-all'>{part.value}</span>
+          </TooltipTrigger>
+          <TooltipContent side='top' align='start' className='max-w-[420px] bg-popover text-popover-foreground text-[11px]'>
+            <div className='max-h-[200px] overflow-auto whitespace-pre-wrap break-all font-mono text-[11px]'>{part.value}</div>
+          </TooltipContent>
+        </Tooltip>
+        <button
+          onClick={() => copy(part.value)}
+          className={`absolute right-0 top-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        >
+          {copied ? <CheckIcon className='size-3.5 text-emerald-500' /> : <CopyIcon className='size-3.5' />}
+        </button>
+      </TableCell>
+    </TableRow>
   )
 }
 
@@ -176,10 +199,10 @@ function MultipartPartCard({ part }: { part: FormField }) {
             </div>
           )}
           <div className='relative group/mini'>
-            <div className='absolute top-1 right-1 z-10 opacity-0 group-hover/mini:opacity-100 transition-all'>
+            <div className={`absolute top-1 right-1 z-10 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover/mini:opacity-100'}`}>
               <Tooltip>
                 <TooltipTrigger className="inline-flex">
-                  <button onClick={() => copy(part.value)} className='rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors'>{copied ? <CheckIcon className='size-3 text-primary' /> : <CopyIcon className='size-3' />}</button>
+                  <button onClick={() => copy(part.value)} className='rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors'>{copied ? <CheckIcon className='size-3 text-emerald-500' /> : <CopyIcon className='size-3' />}</button>
                 </TooltipTrigger>
                 <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
                   {copied ? 'Copied' : 'Copy'}

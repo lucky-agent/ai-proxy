@@ -188,14 +188,14 @@ function App() {
   }, [])
 
   // AI 气泡 → 代理视图：切视图并下发定位指令。清类型过滤，避免目标请求被过滤掉。
-  const handleJumpToProxy = useCallback((requestId: string) => {
+  const handleJumpToProxy = useCallback((requestId: number) => {
     setTypeFilter('all')
     setMountedViews(prev => new Set(prev).add('proxy'))
     setActiveTabId('proxy')
-    setProxyJump(prev => ({ id: requestId, nonce: (prev?.nonce ?? 0) + 1 }))
+    setProxyJump(prev => ({ id: Number(requestId), nonce: (prev?.nonce ?? 0) + 1 }))
   }, [])
 
-  const handleNewRequestSuccess = useCallback((_entryId: string) => {
+  const handleNewRequestSuccess = useCallback((_entryId: number) => {
     // 不跳转，保持在 new-request 视图查看响应
   }, [])
   const { entries, clear } = useProxyEvents()
@@ -338,6 +338,7 @@ function App() {
               running={running}
               status={status}
               jumpTarget={proxyJump}
+              conversationOf={conversationOf}
             />
           )}
           {mountedViews.has('new-request') && activeTabId === 'new-request' && (

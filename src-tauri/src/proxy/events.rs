@@ -24,7 +24,7 @@ pub enum AiHint {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub(crate) enum ProxyEvent {
     Request {
-        id: String,
+        id: u64,
         method: String,
         uri: String,
         timestamp: i64,
@@ -39,11 +39,11 @@ pub(crate) enum ProxyEvent {
         ai_hint: AiHint,
     },
     RequestChunk {
-        id: String,
+        id: u64,
         chunk: String,
     },
     Response {
-        id: String,
+        id: u64,
         status: u16,
         timestamp: i64,
         duration_ms: u64,
@@ -54,16 +54,16 @@ pub(crate) enum ProxyEvent {
         content_length: Option<u64>,
     },
     ResponseChunk {
-        id: String,
+        id: u64,
         chunk: String,
     },
     Error {
-        id: String,
+        id: u64,
         error: String,
     },
     /// 增量归一化快照。AI 流量在各节流窗口推送，末次 `streaming=false` 定稿。
     AiNormalized {
-        id: String,
+        id: u64,
         session_id: String,
         provider: String,
         /// 该次请求的 messages（system/user/assistant 历史），供前端渲染完整对话。
@@ -78,7 +78,7 @@ pub(crate) enum ProxyEvent {
     AiSession {
         session_id: String,
         scope_host: String,
-        request_ids: Vec<String>,
+        request_ids: Vec<u64>,
         usage_total: AiUsage,
         turn_count: u32,
         /// 归组依据：`header:<name>` / `prefix` / `new`。

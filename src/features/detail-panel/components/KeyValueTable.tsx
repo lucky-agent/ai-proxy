@@ -49,7 +49,7 @@ export default function KeyValueTable({ data, emptyLabel }: { data: Record<strin
 
   return (
     <div className="relative" ref={containerRef}>
-      <div className={dragging ? 'cursor-col-resize select-none' : 'select-none'}>
+      <div className={dragging ? 'cursor-col-resize select-none' : ''}>
         <Table className="table-fixed text-xs">
           <colgroup>
             <col style={{ width: keyPct }} />
@@ -75,82 +75,48 @@ export default function KeyValueTable({ data, emptyLabel }: { data: Record<strin
         </Table>
       </div>
 
-      {/* Full-height drag handle overlay */}
-      <div
-        ref={handleRef}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        className="group/handle absolute top-0 bottom-0 z-10 cursor-col-resize"
-        style={{ left: keyPct, width: 5, transform: 'translateX(-2.5px)' }}
-      >
-        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-surface-elevated group-hover/handle:bg-primary/50 transition-colors" />
-      </div>
+      {/* Full-height drag handle overlay (only when there are entries to resize) */}
+      {entries.length > 0 && (
+        <div
+          ref={handleRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          className="group/handle absolute top-0 bottom-0 z-10 cursor-col-resize"
+          style={{ left: keyPct, width: 5, transform: 'translateX(-2.5px)' }}
+        >
+          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-surface-elevated group-hover/handle:bg-primary/50 transition-colors" />
+        </div>
+      )}
     </div>
   )
 }
 
 function KeyValueRow({ entryKey, value }: { entryKey: string; value: string }) {
-  const { copied: valueCopied, copy: copyValue } = useCopyToClipboard(1200)
-  const { copied: rowCopied, copy: copyRow } = useCopyToClipboard(1200)
-  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const handleClick = useCallback(() => {
-    if (clickTimer.current) {
-      clearTimeout(clickTimer.current)
-      clickTimer.current = null
-      copyRow(`${entryKey}: ${value}`)
-    } else {
-      clickTimer.current = setTimeout(() => {
-        clickTimer.current = null
-        copyValue(value)
-      }, 250)
-    }
-  }, [entryKey, value, copyValue, copyRow])
+  const { copied, copy } = useCopyToClipboard(1200)
 
   return (
     <TableRow className="border-b border-surface-elevated/30 group hover:bg-surface-elevated/20 transition-colors">
-      <TableCell className="py-1.5 pl-3 pr-2 align-top font-mono text-xs text-muted-foreground whitespace-nowrap overflow-hidden">
+      <TableCell className="py-1.5 pl-3 pr-2 align-top font-mono text-xs text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
         {entryKey}
       </TableCell>
-      <TableCell className="py-1.5 pr-2 align-top text-foreground/80 text-sm break-all relative">
+      <TableCell className="py-1.5 pr-2 align-top text-foreground/80 text-sm relative max-w-0">
         <Tooltip>
-          <TooltipTrigger className="cursor-pointer">
-            <span onClick={handleClick}>
+          <TooltipTrigger className="block w-full cursor-pointer text-left min-w-0">
+            <span className="line-clamp-2 break-all">
               {value}
             </span>
           </TooltipTrigger>
-          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
-            {valueCopied
-              ? 'Copied value'
-              : rowCopied
-                ? 'Copied key: value'
-                : 'Click to copy value, double-click to copy key: value'}
+          <TooltipContent side="top" align="start" className="max-w-[420px] bg-popover text-popover-foreground text-[11px]">
+            <div className="max-h-[200px] overflow-auto whitespace-pre-wrap break-all font-mono text-[11px]">{value}</div>
           </TooltipContent>
         </Tooltip>
-        <Tooltip>
-          <TooltipTrigger className="absolute right-0 top-0 inline-flex">
-            <button
-              onClick={handleClick}
-              className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all opacity-0 group-hover:opacity-100"
-            >
-              {rowCopied ? (
-                <CheckIcon className="size-3 text-primary" />
-              ) : valueCopied ? (
-                <CheckIcon className="size-3 text-primary" />
-              ) : (
-                <CopyIcon className="size-3" />
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="bg-popover text-popover-foreground text-[11px]">
-            {valueCopied
-              ? 'Copied value'
-              : rowCopied
-                ? 'Copied key: value'
-                : 'Click: copy value, DblClick: copy key: value'}
-          </TooltipContent>
-        </Tooltip>
+        <button
+          onClick={() => copy(value)}
+          className={`absolute right-0 top-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        >
+          {copied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <CopyIcon className="size-3.5" />}
+        </button>
       </TableCell>
     </TableRow>
   )

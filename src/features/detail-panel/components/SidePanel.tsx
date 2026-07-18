@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
-export type PanelTab = 'header' | 'query' | 'body' | 'raw' | 'form' | 'stream' | 'cookies' | 'console'
+export type PanelTab = 'header' | 'query' | 'body' | 'raw' | 'form' | 'stream' | 'cookies' | 'console' | 'compare'
 
 export interface TabDef {
   id: PanelTab

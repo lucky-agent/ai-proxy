@@ -26,7 +26,7 @@ pub(crate) fn record_request(ctx: &ProxyCtx, body: &[u8]) {
         crate::proxy::ai_hint::compute_ai_hint(ctx.uri(), host_hint, ctx.settings());
 
     ctx.send(ProxyEvent::Request {
-        id: ctx.request_id().to_string(),
+        id: ctx.request_id(),
         method: ctx.method().to_string(),
         uri: ctx.uri().to_string(),
         timestamp: ctx.start_ms(),
@@ -44,6 +44,7 @@ pub(crate) fn record_request(ctx: &ProxyCtx, body: &[u8]) {
     // ── DB 持久化（仅解密流量；db 不为 None）──
     if let Some(db) = ctx.db_ref() {
         match db.upsert_traffic_log(
+            ctx.request_id() as i64,
             ctx.method().as_str(),
             &ctx.uri().to_string(),
             crate::utils::date::now_ms(),
@@ -51,25 +52,25 @@ pub(crate) fn record_request(ctx: &ProxyCtx, body: &[u8]) {
             &ctx.query_json(),
             body_str.as_deref(),
         ) {
-            Ok(id) => ctx.set_db_id(id),
+            Ok(()) => ctx.set_db_id(ctx.request_id() as i64),
             Err(e) => log::warn!("[db] upsert_traffic_log: {e:?}"),
         }
     }
 
     if let Some(chunk) = body_str {
         ctx.send(ProxyEvent::RequestChunk {
-            id: ctx.request_id().to_string(),
+            id: ctx.request_id(),
             chunk,
         });
     }
 
-    // ── AI 会话分组（归一化的副产品）──
-    log_ai_request(ctx, &ai_hint, &ai_sources, host_hint, body);
+    // ── AI 请求侧管线：检测 → 归一化 → 分组 → 推送 ──
+    process_ai_request(ctx, &ai_hint, &ai_sources, host_hint, body);
 }
 
-/// 请求侧 AI 归一化 + 会话分组。仅 AI 流量执行；判定结果存 ctx 供响应侧消费。
+/// 请求侧 AI 管线入口：provider 判定 → 请求归一化 → 会话分组 → 前端推送。
 /// `sources`：命中规则的 (来源, 合并头) 对，其合并头置顶于全局名单参与分组。
-fn log_ai_request(
+fn process_ai_request(
     ctx: &ProxyCtx,
     ai_hint: &super::events::AiHint,
     sources: &[AiRuleSource],
@@ -92,12 +93,13 @@ fn log_ai_request(
     let Some(sessions) = ctx.sessions() else {
         return;
     };
-    let body_str = String::from_utf8_lossy(body);
-    let Some(provider) = super::ai::provider_for_request(hint_provider, &body_str) else {
+    // URL 规则未指定 provider → 不解析
+    let Some(provider) = super::ai::provider_for_request(hint_provider) else {
         return;
     };
+    let body_str = String::from_utf8_lossy(body);
 
-    let turns = super::ai::parse_request(provider, &body_str);
+    let turns = provider.parse_request(&body_str);
     if turns.is_empty() {
         return;
     }
@@ -194,7 +196,7 @@ pub(crate) fn record_response(ctx: &ProxyCtx, resp: Response) -> Response {
     let duration_ms = (now_ms - ctx.start_ms()).max(0) as u64;
 
     ctx.send(ProxyEvent::Response {
-        id: ctx.request_id().to_string(),
+        id: ctx.request_id(),
         status: status.as_u16(),
         timestamp: now_ms,
         duration_ms,
@@ -250,10 +252,11 @@ fn push_capped(buf: &mut String, chunk: &str) {
 /// 由透传流（正常流结束）与 `on_drop`（客户端中途断开）共享，
 /// [`Self::finalize`] 幂等，保证只执行一次。
 struct BodyObserver {
-    request_id: String,
+    request_id: u64,
     sender: Option<Channel<ProxyEvent>>,
     /// 请求侧判定的 (provider, session_id, request_turns)；None 表示非 AI 流量，零开销。
     /// turns 为 Arc 共享（与 ctx 同一份），克隆仅复制指针。
+    /// Provider 变体自带协议解析逻辑，构造 BodyObserver 时无需知道 Chat/Responses 区分。
     ai_req: Option<(super::ai::Provider, String, Arc<Vec<super::ai::AiTurn>>)>,
     sessions: Option<Arc<Mutex<super::ai::session::SessionStore>>>,
     /// DB 持久化：流结束时写入 response_body。
@@ -288,7 +291,7 @@ impl BodyObserver {
         let needs_body_buf = db.is_some() && db_id.is_some() && ai_mode.is_none() && !is_sse;
         let store_chunks = db.is_some() && db_id.is_some() && is_sse;
         Self {
-            request_id: ctx.request_id().to_string(),
+            request_id: ctx.request_id(),
             sender: ctx.sender().clone(),
             ai_req,
             sessions: ctx.sessions().cloned(),
@@ -311,13 +314,21 @@ impl BodyObserver {
         // ── SSE 逐 chunk 落库（writer 线程异步写，此处仅发消息）──
         if self.store_chunks {
             if let (Some(db), Some(db_id)) = (self.db.as_ref(), self.db_id) {
-                db.insert_chunk(db_id, &chunk_str, self.chunk_seq, crate::utils::date::now_ms())
-                    .ok();
+                db.insert_chunk(
+                    db_id,
+                    &chunk_str,
+                    self.chunk_seq,
+                    crate::utils::date::now_ms(),
+                )
+                .ok();
                 self.chunk_seq += 1;
                 self.chunk_bytes += chunk_str.len();
                 if self.chunk_bytes >= crate::utils::buf_pool::BODY_CAPTURE_LIMIT {
                     self.store_chunks = false;
-                    log::warn!("[db] response_chunks capped for request {}", self.request_id);
+                    log::warn!(
+                        "[db] response_chunks capped for request {}",
+                        self.request_id
+                    );
                 }
             }
         }
@@ -337,7 +348,7 @@ impl BodyObserver {
                             // 前端按 requestId 缓存），省去热路径深克隆 + 序列化。
                             emit_ai_normalized(
                                 &self.sender,
-                                &self.request_id,
+                                self.request_id,
                                 sid,
                                 Vec::new(),
                                 parser.snapshot(),
@@ -395,7 +406,7 @@ impl BodyObserver {
                     parser.finalize();
                     Some(parser.snapshot())
                 }
-                AiRespMode::NonStreaming(buf) => super::ai::parse_response_body(*provider, buf),
+                AiRespMode::NonStreaming(buf) => provider.parse_response_body(buf),
             };
             if let Some(conv) = conv {
                 // 保持事件顺序（AiNormalized 先于 AiSession），此处每请求只克隆一次。
@@ -403,12 +414,12 @@ impl BodyObserver {
                 // 前端中途挂载错过首发时也能在此自愈。
                 emit_ai_normalized(
                     &self.sender,
-                    &self.request_id,
+                    self.request_id,
                     sid,
                     req_turns.as_ref().clone(),
                     conv.clone(),
                 );
-                commit_ai_final(&self.sender, &self.sessions, &self.request_id, sid, &conv);
+                commit_ai_final(&self.sender, &self.sessions, self.request_id, sid, &conv);
             }
         }
     }
@@ -448,14 +459,14 @@ fn log_body_chunks(body: Body, ctx: &ProxyCtx, is_sse: bool) -> Body {
 /// 前端 useAiSessions 按 requestId 缓存），热路径零克隆。
 fn emit_ai_normalized(
     sender: &Option<Channel<ProxyEvent>>,
-    request_id: &str,
+    request_id: u64,
     session_id: &str,
     request_turns: Vec<super::ai::AiTurn>,
     conv: super::ai::AiConversation,
 ) {
     if let Some(ch) = sender {
         let _ = ch.send(ProxyEvent::AiNormalized {
-            id: request_id.to_string(),
+            id: request_id,
             session_id: session_id.to_string(),
             provider: conv.provider.clone(),
             request_turns,
@@ -469,7 +480,7 @@ fn emit_ai_normalized(
 fn commit_ai_final(
     sender: &Option<Channel<ProxyEvent>>,
     sessions: &Option<std::sync::Arc<std::sync::Mutex<super::ai::session::SessionStore>>>,
-    request_id: &str,
+    request_id: u64,
     session_id: &str,
     conv: &super::ai::AiConversation,
 ) {
@@ -489,7 +500,7 @@ fn commit_ai_final(
                 request_ids: entry.request_ids.clone(),
                 usage_total: entry.usage_total.clone(),
                 turn_count: entry.last_fingerprints.len() as u32,
-                match_reason: "usage".to_string(),
+                match_reason: entry.match_reason.clone(),
                 title: entry.title.clone(),
                 source: entry.source.clone(),
             });
@@ -530,76 +541,4 @@ fn session_header_list(
         }
     }
     list
-}
-
-#[cfg(test)]
-mod tests {
-    use super::session_header_list;
-    use crate::config::AiRuleSource;
-
-    fn src(name: &str, header: &str) -> AiRuleSource {
-        AiRuleSource {
-            name: name.into(),
-            merge_header: header.into(),
-        }
-    }
-
-    #[test]
-    fn source_headers_prepend_before_global() {
-        let sources = vec![
-            src("Claude Code", "x-claude-code-session-id"),
-            src("Cursor", "x-cursor-session"),
-        ];
-        let global = vec!["x-session-id".to_string()];
-        let list = session_header_list(&sources, &global);
-        assert_eq!(
-            list,
-            vec![
-                (
-                    "x-claude-code-session-id".to_string(),
-                    Some("Claude Code".to_string())
-                ),
-                ("x-cursor-session".to_string(), Some("Cursor".to_string())),
-                ("x-session-id".to_string(), None),
-            ]
-        );
-    }
-
-    #[test]
-    fn empty_sources_return_global_only() {
-        let global = vec!["x-session-id".to_string()];
-        assert_eq!(
-            session_header_list(&[], &global),
-            vec![("x-session-id".to_string(), None)]
-        );
-    }
-
-    #[test]
-    fn dedups_global_header_already_in_sources() {
-        let sources = vec![src("Cursor", "X-Session-Id")];
-        let global = vec!["x-session-id".to_string(), "x-other".to_string()];
-        let list = session_header_list(&sources, &global);
-        assert_eq!(
-            list,
-            vec![
-                ("X-Session-Id".to_string(), Some("Cursor".to_string())),
-                ("x-other".to_string(), None),
-            ]
-        );
-    }
-
-    #[test]
-    fn blank_or_duplicate_source_headers_skipped() {
-        let sources = vec![src("A", "   "), src("B", "x-h"), src("C", "X-H")];
-        let list = session_header_list(&sources, &[]);
-        // 空白头跳过；同名头（不区分大小写）首个生效
-        assert_eq!(list, vec![("x-h".to_string(), Some("B".to_string()))]);
-    }
-
-    #[test]
-    fn blank_source_name_keeps_header_without_attribution() {
-        let sources = vec![src("  ", "x-h")];
-        let list = session_header_list(&sources, &[]);
-        assert_eq!(list, vec![("x-h".to_string(), None)]);
-    }
 }

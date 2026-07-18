@@ -3,6 +3,7 @@ use sqlite;
 
 pub(crate) mod collection_nodes;
 pub(crate) mod collection_requests;
+pub(crate) mod id;
 pub(crate) mod traffic;
 
 // ── DbTable trait ────────────────────────────────────────────────────────────────

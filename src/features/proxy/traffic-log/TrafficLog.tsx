@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { TrafficEntry, ProxyJumpTarget } from '@/types/proxy'
+import type { AiConversation } from '@/types/ai'
 import { extractHost, classifyEntry, type TypeFilter } from '@/lib/format'
 import { buildFullUrl } from '@/lib/http-constants'
 import DomainSidebar from './DomainSidebar'
@@ -20,10 +21,11 @@ interface Props {
   onAutoOpenDetail: () => void
   typeFilter: TypeFilter
   jumpTarget?: ProxyJumpTarget | null
+  conversationOf?: (id: number) => AiConversation | undefined
 }
 
-export default function TrafficLog({ entries, showSidebar, detailPosition, onAutoOpenDetail, typeFilter, jumpTarget }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+export default function TrafficLog({ entries, showSidebar, detailPosition, onAutoOpenDetail, typeFilter, jumpTarget, conversationOf }: Props) {
+  const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
   const [sortColumn, setSortColumn] = useState<SortColumn>(null)
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -143,7 +145,7 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
   const selected = entries.find(e => e.id === selectedId)
 
   const handleSelectEntry = useCallback(
-    (id: string) => {
+    (id: number) => {
       setSelectedId(id)
       if (detailPosition === 'hidden') {
         onAutoOpenDetail()
@@ -160,7 +162,7 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
     setEditEntry(entry)
   }, [])
 
-  const handleSendSuccess = useCallback((entryId: string) => {
+  const handleSendSuccess = useCallback((entryId: number) => {
     setSelectedId(entryId)
     setEditEntry(null)
   }, [])
@@ -174,7 +176,7 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
     }
 
     try {
-      const entryId = await invoke<string>('resend_request', {
+      const entryId = await invoke<number>('resend_request', {
         method: entry.method,
         url: buildFullUrl(entry),
         headers,
@@ -206,7 +208,7 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
     />
   )
 
-  const detailPanel = <DetailPanel entry={selected} onClose={handleCloseDetail} />
+  const detailPanel = <DetailPanel entry={selected} conversation={selected ? conversationOf?.(selected.id) : undefined} onClose={handleCloseDetail} />
 
   // Inner content: varies by detailPosition.
   const mainContent = (() => {

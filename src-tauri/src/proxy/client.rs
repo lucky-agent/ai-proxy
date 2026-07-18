@@ -129,7 +129,7 @@ async fn apply_request_scripts(
             log::info!("[script] request blocked");
             if let Some(ref ch) = state.event_channel() {
                 ch.send(ProxyEvent::Error {
-                    id: "blocked".into(),
+                    id: 0,
                     error: "Request blocked by script".into(),
                 })
                 .ok();
@@ -190,7 +190,7 @@ async fn forward_and_log(
                 forward_start.elapsed()
             );
             ctx.send(ProxyEvent::Error {
-                id: ctx.request_id().to_string(),
+                id: ctx.request_id(),
                 error: format!("{err:?}"),
             });
             // ── DB 写入错误 ──

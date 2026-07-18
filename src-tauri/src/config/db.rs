@@ -20,13 +20,14 @@ type SyncSender = mpsc::SyncSender<DbCmd>;
 pub(crate) enum DbCmd {
     // ── Traffic logging ────────────────────────────────────────────────────
     UpsertTrafficLog {
+        id: i64,
         method: String,
         uri: String,
         timestamp: i64,
         headers_json: String,
         query_json: String,
         body: Option<String>,
-        reply: Option<mpsc::Sender<Result<i64, sqlite::Error>>>,
+        reply: Option<mpsc::Sender<Result<(), sqlite::Error>>>,
     },
     UpdateTrafficResponse {
         id: i64,
@@ -56,8 +57,16 @@ pub(crate) enum DbCmd {
         request_id: i64,
         reply: mpsc::Sender<Result<Vec<traffic::ChunkRecord>, sqlite::Error>>,
     },
+    LoadTrafficDetail {
+        id: i64,
+        reply: mpsc::Sender<Result<traffic::TrafficLogEntry, sqlite::Error>>,
+    },
     ClearTraffic {
         reply: mpsc::Sender<Result<(), sqlite::Error>>,
+    },
+    /// Query the maximum traffic_logs id for counter initialization.
+    MaxTrafficId {
+        reply: mpsc::Sender<Result<i64, sqlite::Error>>,
     },
 
     // ── Collection management ───────────────────────────────────────────────
@@ -198,10 +207,10 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
 
             // ── Traffic logging ────────────────────────────────────────────
             DbCmd::UpsertTrafficLog {
-                method, uri, timestamp, headers_json, query_json, body, reply,
+                id, method, uri, timestamp, headers_json, query_json, body, reply,
             } => {
                 let result = traffic::do_upsert_traffic_log(
-                    &conn, &method, &uri, timestamp, &headers_json, &query_json, body.as_deref(),
+                    &conn, id, &method, &uri, timestamp, &headers_json, &query_json, body.as_deref(),
                 );
                 if let Some(reply) = reply { reply.send(result).ok(); }
             }
@@ -236,11 +245,24 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
                 reply.send(traffic::do_load_chunks(&conn, request_id)).ok();
             }
 
+            DbCmd::LoadTrafficDetail { id, reply } => {
+                reply.send(traffic::do_load_traffic_detail(&conn, id)).ok();
+            }
+
             DbCmd::ClearTraffic { reply } => {
                 let result = (|| {
                     conn.execute("DELETE FROM response_chunks")?;
                     conn.execute("DELETE FROM traffic_logs")?;
                     Ok(())
+                })();
+                reply.send(result).ok();
+            }
+
+            DbCmd::MaxTrafficId { reply } => {
+                let result = (|| {
+                    let mut stmt = conn.prepare("SELECT COALESCE(MAX(id), 0) FROM traffic_logs")?;
+                    stmt.next()?;
+                    Ok(stmt.read::<i64, _>(0)?)
                 })();
                 reply.send(result).ok();
             }

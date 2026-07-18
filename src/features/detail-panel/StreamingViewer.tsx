@@ -174,9 +174,9 @@ function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: T
           <TooltipTrigger className="absolute right-1.5 top-1.5 z-10">
             <button
               onClick={() => copy(result.formatted)}
-              className="rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-surface-elevated/50 transition-all group-hover:opacity-100"
+              className={`rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             >
-              {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
+              {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
             </button>
           </TooltipTrigger>
           <TooltipContent side="left" className="bg-popover text-popover-foreground text-[11px]">
@@ -267,7 +267,7 @@ function ChunkContent({ data }: { data: string }) {
       <button
         onClick={() => copy(data)}
         className="absolute right-1 top-1 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-surface-elevated/50 transition-all group-hover:opacity-100">
-        {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
+        {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
       </button>
       <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-surface-elevated/20 px-3 py-2 font-mono text-[11px] leading-5 text-foreground/80">
         {data}
@@ -333,9 +333,9 @@ function SseEventItem({ index, event }: { index: number; event: SseEvent }) {
         <div className="group relative px-3 pb-2 pl-9">
           <button
             onClick={() => copy(event.data)}
-            className="absolute right-1 top-1 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-surface-elevated/50 transition-all group-hover:opacity-100">
+            className={`absolute right-1 top-1 z-10 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
             {copied ? (
-              <CheckIcon className="size-3 text-primary" />
+              <CheckIcon className="size-3 text-emerald-500" />
             ) : (
               <CopyIcon className="size-3" />
             )}

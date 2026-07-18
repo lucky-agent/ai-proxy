@@ -79,12 +79,18 @@
     "mergeFormatOpenai": "OpenAI",
     "errorStatus": "Error",
     "console": "Console",
-    "noConsole": "No console output"
+    "noConsole": "No console output",
+    "compare": "AI Compare",
+    "compareIR": "IR",
+    "compareRaw": "Raw JSON",
+    "compareWaiting": "Waiting for normalized data…"
   },
   "settings": {
     "title": "Settings",
-    "description": "Configure proxy listen address and upstream behavior.",
+    "description": "Configure interface preferences and proxy behavior.",
     "loading": "Loading...",
+    "generalTab": "General",
+    "proxyTab": "Proxy",
     "listenHost": "Listen Host",
     "listenPort": "Listen Port",
     "upstreamProxy": "Use system proxy for upstream requests",

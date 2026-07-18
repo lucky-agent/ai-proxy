@@ -66,7 +66,7 @@ export default function SummaryBar({ entry, onClose, showUriTooltip = true }: { 
             onClick={() => copy(entry.uri)}
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors"
           >
-            {copied ? <CheckIcon className="size-3 text-primary" /> : <CopyIcon className="size-3" />}
+            {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-[11px]">

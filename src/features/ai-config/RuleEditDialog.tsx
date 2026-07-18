@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
-import { PlusIcon, XIcon } from 'lucide-react'
+import { ChevronDownIcon, PlusIcon, XIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Select,
-  SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Select as SelectPrimitive } from '@base-ui/react/select'
+import { Combobox } from '@base-ui/react/combobox'
 import { useLocale } from '@/hooks/useLocale'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import type { AiRuleSource, AiUrlRule } from '@/types/settings'
@@ -16,18 +17,18 @@ import type { AiRuleSource, AiUrlRule } from '@/types/settings'
 /** provider 下拉里「自动检测」对应后端 provider: null */
 const PROVIDER_AUTO = 'auto'
 
-/** 「来源名」输入的内置客户端建议（datalist，可自由输入其他名称） */
-const BUILTIN_SOURCES = [
-  'Claude Code',
-  'Cursor',
-  'Cline',
-  'Windsurf',
-  'Cherry Studio',
-  'NextChat',
-  'LobeChat',
-  'Browser',
-]
-const SOURCE_DATALIST_ID = 'ai-rule-source-names'
+/** 已知来源名 → 默认合并头：选中后自动填 header，仍可手动覆盖。
+ *  value 为空串表示该客户端暂无已知合并头，不自动填充。 */
+const DEFAULT_MERGE_HEADERS: Record<string, string> = {
+  'Claude Code': 'x-claude-code-session-id',
+  Cursor: 'x-cursor-session',
+  Cline: '',
+  Windsurf: '',
+  'Cherry Studio': '',
+  NextChat: '',
+  LobeChat: '',
+  Browser: '',
+}
 
 interface Props {
   /** null = 新增；否则为被编辑规则（用于表单预填） */
@@ -141,13 +142,19 @@ export default function RuleEditForm({
                 }
               </SelectValue>
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="openai">openai</SelectItem>
-              <SelectItem value="anthropic">anthropic</SelectItem>
-              <SelectItem value={PROVIDER_AUTO}>
-                {t('aiConfig.providerAuto')}
-              </SelectItem>
-            </SelectContent>
+            <SelectPrimitive.Portal>
+              <SelectPrimitive.Positioner side="bottom" sideOffset={4} alignItemWithTrigger={false} collisionAvoidance={{ side: 'none' }} className="isolate z-50">
+                <SelectPrimitive.Popup className="relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+                  <SelectPrimitive.List>
+                    <SelectItem value="openai">openai</SelectItem>
+                    <SelectItem value="anthropic">anthropic</SelectItem>
+                    <SelectItem value={PROVIDER_AUTO}>
+                      {t('aiConfig.providerAuto')}
+                    </SelectItem>
+                  </SelectPrimitive.List>
+                </SelectPrimitive.Popup>
+              </SelectPrimitive.Positioner>
+            </SelectPrimitive.Portal>
           </Select>
         </label>
 
@@ -173,13 +180,54 @@ export default function RuleEditForm({
             <div className="grid gap-1.5">
               {sources.map((s, i) => (
                 <div key={i} className="flex items-center gap-1.5">
-                  <Input
-                    className="flex-1 text-xs"
-                    list={SOURCE_DATALIST_ID}
-                    value={s.name}
-                    placeholder={t('aiConfig.sourceNamePlaceholder')}
-                    onChange={(e) => updateSource(i, { name: e.target.value })}
-                  />
+                  <Combobox.Root
+                    value={DEFAULT_MERGE_HEADERS[s.name] !== undefined ? s.name : null}
+                    onValueChange={(v) => {
+                      const name = Array.isArray(v) ? v[0] ?? '' : (v ?? '')
+                      const autoHeader = DEFAULT_MERGE_HEADERS[name] ?? ''
+                      updateSource(i, {
+                        name,
+                        merge_header: autoHeader || s.merge_header,
+                      })
+                    }}
+                    inputValue={s.name}
+                    onInputValueChange={(v) =>
+                      updateSource(i, { name: v })
+                    }
+                    items={Object.keys(DEFAULT_MERGE_HEADERS)}
+                    autoHighlight
+                  >
+                    <div className="relative flex-1">
+                      <Combobox.Input
+                        className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-xs font-normal outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                        placeholder={t('aiConfig.sourceNamePlaceholder')}
+                      />
+                      <Combobox.Trigger
+                        render={
+                          <button className="absolute right-1 top-1/2 -translate-y-1/2 flex size-5 items-center justify-center rounded text-muted-foreground">
+                            <ChevronDownIcon className="size-3.5" />
+                          </button>
+                        }
+                      />
+                    </div>
+                    <Combobox.Portal>
+                      <Combobox.Positioner side="bottom" sideOffset={4} alignItemWithTrigger={false} collisionAvoidance={{ side: 'none' }} className="isolate z-50">
+                        <Combobox.Popup className="relative isolate z-50 max-h-40 w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+                          <Combobox.List className="p-1">
+                            {Object.keys(DEFAULT_MERGE_HEADERS).map((name) => (
+                              <Combobox.Item
+                                key={name}
+                                value={name}
+                                className="relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-xs outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                              >
+                                {name}
+                              </Combobox.Item>
+                            ))}
+                          </Combobox.List>
+                        </Combobox.Popup>
+                      </Combobox.Positioner>
+                    </Combobox.Portal>
+                  </Combobox.Root>
                   <Input
                     className="flex-1 font-mono text-xs"
                     value={s.merge_header}
@@ -206,11 +254,6 @@ export default function RuleEditForm({
               ))}
             </div>
           )}
-          <datalist id={SOURCE_DATALIST_ID}>
-            {BUILTIN_SOURCES.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
         </div>
       </div>
 

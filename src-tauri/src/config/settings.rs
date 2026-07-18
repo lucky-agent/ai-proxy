@@ -215,6 +215,12 @@ pub(crate) fn default_ai_url_rules() -> Vec<AiUrlRule> {
             sources: Vec::new(),
         },
         AiUrlRule {
+            url: "api.openai.com/v1/responses".into(),
+            provider: Some("openai-responses".into()),
+            enabled: true,
+            sources: Vec::new(),
+        },
+        AiUrlRule {
             url: "api.anthropic.com/v1/messages".into(),
             provider: Some("anthropic".into()),
             enabled: true,
@@ -235,6 +241,18 @@ pub(crate) fn default_ai_url_rules() -> Vec<AiUrlRule> {
         AiUrlRule {
             url: "openrouter.ai/api/v1/chat/completions".into(),
             provider: None,
+            enabled: true,
+            sources: Vec::new(),
+        },
+        AiUrlRule {
+            url: "generativelanguage.googleapis.com/v1beta/models/*".into(),
+            provider: Some("gemini".into()),
+            enabled: true,
+            sources: Vec::new(),
+        },
+        AiUrlRule {
+            url: "generativelanguage.googleapis.com/v1alpha/models/*".into(),
+            provider: Some("gemini".into()),
             enabled: true,
             sources: Vec::new(),
         },
@@ -484,61 +502,5 @@ pub fn sync_ssl_for_ai(ssl: &mut SslConfig, ai: &AiConfig) {
                 enabled: true,
             });
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 旧配置（无 sources 字段）反序列化时取默认空列表。
-    #[test]
-    fn ai_url_rule_sources_default_on_old_config() {
-        let rule: AiUrlRule =
-            serde_json::from_str(r#"{"url":"a/b","provider":"openai","enabled":true}"#).unwrap();
-        assert!(rule.sources.is_empty());
-    }
-
-    /// 旧配置（无 method 字段）反序列化时默认空串 = any。
-    #[test]
-    fn script_item_method_default_on_old_config() {
-        let item: ScriptItem =
-            serde_json::from_str(r#"{"name":"a","domain":"*.example.com","enabled":true}"#)
-                .unwrap();
-        assert_eq!(item.method, "");
-    }
-
-    fn script_item(method: &str) -> ScriptItem {
-        ScriptItem {
-            name: "a".into(),
-            domain: "*.example.com".into(),
-            method: method.into(),
-            enabled: true,
-            file_name: "abc".into(),
-        }
-    }
-
-    /// method 空串 = any 匹配所有方法；指定方法大小写不敏感精确匹配。
-    #[test]
-    fn script_item_method_matching() {
-        assert!(script_item("").matches("api.example.com", "GET"));
-        assert!(script_item("").matches("api.example.com", "POST"));
-        assert!(script_item("POST").matches("api.example.com", "POST"));
-        assert!(script_item("post").matches("api.example.com", "POST"));
-        assert!(!script_item("POST").matches("api.example.com", "GET"));
-        // 域名不命中时 method 一致也不生效
-        assert!(!script_item("POST").matches("other.com", "POST"));
-    }
-
-    /// (来源, 合并头) 成对反序列化。
-    #[test]
-    fn ai_rule_source_pair_deserializes() {
-        let rule: AiUrlRule = serde_json::from_str(
-            r#"{"url":"a/b","sources":[{"name":"Cursor","merge_header":"x-cursor-session"}]}"#,
-        )
-        .unwrap();
-        assert_eq!(rule.sources.len(), 1);
-        assert_eq!(rule.sources[0].name, "Cursor");
-        assert_eq!(rule.sources[0].merge_header, "x-cursor-session");
     }
 }

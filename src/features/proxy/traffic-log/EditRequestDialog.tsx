@@ -31,7 +31,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
   entry: TrafficEntry | null
   /** 编辑模式下发送后自动选中并打开详情 */
-  onSendSuccess?: (entryId: string) => void
+  onSendSuccess?: (entryId: number) => void
 }
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
@@ -92,7 +92,7 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
     }
 
     try {
-      const entryId = await invoke<string>('resend_request', {
+      const entryId = await invoke<number>('resend_request', {
         method,
         url: url.trim(),
         headers: headerMap,

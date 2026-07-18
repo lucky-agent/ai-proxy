@@ -174,7 +174,8 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
         </DialogHeader>
 
         {/* 包裹内容区 + error + footer：侧滑面板的定位锚 */}
-        <div className="relative overflow-hidden">
+        <div className="relative">
+          <div className="overflow-hidden">
           {loading ? (
             <p className="text-sm text-muted-foreground">{t('settings.loading')}</p>
           ) : (
@@ -253,7 +254,7 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
                           rowHit(rule, index) &&
                             'bg-ai-user-bubble/[0.08] shadow-[inset_2px_0_0_var(--ai-user-bubble)] hover:bg-ai-user-bubble/[0.12]'
                         )}
-                        onClick={() => openEdit(index)}
+                        onDoubleClick={() => openEdit(index)}
                       >
                         <span
                           className={COL.enabled}
@@ -429,36 +430,36 @@ export default function AiConfigDialog({ open, onOpenChange }: Props) {
                 )}
               </div>
 
-              {/* 侧滑遮罩：点击关闭面板 */}
-              {editingPanel && (
-                <div
-                  className={cn(
-                    'absolute inset-0 z-10 bg-black/5',
-                    closingPanel ? 'animate-fade-out-overlay' : 'animate-fade-in-overlay'
-                  )}
-                  onClick={handleClosePanel}
-                />
-              )}
-
-              {/* 侧滑编辑面板 */}
-              {editingPanel && (
-                <div
-                  className={cn(
-                    'absolute inset-y-0 right-0 z-20 flex w-[min(88%,400px)] flex-col border-l-2 border-border bg-popover shadow-lg',
-                    closingPanel ? 'animate-slide-out-right' : 'animate-slide-in-right'
-                  )}
-                >
-                  <div className="flex-1 flex flex-col overflow-y-auto p-4">
-                    <RuleEditForm
-                      initial={editingRule}
-                      existingUrls={existingUrls}
-                      onConfirm={applyRule}
-                      onCancel={handleClosePanel}
-                    />
-                  </div>
-                </div>
-              )}
             </>
+          )}
+          </div>{/* overflow-hidden 结束 */}
+
+          {/* 侧滑遮罩 + 编辑面板：提升到此层级避免 overflow-hidden 裁剪导致表格抖动 */}
+          {editingPanel && (
+            <div
+              className={cn(
+                'absolute inset-0 z-10 bg-black/5',
+                closingPanel ? 'animate-fade-out-overlay' : 'animate-fade-in-overlay'
+              )}
+              onClick={handleClosePanel}
+            />
+          )}
+          {editingPanel && (
+            <div
+              className={cn(
+                'absolute inset-y-0 right-0 z-20 flex w-[min(70%,400px)] flex-col border-l border-border bg-popover shadow-lg',
+                closingPanel ? 'animate-slide-out-right' : 'animate-slide-in-right'
+              )}
+            >
+              <div className="flex-1 flex flex-col overflow-y-auto p-4">
+                <RuleEditForm
+                  initial={editingRule}
+                  existingUrls={existingUrls}
+                  onConfirm={applyRule}
+                  onCancel={handleClosePanel}
+                />
+              </div>
+            </div>
           )}
 
           {error && (

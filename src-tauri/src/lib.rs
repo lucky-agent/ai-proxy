@@ -9,6 +9,7 @@ use proxy::state::AppState;
 use tauri::{Emitter, Manager, RunEvent};
 
 use crate::commands::load_traffic_history;
+use crate::commands::get_traffic_detail;
 use crate::commands::resend_request;
 use crate::commands::open_url;
 use crate::commands::{
@@ -52,7 +53,15 @@ fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .app_data_dir()
         .expect("Failed to get app data directory");
 
+    use crate::storage::id;
+
     let store = Store::new(data_dir);
+
+    // 从 DB 恢复请求 ID 计数器，防止重启后 ID 重复
+    match store.max_traffic_id() {
+        Ok(max_id) => id::init_request_counter(max_id as u64),
+        Err(e) => log::warn!("[db] max_traffic_id failed: {e:?}, counter starts from 1"),
+    }
 
     let mut settings =
         Settings::load_from_path(&store.data_dir()).expect("Failed to load configuration");
@@ -151,6 +160,7 @@ pub fn run() {
             subscribe_proxy_events,
             sync_tray_locale,
             load_traffic_history,
+            get_traffic_detail,
             resend_request,
             get_collections,
             create_collection,

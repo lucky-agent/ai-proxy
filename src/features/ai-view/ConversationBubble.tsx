@@ -366,7 +366,9 @@ function CopyButton({ copied, onCopy, isUser, show = true }: { copied: boolean; 
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onCopy() }}
-      className={`absolute top-1.5 right-1.5 z-10 rounded-md p-1 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity cursor-pointer ${
+      className={`absolute top-1.5 right-1.5 z-10 rounded-md p-1 transition-opacity cursor-pointer ${
+        copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-70 hover:!opacity-100'
+      } ${
         isUser
           ? 'text-white/80 hover:bg-white/15'
           : 'text-muted-foreground bg-surface-base/40 hover:bg-surface-base/80'

@@ -44,7 +44,7 @@ export interface AiSessionState {
   /** 会话标题：后端从首请求响应的 {"title": "..."} 提取，无则回退 scopeHost */
   title?: string
   /** 组内请求 id，有序 */
-  requestIds: string[]
+  requestIds: number[]
   usageTotal: AiUsage
   turnCount: number
   /** 归组依据：`header:<name>` / `prefix` / `new` / `usage` */
@@ -52,5 +52,5 @@ export interface AiSessionState {
   /** 来源归属（客户端名）：后端按命中的合并头确认，无则缺省 */
   source?: string
   /** 每个请求 id → 该次归一化对话（流式期间被 AiNormalized 不断覆盖更新） */
-  conversations: Record<string, AiConversation>
+  conversations: Record<number, AiConversation>
 }

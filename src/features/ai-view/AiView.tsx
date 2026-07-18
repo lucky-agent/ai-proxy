@@ -46,12 +46,12 @@ function MetaPanel({ session }: { session: AiSessionState }) {
 }
 
 function renderConversation(
-  rendered: { turn: AiTurn; requestId: string }[],
+  rendered: { turn: AiTurn; requestId: number }[],
   selection: AiSelection,
-  reqIndex: Map<string, number>,
-  isStreamingReq: (requestId: string) => boolean,
+  reqIndex: Map<number, number>,
+  isStreamingReq: (requestId: number) => boolean,
   mdSessions: Record<string, boolean>,
-  onJumpToProxy: ((requestId: string) => void) | undefined,
+  onJumpToProxy: ((requestId: number) => void) | undefined,
   t: ReturnType<typeof useTranslation>['t'],
 ): ReactNode {
   if (rendered.length === 0) {
@@ -80,16 +80,16 @@ function renderConversation(
 
 interface AiViewProps {
   sessions: AiSessionState[]
-  mergedTimeline: (sessionId: string) => { turn: AiTurn; requestId: string }[]
-  conversationOf: (requestId: string) => AiConversation | undefined
+  mergedTimeline: (sessionId: string) => { turn: AiTurn; requestId: number }[]
+  conversationOf: (requestId: number) => AiConversation | undefined
   showSidebar: boolean
   detailPosition: DetailPosition
   /** 点击气泡的跳转钮 → 切到代理视图并定位该请求。 */
-  onJumpToProxy?: (requestId: string) => void
+  onJumpToProxy?: (requestId: number) => void
   /** 右键删除整个会话（仅前端移除） */
   onDeleteSession: (sessionId: string) => void
   /** 右键删除会话内单次请求（仅前端移除） */
-  onDeleteRequest: (sessionId: string, requestId: string) => void
+  onDeleteRequest: (sessionId: string, requestId: number) => void
 }
 
 export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, detailPosition, onJumpToProxy, onDeleteSession, onDeleteRequest }: AiViewProps) {
@@ -121,7 +121,7 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
     setSelection((sel) => (sel?.sessionId === sessionId ? null : sel))
   }, [onDeleteSession])
 
-  const handleDeleteRequest = useCallback((sessionId: string, requestId: string) => {
+  const handleDeleteRequest = useCallback((sessionId: string, requestId: number) => {
     const remaining = sessions.find((s) => s.sessionId === sessionId)?.requestIds.filter((rid) => rid !== requestId).length ?? 0
     onDeleteRequest(sessionId, requestId)
     setSelection((sel) => {
@@ -133,13 +133,13 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
 
   /** requestId → #req 序号（会话内位置） */
   const reqIndex = useMemo(() => {
-    const m = new Map<string, number>()
+    const m = new Map<number, number>()
     selectedSession?.requestIds.forEach((rid, i) => m.set(rid, i + 1))
     return m
   }, [selectedSession])
 
   // 会话头 → 合并时间线；单请求 → 该次完整对话
-  const rendered = useMemo<{ turn: AiTurn; requestId: string }[]>(() => {
+  const rendered = useMemo<{ turn: AiTurn; requestId: number }[]>(() => {
     if (!selection || !selectedSession) return []
     if (selection.requestId) {
       const conv = conversationOf(selection.requestId)
@@ -148,7 +148,7 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
     return mergedTimeline(selection.sessionId)
   }, [selection, selectedSession, mergedTimeline, conversationOf])
 
-  const isStreamingReq = (requestId: string): boolean =>
+  const isStreamingReq = (requestId: number): boolean =>
     conversationOf(requestId)?.streaming ?? false
 
   // 打开会话即滚到底部看最新内容；流式期间吸底跟随，用户主动上滚查看历史时不打扰

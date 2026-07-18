@@ -26,7 +26,7 @@ import type { TrafficEntry } from '@/types/proxy'
 import type { DetailPosition } from '@/features/bottom-bar'
 
 interface NewRequestViewProps {
-  onSendSuccess: (entryId: string) => void
+  onSendSuccess: (entryId: number) => void
   entries: TrafficEntry[]
   showSidebar: boolean
   detailPosition: DetailPosition
@@ -145,7 +145,7 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
     cancelRef.current = controller
 
     try {
-      const entryId = await invoke<string>('resend_request', {
+      const entryId = await invoke<number>('resend_request', {
         method: activeTab.method,
         url: finalUrl,
         headers: headerMap,

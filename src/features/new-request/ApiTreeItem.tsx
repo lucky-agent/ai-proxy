@@ -1,9 +1,10 @@
 // src/features/new-request/ApiTreeItem.tsx
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { ChevronRightIcon, FolderIcon, Trash2Icon, CopyIcon, PencilIcon, FileIcon, ImportIcon } from 'lucide-react'
+import { ChevronRightIcon, FolderIcon, Trash2Icon, CopyIcon, CheckIcon, PencilIcon, FileIcon, ImportIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatCurl } from '@/lib/curl'
 import { Input } from '@/components/ui/input'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -49,6 +50,7 @@ export function ApiTreeItem({
   onToggleExpand,
 }: ApiTreeItemProps) {
   const { t } = useLocale()
+  const { copied, copy } = useCopyToClipboard()
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(node.name)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
@@ -99,8 +101,8 @@ export function ApiTreeItem({
       cookies: req.cookies,
     })
     console.log('[handleCopyCurl] result:', curlStr)
-    navigator.clipboard.writeText(curlStr).catch(() => {})
-  }, [node])
+    copy(curlStr)
+  }, [node, copy])
 
   // 点击事件
   const handleClick = useCallback(() => {
@@ -206,7 +208,7 @@ export function ApiTreeItem({
               <span>{t('collection.duplicate')}</span>
             </ContextMenuItem>
             <ContextMenuItem onClick={handleCopyCurl}>
-              <CopyIcon className="size-3" />
+              {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
               <span>{t('collection.copyCurl')}</span>
             </ContextMenuItem>
             <ContextMenuSeparator />

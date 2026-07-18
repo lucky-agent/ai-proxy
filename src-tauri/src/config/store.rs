@@ -42,6 +42,11 @@ impl Store {
         self.db.clone()
     }
 
+    /// 查询 traffic_logs 当前最大 id，用于启动时恢复计数器。
+    pub(crate) fn max_traffic_id(&self) -> Result<i64, sqlite::Error> {
+        self.db.max_traffic_id()
+    }
+
     pub fn build_log_plugin(log: &LogConfig) -> tauri_plugin_log::Builder {
         let log_dir = PathBuf::from(log.dir.clone().unwrap_or_else(|| "logs".to_string()));
         let mut targets = vec![Target::new(TargetKind::Folder {

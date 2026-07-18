@@ -21,4 +21,4 @@ pub use settings::{get_script_config, save_script_config, set_script_enabled, ge
 pub use settings::test_rule_match;
 pub use theme::{get_theme, set_theme};
 mod traffic;
-pub use traffic::load_traffic_history;
+pub use traffic::{load_traffic_history, get_traffic_detail};
