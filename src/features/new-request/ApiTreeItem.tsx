@@ -87,7 +87,6 @@ export function ApiTreeItem({
 
   const handleCopyCurl = useCallback(() => {
     const req = node as ApiRequestNode
-    console.log('[handleCopyCurl] node:', JSON.stringify({ method: req.method, url: req.url, headers: req.headers, params: req.params, cookies: req.cookies, body: req.body?.substring(0, 50) }))
     const headerMap: Record<string, string> = {}
     for (const h of req.headers) {
       if (h.key.trim()) headerMap[h.key.trim()] = h.value
@@ -100,7 +99,6 @@ export function ApiTreeItem({
       params: req.params,
       cookies: req.cookies,
     })
-    console.log('[handleCopyCurl] result:', curlStr)
     copy(curlStr)
   }, [node, copy])
 

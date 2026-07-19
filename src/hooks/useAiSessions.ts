@@ -18,6 +18,8 @@ function sameBlock(a: AiContentBlock, b: AiContentBlock): boolean {
   switch (a.type) {
     case 'text':
       return a.text === (b as Extract<AiContentBlock, { type: 'text' }>).text
+    case 'thinking':
+      return a.text === (b as Extract<AiContentBlock, { type: 'thinking' }>).text
     case 'tool_use': {
       const bb = b as Extract<AiContentBlock, { type: 'tool_use' }>
       // 极少数解析不到 id 时（空串）退化为 input 比对
@@ -29,11 +31,20 @@ function sameBlock(a: AiContentBlock, b: AiContentBlock): boolean {
   }
 }
 
-/** 两个 turn 是否相等：role + 逐 block 比较，任一不匹配即短路。 */
+/** LCP 比较忽略 thinking：客户端回放历史时可能剥掉思考内容（如 reasoning_content
+ *  不回放），计入会让同一 turn 前后形状不同、时间线在该处断链重复。 */
+function comparableBlocks(turn: AiTurn): AiContentBlock[] {
+  return turn.content.filter((b) => b.type !== 'thinking')
+}
+
+/** 两个 turn 是否相等：role + 逐 block 比较（忽略 thinking），任一不匹配即短路。 */
 function sameTurn(a: AiTurn, b: AiTurn): boolean {
   if (a === b) return true
-  if (a.role !== b.role || a.content.length !== b.content.length) return false
-  return a.content.every((blk, i) => sameBlock(blk, b.content[i]))
+  if (a.role !== b.role) return false
+  const ca = comparableBlocks(a)
+  const cb = comparableBlocks(b)
+  if (ca.length !== cb.length) return false
+  return ca.every((blk, i) => sameBlock(blk, cb[i]))
 }
 
 /** 将 sid 移到 LRU 数组末尾（标记为最近访问）。 */

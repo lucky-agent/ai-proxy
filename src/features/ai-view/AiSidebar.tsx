@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { MessageSquareIcon, ChevronRight, ChevronDown, Trash2Icon, CodeIcon, TextIcon } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { MessageSquareIcon, ChevronRight, ChevronDown, Trash2Icon, CodeIcon, TextIcon, TerminalIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
@@ -10,8 +10,9 @@ import {
 } from '@/components/ui/context-menu'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type { AiSessionState } from '@/types/ai'
+import type { AiSessionState, AiUsage } from '@/types/ai'
 import { cn } from '@/lib/utils'
+import { formatDuration } from '@/lib/format'
 
 /** 选中项：仅 sessionId = 选中会话头（合并时间线）；带 requestId = 选中单次请求 */
 export interface AiSelection {
@@ -25,17 +26,43 @@ interface AiSidebarProps {
   onSelect: (sel: AiSelection) => void
   onDeleteSession: (sessionId: string) => void
   onDeleteRequest: (sessionId: string, requestId: number) => void
+  /** 复制该请求的 cURL（右键菜单项） */
+  onCopyCurl?: (requestId: number) => void
   /** sessionId → 是否 md 渲染 */
   mdSessions: Record<string, boolean>
   onToggleMd: (sessionId: string) => void
 }
 
-/** 归组依据 → 短标签 */
-function reasonLabel(reason: string): string {
-  if (reason.startsWith('header:')) return 'header'
-  if (reason === 'prefix') return 'prefix'
-  if (reason === 'new') return 'new'
-  return reason || '—'
+/** 悬浮弹窗统一样式：popover 底色 + 两列网格（标签 | 右对齐值） */
+const TIP_CLASS = 'bg-popover text-popover-foreground border border-border'
+const TIP_GRID = 'grid grid-cols-[auto_auto] gap-x-5 gap-y-1 text-ui-sm py-0.5'
+
+/** Token 用量行组（Prompt/Completion/Cache Read/Write/Total）；缓存行无值时隐藏 */
+function UsageRows({ usage }: { usage: AiUsage }) {
+  return (
+    <>
+      <span className="text-muted-foreground">Prompt</span>
+      <span className="text-right font-mono tabular-nums">{usage.promptTokens?.toLocaleString() ?? '-'}</span>
+      <span className="text-muted-foreground">Completion</span>
+      <span className="text-right font-mono tabular-nums">{usage.completionTokens?.toLocaleString() ?? '-'}</span>
+      {usage.cachedTokens != null && (
+        <>
+          <span className="text-muted-foreground">Cache Read</span>
+          <span className="text-right font-mono tabular-nums">{usage.cachedTokens.toLocaleString()}</span>
+        </>
+      )}
+      {usage.cacheCreationTokens != null && (
+        <>
+          <span className="text-muted-foreground">Cache Write</span>
+          <span className="text-right font-mono tabular-nums">{usage.cacheCreationTokens.toLocaleString()}</span>
+        </>
+      )}
+      <span className="font-semibold text-violet-400">Total</span>
+      <span className="text-right font-mono tabular-nums font-semibold text-violet-400">
+        {usage.totalTokens?.toLocaleString() ?? '-'}
+      </span>
+    </>
+  )
 }
 
 function SessionGroup({
@@ -44,6 +71,7 @@ function SessionGroup({
   onSelect,
   onDeleteSession,
   onDeleteRequest,
+  onCopyCurl,
   mdSessions,
   onToggleMd,
 }: {
@@ -52,6 +80,7 @@ function SessionGroup({
   onSelect: (sel: AiSelection) => void
   onDeleteSession: (sessionId: string) => void
   onDeleteRequest: (sessionId: string, requestId: number) => void
+  onCopyCurl?: (requestId: number) => void
   mdSessions: Record<string, boolean>
   onToggleMd: (sessionId: string) => void
 }) {
@@ -59,6 +88,15 @@ function SessionGroup({
   const [expanded, setExpanded] = useState(true)
   const headSelected = selection?.sessionId === session.sessionId && !selection?.requestId
   const total = session.usageTotal.totalTokens
+
+  // 会话模型：取最新一轮已知 model 的请求（流式首轮可能尚未产出 model）
+  const model = useMemo(() => {
+    for (let i = session.requestIds.length - 1; i >= 0; i--) {
+      const m = session.conversations[session.requestIds[i]]?.model
+      if (m) return m
+    }
+    return undefined
+  }, [session.requestIds, session.conversations])
 
   return (
     <div className="border-b border-border/40">
@@ -82,18 +120,28 @@ function SessionGroup({
               >
                 {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
               </span>
-              <span className="text-ui-2xs font-semibold px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400 border-violet-500/20">
-                {reasonLabel(session.matchReason)}
-              </span>
               {session.source && (
-                <Tooltip>
-                  <TooltipTrigger className="inline-flex">
-                    <span className="max-w-24 truncate text-ui-2xs px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-500 border-sky-500/20 dark:text-sky-400">
-                      {session.source}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[320px] bg-popover text-popover-foreground text-ui-sm">
-                    {session.source}
+                <Tooltip delay={150}>
+                  <TooltipTrigger
+                    render={
+                      <span className="max-w-24 truncate text-ui-2xs px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-500 border-sky-500/20 dark:text-sky-400 cursor-default">
+                        {session.source}
+                      </span>
+                    }
+                  />
+                  <TooltipContent side="right" className={TIP_CLASS}>
+                    <div className={TIP_GRID}>
+                      <span className="text-muted-foreground">Session</span>
+                      <span className="text-right break-all">{session.scopeHost || '—'}</span>
+                      <span className="text-muted-foreground">{t('aiSidebar.model', '模型')}</span>
+                      <span className="text-right break-all">{model ?? '—'}</span>
+                      <span className="text-muted-foreground">{t('aiSidebar.groupBy', '分组依据')}</span>
+                      <span className="text-right break-all">{session.matchReason || '—'}</span>
+                      <span className="text-muted-foreground">{t('aiSidebar.turns', '轮次')}</span>
+                      <span className="text-right">{t('aiSidebar.turnsValue', '{{count}} 次请求', { count: session.requestIds.length })}</span>
+                      <div className="col-span-2 border-t border-border/60 my-0.5" />
+                      <UsageRows usage={session.usageTotal} />
+                    </div>
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -111,11 +159,20 @@ function SessionGroup({
                 {mdSessions[session.sessionId] ? <CodeIcon className="size-3" /> : <TextIcon className="size-3" />}
               </span>
             </div>
-            <p className="text-ui-sm text-foreground/80 truncate leading-tight">
-              {session.title || session.scopeHost || session.sessionId}
-            </p>
+            <Tooltip delay={300}>
+              <TooltipTrigger
+                render={
+                  <p className="text-ui-sm text-foreground/80 truncate leading-tight cursor-default">
+                    {session.title || session.scopeHost || session.sessionId}
+                  </p>
+                }
+              />
+              <TooltipContent side="right" className="bg-popover text-popover-foreground border border-border text-ui-sm px-2 py-1">
+                {session.title || session.scopeHost || session.sessionId}
+              </TooltipContent>
+            </Tooltip>
             <p className="text-ui-xs text-muted-foreground/50 mt-0.5">
-              {total != null ? `Σ ${total} tokens` : '— tokens'}
+              {total != null ? `Σ ${total.toLocaleString()} tokens` : '— tokens'}
             </p>
           </button>
         </ContextMenuTrigger>
@@ -132,6 +189,8 @@ function SessionGroup({
         <div className="bg-surface-deep/40">
           {session.requestIds.map((rid, i) => {
             const sel = selection?.sessionId === session.sessionId && selection?.requestId === rid
+            const conv = session.conversations[rid]
+            const hasLatency = conv?.firstChunkMs != null || conv?.durationMs != null
             return (
               <ContextMenu key={rid}>
                 <ContextMenuTrigger>
@@ -142,10 +201,58 @@ function SessionGroup({
                     )}
                     onClick={() => onSelect({ sessionId: session.sessionId, requestId: rid })}
                   >
-                    #{i + 1}
+                    <span className="flex items-center gap-1.5 w-full">
+                      <span className="cursor-default">
+                        #{i + 1}
+                      </span>
+                      {conv?.model && (
+                        <span className="ml-auto">
+                          <Tooltip delay={150}>
+                            <TooltipTrigger
+                              render={
+                                <span className="max-w-20 truncate text-ui-2xs font-semibold px-1 py-px rounded border bg-violet-500/10 text-violet-400 border-violet-500/20 cursor-default">
+                                  {conv.model}
+                                </span>
+                              }
+                            />
+                            <TooltipContent side="right" className={TIP_CLASS}>
+                              <div className={TIP_GRID}>
+                                <div className="col-span-2 text-ui-xs font-bold tracking-wider text-muted-foreground">
+                                  #{i + 1} · TOKEN
+                                </div>
+                                <UsageRows usage={conv?.usage ?? {}} />
+                                {hasLatency && <div className="col-span-2 border-t border-border/60 my-0.5" />}
+                                {conv?.firstChunkMs != null && (
+                                  <>
+                                    <span className="text-emerald-600 dark:text-emerald-400">{t('aiSidebar.firstChunk', '首字')}</span>
+                                    <span className="text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+                                      {formatDuration(conv.firstChunkMs)}
+                                    </span>
+                                  </>
+                                )}
+                                {conv?.durationMs != null && (
+                                  <>
+                                    <span className="text-emerald-600 dark:text-emerald-400">{t('aiSidebar.totalTime', '总耗时')}</span>
+                                    <span className="text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+                                      {formatDuration(conv.durationMs)}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
+                      )}
+                    </span>
                   </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent className="text-xs min-w-36">
+                  {onCopyCurl && (
+                    <ContextMenuItem onClick={() => onCopyCurl(rid)}>
+                      <TerminalIcon className="size-3.5" />
+                      <span>{t('aiView.copyCurl', '复制为 cURL')}</span>
+                    </ContextMenuItem>
+                  )}
                   <ContextMenuItem variant="destructive" onClick={() => onDeleteRequest(session.sessionId, rid)}>
                     <Trash2Icon className="size-3.5" />
                     <span>{t('aiSidebar.deleteRequest', '删除该请求')}</span>
@@ -160,7 +267,7 @@ function SessionGroup({
   )
 }
 
-export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDeleteRequest, mdSessions, onToggleMd }: AiSidebarProps) {
+export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDeleteRequest, onCopyCurl, mdSessions, onToggleMd }: AiSidebarProps) {
   const { t } = useTranslation()
 
   return (
@@ -190,6 +297,7 @@ export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDe
                 onSelect={onSelect}
                 onDeleteSession={onDeleteSession}
                 onDeleteRequest={onDeleteRequest}
+                onCopyCurl={onCopyCurl}
                 mdSessions={mdSessions}
                 onToggleMd={onToggleMd}
               />

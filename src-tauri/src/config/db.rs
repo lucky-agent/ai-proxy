@@ -74,7 +74,6 @@ pub(crate) enum DbCmd {
         reply: mpsc::Sender<Result<Vec<collection_nodes::CollectionNodeRow>, sqlite::Error>>,
     },
     InsertCollectionRequest {
-        collection_id: i64,
         name: String,
         method: String,
         uri: String,
@@ -273,11 +272,11 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
             }
 
             DbCmd::InsertCollectionRequest {
-                collection_id, name, method, uri, timestamp, reply,
+                name, method, uri, timestamp, reply,
             } => {
                 reply
                     .send(collection_requests::do_insert_collection_request(
-                        &conn, collection_id, &name, &method, &uri, timestamp,
+                        &conn, &name, &method, &uri, timestamp,
                     ))
                     .ok();
             }

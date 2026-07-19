@@ -8,12 +8,10 @@ pub(crate) mod openai_responses;
 pub(crate) mod session;
 pub(crate) mod stream;
 
-pub(crate) use normalize::{AiConversation, AiTurn, AiUsage};
+pub(crate) use normalize::{AiContentBlock, AiConversation, AiTurn, AiUsage};
 
 /// AI 协议完整接口。新增协议只需实现此 trait + 在 Provider 加一个变体。
 pub(crate) trait AiProtocol {
-    /// 协议标识。
-    fn name(&self) -> &'static str;
     /// 解析非流式请求体 → turns。
     fn parse_request(&self, body: &str) -> Option<Vec<AiTurn>>;
     /// 解析非流式响应体 → conversation。

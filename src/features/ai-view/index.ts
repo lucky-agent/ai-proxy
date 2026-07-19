@@ -1,2 +1,6 @@
 export { AiView } from './AiView'
 export { AiSidebar } from './AiSidebar'
+export { ToolCallCard } from './ToolCallCard'
+export type { ToolCallEntry } from './ToolCallCard'
+export { ToolFilterBar } from './ToolFilterBar'
+export type { ToolFilterItem } from './ToolFilterBar'

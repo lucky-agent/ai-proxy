@@ -73,23 +73,6 @@ function insertNodeInTree(
   })
 }
 
-/** Find the root collection id that contains a given node */
-function findCollectionIdForNode(collections: ApiCollection[], nodeId: number): number | null {
-  for (const col of collections) {
-    if (col.id === nodeId) return col.id
-    if (nodeInTree(col.children, nodeId)) return col.id
-  }
-  return null
-}
-
-function nodeInTree(nodes: ApiTreeNode[], targetId: number): boolean {
-  for (const n of nodes) {
-    if (n.id === targetId) return true
-    if (n.type === 'folder' && nodeInTree(n.children, targetId)) return true
-  }
-  return false
-}
-
 /** Safely cast a node to ApiRequestNode */
 function asRequest(node: ApiTreeNode): ApiRequestNode | null {
   return node.type === 'request' ? (node as ApiRequestNode) : null
@@ -172,14 +155,7 @@ export function useCollections() {
 
   /** 7.3: Add a request under a parent node (collection or folder). Returns the new node id. */
   const addRequest = useCallback((parentId: number): Promise<number | null> => {
-    // Find the collection id for this parent synchronously
-    let collectionId: number | null = null
-    setCollections(prev => {
-      collectionId = findCollectionIdForNode(prev, parentId)
-      return prev
-    })
-
-    return invoke<string>('create_request', { parentId, collectionId, name: 'New Request' })
+    return invoke<string>('create_request', { parentId, name: 'New Request' })
       .then(backendJsonStr => {
         // Parse JSON { nodeId, requestId } response
         const parsed = JSON.parse(backendJsonStr) as { nodeId: number; requestId: number }

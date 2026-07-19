@@ -1,49 +1,57 @@
 import { SparklesIcon } from 'lucide-react'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useTranslation } from 'react-i18next'
 import { useState, useMemo, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { AiSidebar, type AiSelection } from './AiSidebar'
 import { ConversationBubble } from './ConversationBubble'
+import { ToolFilterBar } from './ToolFilterBar'
+import { ToolCallCard, type ToolCallEntry } from './ToolCallCard'
+import type { ToolFilterItem } from './ToolFilterBar'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { usePanelRef } from 'react-resizable-panels'
-import type { AiConversation, AiSessionState, AiTurn } from '@/types/ai'
-import type { DetailPosition } from '@/features/bottom-bar'
+import { formatDayTime } from '@/lib/format'
+import type { AiConversation, AiSessionState, AiTurn, AiContentBlock } from '@/types/ai'
 
-/** 会话元信息面板，在右侧/下方布局中复用 */
-function MetaPanel({ session }: { session: AiSessionState }) {
-  return (
-    <div className="text-xs text-muted-foreground space-y-2 min-w-0">
-      <div>
-        <span className="font-semibold text-foreground/70">Session</span><br />
-        <span className="break-all">{session.scopeHost || '—'}</span>
-      </div>
-      <div>
-        <span className="font-semibold text-foreground/70">分组依据</span><br />
-        <Tooltip>
-          <TooltipTrigger className="break-all text-left">
-            <span>{session.matchReason || '—'}</span>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-[360px] bg-popover text-popover-foreground text-ui-sm">
-            {session.matchReason || '—'}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-      <div>
-        <span className="font-semibold text-foreground/70">轮次</span><br />
-        {session.requestIds.length} 次请求
-      </div>
-      <div>
-        <span className="font-semibold text-foreground/70">Token（累加）</span><br />
-        Prompt: {session.usageTotal.promptTokens ?? '-'}<br />
-        Completion: {session.usageTotal.completionTokens ?? '-'}<br />
-        Total: {session.usageTotal.totalTokens ?? '-'}
-        {session.usageTotal.cachedTokens != null && (
-          <><br />Cached: {session.usageTotal.cachedTokens}</>
-        )}
-      </div>
-    </div>
-  )
+// ─── 工具调用提取 / 配对 ───────────────────────────────────────────
+
+/** 从 tool_result 的 content blocks 中提取纯文本 */
+function toolResultText(blocks: AiContentBlock[]): string {
+  return blocks
+    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+    .map((b) => b.text)
+    .join('\n')
 }
+
+/** 构建 tool_use_id → 结果文本 的映射 */
+function buildResultMap(rendered: { turn: AiTurn; requestId: number }[]): Map<string, string> {
+  const m = new Map<string, string>()
+  for (const { turn } of rendered) {
+    for (const block of turn.content) {
+      if (block.type === 'tool_result') {
+        m.set(block.tool_use_id, toolResultText(block.content))
+      }
+    }
+  }
+  return m
+}
+
+/** 去重工具集合：从已渲染的 turn 中收集所有 tool_use 的名称和出现次数 */
+function collectToolItems(
+  rendered: { turn: AiTurn; requestId: number }[],
+): ToolFilterItem[] {
+  const counts = new Map<string, number>()
+  for (const { turn } of rendered) {
+    for (const block of turn.content) {
+      if (block.type === 'tool_use') {
+        counts.set(block.name, (counts.get(block.name) ?? 0) + 1)
+      }
+    }
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([toolName, count]) => ({ toolName, count }))
+}
+
+// ─── 渲染：全部 气泡时间线 ─────────────────────────────────────────
 
 function renderConversation(
   rendered: { turn: AiTurn; requestId: number }[],
@@ -53,6 +61,7 @@ function renderConversation(
   mdSessions: Record<string, boolean>,
   onJumpToProxy: ((requestId: number) => void) | undefined,
   t: ReturnType<typeof useTranslation>['t'],
+  conversationOf: (requestId: number) => AiConversation | undefined,
 ): ReactNode {
   if (rendered.length === 0) {
     return (
@@ -61,42 +70,189 @@ function renderConversation(
       </div>
     )
   }
+  let prevRequestId: number | undefined
+  let prevTime: string | undefined
   return rendered.map(({ turn, requestId }, i) => {
     const idx = reqIndex.get(requestId)
     const showLabel = !selection.requestId && idx != null
     const isLast = i === rendered.length - 1
+    const isNewRequest = requestId !== prevRequestId
+    prevRequestId = requestId
+    const ts = isNewRequest ? conversationOf(requestId)?.startMs : undefined
+    const timeLabel = ts != null ? formatDayTime(ts) : undefined
+    const showTime = timeLabel != null && timeLabel !== prevTime
+    if (timeLabel != null) prevTime = timeLabel
     return (
-      <ConversationBubble
-        key={`${selection.sessionId}:${selection.requestId ?? 'all'}:${i}`}
-        turn={turn}
-        isStreaming={turn.role === 'assistant' && isLast && isStreamingReq(requestId)}
-        reqLabel={showLabel ? `#${idx}` : undefined}
-        onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
-        defaultView={mdSessions[selection.sessionId] ? 'md' : 'raw'}
-      />
+      <div key={`${selection.sessionId}:${selection.requestId ?? 'all'}:${i}`}>
+        {showTime && (
+          <div className="mb-1 text-center text-ui-sm tabular-nums text-muted-foreground/70">
+            {timeLabel}
+          </div>
+        )}
+        <ConversationBubble
+          turn={turn}
+          isStreaming={turn.role === 'assistant' && isLast && isStreamingReq(requestId)}
+          reqLabel={showLabel ? `#${idx}` : undefined}
+          onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
+          defaultView={mdSessions[selection.sessionId] ? 'md' : 'raw'}
+        />
+      </div>
     )
   })
 }
+
+// ─── 渲染：纯对话（移除所有 tool_use / tool_result / tool turn） ────
+
+/** 从 turn 移除 tool_use / tool_result / thinking block，保留纯文本 */
+function stripToolBlocks(turn: AiTurn): AiTurn | null {
+  if (turn.role === 'tool') return null
+  if (turn.content.length > 0 && turn.content.every((b) => b.type === 'tool_result')) return null
+
+  const filtered = turn.content.filter(
+    (b) => b.type === 'text' || b.type === 'thinking',
+  )
+  if (filtered.length === 0) return null
+
+  if (turn.role === 'assistant') {
+    return { role: 'assistant', content: filtered }
+  }
+  return { ...turn, content: filtered }
+}
+
+function renderNoTools(
+  rendered: { turn: AiTurn; requestId: number }[],
+  selection: AiSelection,
+  reqIndex: Map<number, number>,
+  isStreamingReq: (requestId: number) => boolean,
+  mdSessions: Record<string, boolean>,
+  onJumpToProxy: ((requestId: number) => void) | undefined,
+  t: ReturnType<typeof useTranslation>['t'],
+): ReactNode {
+  const items: ReactNode[] = []
+  for (let i = 0; i < rendered.length; i++) {
+    const { turn, requestId } = rendered[i]
+    const stripped = stripToolBlocks(turn)
+    if (!stripped) continue
+
+    const idx = reqIndex.get(requestId)
+    const showLabel = !selection.requestId && idx != null
+    const isLast = i === rendered.length - 1
+    items.push(
+      <div key={`nt-${selection.sessionId}:${i}`}>
+        <ConversationBubble
+          turn={stripped}
+          isStreaming={stripped.role === 'assistant' && isLast && isStreamingReq(requestId)}
+          reqLabel={showLabel ? `#${idx}` : undefined}
+          onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
+          defaultView={mdSessions[selection.sessionId] ? 'md' : 'raw'}
+        />
+      </div>,
+    )
+  }
+  return items.length > 0 ? items : (
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      {t('aiView.waiting', '等待归一化数据…')}
+    </div>
+  )
+}
+
+// ─── 渲染：工具卡片（按选中的工具名集合） ────────────────────────────
+
+function renderToolCards(
+  rendered: { turn: AiTurn; requestId: number }[],
+  selectedTools: Set<string>,
+  reqIndex: Map<number, number>,
+  _mdSessions: Record<string, boolean>,
+  onJumpToProxy: ((requestId: number) => void) | undefined,
+  t: ReturnType<typeof useTranslation>['t'],
+): ReactNode {
+  const resultMap = buildResultMap(rendered)
+  const items: ReactNode[] = []
+
+  for (const { turn, requestId } of rendered) {
+    if (turn.role !== 'assistant') continue
+
+    const toolsInTurn = turn.content.filter((b) => b.type === 'tool_use')
+    const totalToolsInTurn = toolsInTurn.length
+    let toolIdx = 0
+
+    for (const block of turn.content) {
+      if (block.type !== 'tool_use') continue
+      toolIdx++
+      if (!selectedTools.has(block.name)) continue
+
+      const result = resultMap.get(block.id) ?? null
+      const resultLines = result ? result.split('\n').length : 0
+      const entry: ToolCallEntry = {
+        requestId,
+        stepIndex: toolIdx,
+        stepTotal: totalToolsInTurn,
+        toolName: block.name,
+        input: block.input,
+        result,
+        resultLines,
+      }
+
+      const idx = reqIndex.get(requestId) ?? 0
+      items.push(
+        <ToolCallCard
+          key={`card-${requestId}-${block.id}`}
+          entry={entry}
+          reqLabel={`#${idx}`}
+          defaultExpanded
+          onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
+        />,
+      )
+    }
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        {t('aiView.toolCallsSummary', '{{count}} call(s) · {{reqs}} request(s)', { count: 0, reqs: 0 })}
+      </div>
+    )
+  }
+
+  items.push(
+    <div key="summary" className="text-center text-ui-2xs text-muted-foreground pt-1 pb-2 border-t border-dashed border-border/50 mx-3">
+      {t('aiView.toolCallsSummary', '{{count}} call(s) · {{reqs}} request(s)', {
+        count: items.length - 1,
+        reqs: new Set(rendered
+          .filter(({ turn }) => turn.role === 'assistant' && turn.content.some((b) => b.type === 'tool_use' && selectedTools.has(b.name)))
+          .map(({ requestId }) => requestId),
+        ).size,
+      })}
+    </div>,
+  )
+
+  return items
+}
+
+// ─── 组件 ───────────────────────────────────────────────────────────
 
 interface AiViewProps {
   sessions: AiSessionState[]
   mergedTimeline: (sessionId: string) => { turn: AiTurn; requestId: number }[]
   conversationOf: (requestId: number) => AiConversation | undefined
   showSidebar: boolean
-  detailPosition: DetailPosition
   /** 点击气泡的跳转钮 → 切到代理视图并定位该请求。 */
   onJumpToProxy?: (requestId: number) => void
   /** 右键删除整个会话（仅前端移除） */
   onDeleteSession: (sessionId: string) => void
   /** 右键删除会话内单次请求（仅前端移除） */
   onDeleteRequest: (sessionId: string, requestId: number) => void
+  /** 右键复制该轮对应请求的 cURL（使用代理记录的原始请求数据） */
+  onCopyCurl?: (requestId: number) => void
 }
 
-export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, detailPosition, onJumpToProxy, onDeleteSession, onDeleteRequest }: AiViewProps) {
+export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, onJumpToProxy, onDeleteSession, onDeleteRequest, onCopyCurl }: AiViewProps) {
   const { t } = useTranslation()
   const [selection, setSelection] = useState<AiSelection | null>(null)
+  const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
+  const [isNoTools, setIsNoTools] = useState(false)
 
-  // 会话级 md 渲染开关：sessionId → 是否 md 渲染（默认 raw，不持久化）
+  // 会话级 md 渲染开关
   const [mdSessions, setMdSessions] = useState<Record<string, boolean>>({})
   const toggleMdSession = useCallback((sessionId: string) => {
     setMdSessions((prev) => ({ ...prev, [sessionId]: !prev[sessionId] }))
@@ -115,7 +271,6 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
     [selection, sessions],
   )
 
-  // 删除时修正选中态：删中当前会话 → 清空；删中当前请求 → 回落会话头（删空则清空）
   const handleDeleteSession = useCallback((sessionId: string) => {
     onDeleteSession(sessionId)
     setSelection((sel) => (sel?.sessionId === sessionId ? null : sel))
@@ -131,14 +286,12 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
     })
   }, [onDeleteRequest, sessions])
 
-  /** requestId → #req 序号（会话内位置） */
   const reqIndex = useMemo(() => {
     const m = new Map<number, number>()
     selectedSession?.requestIds.forEach((rid, i) => m.set(rid, i + 1))
     return m
   }, [selectedSession])
 
-  // 会话头 → 合并时间线；单请求 → 该次完整对话
   const rendered = useMemo<{ turn: AiTurn; requestId: number }[]>(() => {
     if (!selection || !selectedSession) return []
     if (selection.requestId) {
@@ -148,10 +301,17 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
     return mergedTimeline(selection.sessionId)
   }, [selection, selectedSession, mergedTimeline, conversationOf])
 
+  const toolItems = useMemo(() => collectToolItems(rendered), [rendered])
+
+  // 切换会话/请求时清除工具筛选
+  useEffect(() => {
+    setSelectedTools(new Set())
+    setIsNoTools(false)
+  }, [selection])
+
   const isStreamingReq = (requestId: number): boolean =>
     conversationOf(requestId)?.streaming ?? false
 
-  // 打开会话即滚到底部看最新内容；流式期间吸底跟随，用户主动上滚查看历史时不打扰
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
 
@@ -162,7 +322,7 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
   useEffect(() => {
     const el = scrollRef.current
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight
-  }, [rendered])
+  }, [rendered, selectedTools, isNoTools])
 
   const handleScroll = () => {
     const el = scrollRef.current
@@ -170,11 +330,40 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
     stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
   }
 
+  const handleToggleAll = useCallback(() => {
+    setSelectedTools(new Set())
+    setIsNoTools(false)
+  }, [])
+
+  const handleToggleNoTools = useCallback(() => {
+    if (isNoTools) {
+      setIsNoTools(false)
+    } else {
+      setIsNoTools(true)
+      setSelectedTools(new Set())
+    }
+  }, [isNoTools])
+
+  const handleToggleTool = useCallback((toolName: string) => {
+    setSelectedTools((prev) => {
+      const next = new Set(prev)
+      if (next.has(toolName)) {
+        next.delete(toolName)
+      } else {
+        next.add(toolName)
+      }
+      return next
+    })
+    setIsNoTools(false)
+  }, [])
+
+  const isAll = !isNoTools && selectedTools.size === 0
+
   return (
     <ResizablePanelGroup orientation="horizontal" id="ai-view" className="h-full bg-surface-deep">
       <ResizablePanel id="ai-sidebar" defaultSize="22%" minSize="15%" maxSize="40%" collapsible collapsedSize={0} panelRef={aiSidebarPanelRef}>
         <div className="h-full overflow-hidden">
-          <AiSidebar sessions={sessions} selection={selection} onSelect={setSelection} onDeleteSession={handleDeleteSession} onDeleteRequest={handleDeleteRequest} mdSessions={mdSessions} onToggleMd={toggleMdSession} />
+          <AiSidebar sessions={sessions} selection={selection} onSelect={setSelection} onDeleteSession={handleDeleteSession} onDeleteRequest={handleDeleteRequest} onCopyCurl={onCopyCurl} mdSessions={mdSessions} onToggleMd={toggleMdSession} />
         </div>
       </ResizablePanel>
 
@@ -182,39 +371,26 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
 
       <ResizablePanel id="ai-main" defaultSize="78%" minSize="60%">
         {selection && selectedSession ? (
-          <>
-            {/* 右侧元信息组件，三种布局复用 */}
-            {detailPosition === 'right' && (
-              <div className="flex h-full gap-2 p-4">
-                <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-3">
-                  {renderConversation(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t)}
-                </div>
-                <div className="w-56 flex-shrink-0 border-l border-border/40 pl-3">
-                  <MetaPanel session={selectedSession} />
-                </div>
-              </div>
+          <div className="flex h-full flex-col">
+            {toolItems.length > 0 && (
+              <ToolFilterBar
+                items={toolItems}
+                selectedTools={selectedTools}
+                isNoTools={isNoTools}
+                onToggleAll={handleToggleAll}
+                onToggleNoTools={handleToggleNoTools}
+                onToggleTool={handleToggleTool}
+              />
             )}
-            {detailPosition === 'bottom' && (
-              <ResizablePanelGroup orientation="vertical" id="ai-main-vertical" className="h-full">
-                <ResizablePanel id="conversation" defaultSize="65%" minSize="30%">
-                  <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto space-y-3 p-4">
-                    {renderConversation(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t)}
-                  </div>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-                <ResizablePanel id="meta" defaultSize="35%" minSize="10%" collapsible collapsedSize={0}>
-                  <div className="h-full overflow-y-auto p-4">
-                    <MetaPanel session={selectedSession} />
-                  </div>
-                </ResizablePanel>
-              </ResizablePanelGroup>
-            )}
-            {detailPosition === 'hidden' && (
-              <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto space-y-3 p-4">
-                {renderConversation(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t)}
-              </div>
-            )}
-          </>
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-3 p-4">
+              {isAll
+                ? renderConversation(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t, conversationOf)
+                : isNoTools
+                ? renderNoTools(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t)
+                : renderToolCards(rendered, selectedTools, reqIndex, mdSessions, onJumpToProxy, t)
+              }
+            </div>
+          </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 bg-surface-deep text-muted-foreground">
             <SparklesIcon className="size-12 text-muted-foreground/30" />

@@ -10,7 +10,6 @@ use crate::storage::DbTable;
 #[derive(Debug, Clone)]
 pub(crate) struct CollectionRequestRow {
     pub id: i64,
-    pub collection_id: i64,
     pub name: String,
     pub method: String,
     pub uri: String,
@@ -34,7 +33,6 @@ pub(crate) struct CollectionRequestsTable;
 pub(crate) trait CollectionRequestsRepository {
     fn insert_collection_request(
         &self,
-        collection_id: i64,
         name: &str,
         method: &str,
         uri: &str,
@@ -72,7 +70,6 @@ use crate::config::db::DbCmd;
 impl CollectionRequestsRepository for Db {
     fn insert_collection_request(
         &self,
-        collection_id: i64,
         name: &str,
         method: &str,
         uri: &str,
@@ -80,7 +77,6 @@ impl CollectionRequestsRepository for Db {
     ) -> Result<i64, sqlite::Error> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send(DbCmd::InsertCollectionRequest {
-            collection_id,
             name: name.to_string(),
             method: method.to_string(),
             uri: uri.to_string(),
@@ -158,21 +154,19 @@ impl CollectionRequestsRepository for Db {
 
 pub(crate) fn do_insert_collection_request(
     conn: &sqlite::Connection,
-    collection_id: i64,
     name: &str,
     method: &str,
     uri: &str,
     timestamp: i64,
 ) -> Result<i64, sqlite::Error> {
     let mut stmt = conn.prepare(
-        "INSERT INTO collection_requests (collection_id, name, method, uri, request_headers, request_query, cookies, body_type, auth_type, auth_data, created_at, updated_at) VALUES (?, ?, ?, ?, '[]', '[]', '[]', '', '', '', ?, ?)",
+        "INSERT INTO collection_requests (name, method, uri, request_headers, request_query, cookies, body_type, auth_type, auth_data, created_at, updated_at) VALUES (?, ?, ?, '[]', '[]', '[]', '', '', '', ?, ?)",
     )?;
-    stmt.bind((1_usize, collection_id as i64))?;
-    stmt.bind((2_usize, name))?;
-    stmt.bind((3_usize, method))?;
-    stmt.bind((4_usize, uri))?;
+    stmt.bind((1_usize, name))?;
+    stmt.bind((2_usize, method))?;
+    stmt.bind((3_usize, uri))?;
+    stmt.bind((4_usize, timestamp as i64))?;
     stmt.bind((5_usize, timestamp as i64))?;
-    stmt.bind((6_usize, timestamp as i64))?;
     stmt.next()?;
     let mut id_stmt = conn.prepare("SELECT last_insert_rowid()")?;
     id_stmt.next()?;
@@ -220,8 +214,8 @@ pub(crate) fn do_duplicate_collection_request(
     timestamp: i64,
 ) -> Result<i64, sqlite::Error> {
     let mut stmt = conn.prepare(
-        "INSERT INTO collection_requests (collection_id, name, method, uri, request_headers, request_body, request_query, cookies, body_type, auth_type, auth_data, created_at, updated_at)
-         SELECT collection_id, name, method, uri, request_headers, request_body, request_query, cookies, body_type, auth_type, auth_data, ?, ?
+        "INSERT INTO collection_requests (name, method, uri, request_headers, request_body, request_query, cookies, body_type, auth_type, auth_data, created_at, updated_at)
+         SELECT name, method, uri, request_headers, request_body, request_query, cookies, body_type, auth_type, auth_data, ?, ?
          FROM collection_requests WHERE id = ?",
     )?;
     stmt.bind((1_usize, timestamp as i64))?;
@@ -239,7 +233,7 @@ pub(crate) fn do_find_collection_requests_by_ids(
 ) -> Result<Vec<CollectionRequestRow>, sqlite::Error> {
     let placeholders: String = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
     let sql = format!(
-        "SELECT id, collection_id, name, method, uri, request_headers, request_body, request_query, cookies, body_type, auth_type, auth_data, created_at, updated_at FROM collection_requests WHERE id IN ({})",
+        "SELECT id, name, method, uri, request_headers, request_body, request_query, cookies, body_type, auth_type, auth_data, created_at, updated_at FROM collection_requests WHERE id IN ({})",
         placeholders
     );
     let mut stmt = conn.prepare(sql)?;
@@ -250,19 +244,18 @@ pub(crate) fn do_find_collection_requests_by_ids(
     while let sqlite::State::Row = stmt.next()? {
         results.push(CollectionRequestRow {
             id: stmt.read::<i64, _>(0)?,
-            collection_id: stmt.read::<i64, _>(1)?,
-            name: stmt.read::<String, _>(2)?,
-            method: stmt.read::<String, _>(3)?,
-            uri: stmt.read::<String, _>(4)?,
-            request_headers: stmt.read::<String, _>(5)?,
-            request_body: stmt.read::<Option<String>, _>(6)?,
-            request_query: stmt.read::<String, _>(7)?,
-            cookies: stmt.read::<String, _>(8)?,
-            body_type: stmt.read::<String, _>(9)?,
-            auth_type: stmt.read::<String, _>(10)?,
-            auth_data: stmt.read::<String, _>(11)?,
-            created_at: stmt.read::<i64, _>(12)?,
-            updated_at: stmt.read::<i64, _>(13)?,
+            name: stmt.read::<String, _>(1)?,
+            method: stmt.read::<String, _>(2)?,
+            uri: stmt.read::<String, _>(3)?,
+            request_headers: stmt.read::<String, _>(4)?,
+            request_body: stmt.read::<Option<String>, _>(5)?,
+            request_query: stmt.read::<String, _>(6)?,
+            cookies: stmt.read::<String, _>(7)?,
+            body_type: stmt.read::<String, _>(8)?,
+            auth_type: stmt.read::<String, _>(9)?,
+            auth_data: stmt.read::<String, _>(10)?,
+            created_at: stmt.read::<i64, _>(11)?,
+            updated_at: stmt.read::<i64, _>(12)?,
         });
     }
     Ok(results)
@@ -275,7 +268,6 @@ impl DbTable for CollectionRequestsTable {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS collection_requests (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                collection_id   INTEGER NOT NULL,
                 name            TEXT NOT NULL DEFAULT '',
                 method          TEXT NOT NULL,
                 uri             TEXT NOT NULL,
@@ -290,6 +282,17 @@ impl DbTable for CollectionRequestsTable {
                 updated_at      INTEGER NOT NULL
             )",
         )?;
+        // 旧库迁移：collection_id 为冗余列（归属关系由 collection_nodes.parent_id 表达，
+        // 且跨集合移动节点后不会同步更新），存在时直接删除
+        let has_legacy_collection_id = {
+            let mut stmt = conn.prepare(
+                "SELECT 1 FROM pragma_table_info('collection_requests') WHERE name = 'collection_id'",
+            )?;
+            matches!(stmt.next()?, sqlite::State::Row)
+        };
+        if has_legacy_collection_id {
+            conn.execute("ALTER TABLE collection_requests DROP COLUMN collection_id")?;
+        }
         Ok(())
     }
 }

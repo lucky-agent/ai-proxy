@@ -192,7 +192,13 @@ function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: T
           {tokenUsage?.cachedTokens != null && tokenUsage.cachedTokens > 0 && (
             <>
               <span className="text-muted-foreground/20 mx-0.5">|</span>
-              <span className="text-emerald-600 dark:text-emerald-400">缓存 {tokenUsage.cachedTokens}</span>
+              <span className="text-emerald-600 dark:text-emerald-400">缓存读 {tokenUsage.cachedTokens}</span>
+            </>
+          )}
+          {tokenUsage?.cacheCreationTokens != null && tokenUsage.cacheCreationTokens > 0 && (
+            <>
+              <span className="text-muted-foreground/20 mx-0.5">|</span>
+              <span className="text-emerald-600 dark:text-emerald-400">缓存写 {tokenUsage.cacheCreationTokens}</span>
             </>
           )}
         </div>

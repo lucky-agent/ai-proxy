@@ -9,8 +9,7 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
-use super::normalize::{AiContentBlock, AiConversation, AiTurn, AiUsage};
-use super::openai_responses::normalize_usage;
+use super::normalize::{AiContentBlock, AiConversation, AiTurn, AiUsage, normalize_usage};
 use super::{AiProtocol, StreamState};
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -20,10 +19,6 @@ use super::{AiProtocol, StreamState};
 pub(crate) struct GeminiProtocol;
 
 impl AiProtocol for GeminiProtocol {
-    fn name(&self) -> &'static str {
-        "gemini"
-    }
-
     /// 解析请求体 `contents[]`（含 systemInstruction + tools）。
     fn parse_request(&self, body: &str) -> Option<Vec<AiTurn>> {
         let p: Value = serde_json::from_str(body).ok()?;
@@ -46,11 +41,8 @@ impl AiProtocol for GeminiProtocol {
 
         // tools[] → tools_def turn
         // Gemini tools 格式：[{functionDeclarations: [{name, description, parametersJsonSchema}]}]
-        if let Some(tools) = p.get("tools").and_then(Value::as_array) {
-            if !tools.is_empty() {
-                let tools_json = serde_json::to_string(tools).unwrap_or_default();
-                turns.push(AiTurn::new("tools_def", vec![AiContentBlock::text(tools_json)]));
-            }
+        if let Some(t) = p.get("tools").and_then(Value::as_array).and_then(|ts| AiTurn::tools_def(ts)) {
+            turns.push(t);
         }
 
         for m in contents {
@@ -110,14 +102,18 @@ impl AiProtocol for GeminiProtocol {
             .get("usageMetadata")
             .map(normalize_usage);
 
-        Some(AiConversation {
-            provider: "gemini".to_string(),
-            turns: vec![AiTurn::new("assistant", blocks)],
-            streaming: false,
-            model: p.get("model").and_then(Value::as_str).map(String::from),
+        Some(AiConversation::new(
+            "gemini",
+            vec![AiTurn::new("assistant", blocks)],
+            false,
+            // Gemini 响应的模型名在顶层 `modelVersion`（`model` 仅兼容网关注入）
+            p.get("modelVersion")
+                .or_else(|| p.get("model"))
+                .and_then(Value::as_str)
+                .map(String::from),
             usage,
             finish_reason,
-        })
+        ))
     }
 
     fn create_stream_state(&self) -> Box<dyn StreamState> {
@@ -155,10 +151,15 @@ fn parts_to_blocks(parts: &[Value]) -> Vec<AiContentBlock> {
     for part in parts {
         let Some(part_obj) = part.as_object() else { continue };
 
-        // text / thinking
+        // text；`thought: true` 的思考摘要单列为 Thinking（与 Anthropic/OpenAI 同口径）
         if let Some(text) = part_obj.get("text").and_then(Value::as_str) {
+            let is_thought = part_obj.get("thought").and_then(Value::as_bool).unwrap_or(false);
             if !text.is_empty() {
-                blocks.push(AiContentBlock::text(text));
+                blocks.push(if is_thought {
+                    AiContentBlock::thinking(text)
+                } else {
+                    AiContentBlock::text(text)
+                });
             }
         }
 
@@ -214,6 +215,8 @@ struct GeminiToolCall {
 
 #[derive(Default)]
 struct GeminiCandidate {
+    /// `thought: true` part 的累积思考文本。
+    thinking: String,
     text: String,
     tool_calls: Vec<GeminiToolCall>,
     finish_reason: Option<String>,
@@ -237,7 +240,11 @@ impl StreamState for GeminiStreamState {
             .unwrap_or(&p);
 
         if self.model.is_none() {
-            if let Some(m) = chunk.get("model").and_then(Value::as_str) {
+            if let Some(m) = chunk
+                .get("modelVersion")
+                .or_else(|| chunk.get("model"))
+                .and_then(Value::as_str)
+            {
                 self.model = Some(m.to_string());
             }
         }
@@ -250,7 +257,14 @@ impl StreamState for GeminiStreamState {
                     if let Some(parts) = content.get("parts").and_then(Value::as_array) {
                         for part in parts {
                             if let Some(text) = part.get("text").and_then(Value::as_str) {
-                                entry.text.push_str(text);
+                                // 思考摘要（thought: true）与正文分开累积
+                                let is_thought =
+                                    part.get("thought").and_then(Value::as_bool).unwrap_or(false);
+                                if is_thought {
+                                    entry.thinking.push_str(text);
+                                } else {
+                                    entry.text.push_str(text);
+                                }
                             }
                             if let Some(call) = part.get("functionCall") {
                                 entry.tool_calls.push(GeminiToolCall {
@@ -279,6 +293,10 @@ impl StreamState for GeminiStreamState {
     fn snapshot(&self) -> AiConversation {
         let mut blocks: Vec<AiContentBlock> = Vec::new();
         for c in self.candidates.values() {
+            // 思考先于正文（生成顺序）
+            if !c.thinking.is_empty() {
+                blocks.push(AiContentBlock::thinking(c.thinking.clone()));
+            }
             if !c.text.is_empty() {
                 blocks.push(AiContentBlock::text(c.text.clone()));
             }
@@ -292,14 +310,14 @@ impl StreamState for GeminiStreamState {
         }
         if blocks.is_empty() { blocks.push(AiContentBlock::text("")); }
         let finish_reason = self.candidates.values().find_map(|c| c.finish_reason.clone());
-        AiConversation {
-            provider: "gemini".to_string(),
-            turns: vec![AiTurn::new("assistant", blocks)],
-            streaming: !self.done,
-            model: self.model.clone(),
-            usage: self.usage.clone(),
+        AiConversation::new(
+            "gemini",
+            vec![AiTurn::new("assistant", blocks)],
+            !self.done,
+            self.model.clone(),
+            self.usage.clone(),
             finish_reason,
-        }
+        )
     }
 
     fn finalize(&mut self) {
@@ -426,5 +444,77 @@ mod tests {
             .iter()
             .any(|b| matches!(b, AiContentBlock::ToolUse { .. }));
         assert!(has_tool_use);
+    }
+
+    /// Gemini 响应的模型名字段是 `modelVersion`（顶层没有 `model`）。
+    #[test]
+    fn parse_response_model_from_model_version() {
+        let body = r#"{
+            "candidates": [{"content": {"role": "model", "parts": [{"text": "hi"}]}, "finishReason": "STOP"}],
+            "modelVersion": "gemini-2.0-flash"
+        }"#;
+        let conv = GeminiProtocol.parse_response_body(body).unwrap();
+        assert_eq!(conv.model.as_deref(), Some("gemini-2.0-flash"));
+    }
+
+    /// `thought: true` 的思考摘要 part → Thinking block，不混入正文。
+    #[test]
+    fn thought_parts_become_thinking_blocks() {
+        let body = r#"{
+            "candidates": [{
+                "content": {"role": "model", "parts": [
+                    {"text": "let me think...", "thought": true},
+                    {"text": "actual answer"}
+                ]},
+                "finishReason": "STOP"
+            }]
+        }"#;
+        let conv = GeminiProtocol.parse_response_body(body).unwrap();
+        assert_eq!(conv.turns[0].content.len(), 2);
+        match &conv.turns[0].content[0] {
+            AiContentBlock::Thinking { text } => assert_eq!(text, "let me think..."),
+            other => panic!("expected thinking block, got {other:?}"),
+        }
+        match &conv.turns[0].content[1] {
+            AiContentBlock::Text { text } => assert_eq!(text, "actual answer"),
+            other => panic!("expected text block, got {other:?}"),
+        }
+    }
+
+    // ── 流式状态机 ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn stream_model_from_model_version() {
+        let mut st = GeminiStreamState::default();
+        st.apply(
+            "message",
+            r#"{"candidates":[{"content":{"parts":[{"text":"h"}]},"index":0}],"modelVersion":"gemini-2.0-flash"}"#,
+        );
+        let conv = st.snapshot();
+        assert_eq!(conv.model.as_deref(), Some("gemini-2.0-flash"));
+    }
+
+    /// 流式 thought part 累积为 Thinking block，排在正文之前。
+    #[test]
+    fn stream_thought_becomes_thinking() {
+        let mut st = GeminiStreamState::default();
+        st.apply(
+            "message",
+            r#"{"candidates":[{"content":{"parts":[{"text":"thinking","thought":true}]},"index":0}]}"#,
+        );
+        st.apply(
+            "message",
+            r#"{"candidates":[{"content":{"parts":[{"text":"answer"}]},"index":0,"finishReason":"STOP"}]}"#,
+        );
+        let conv = st.snapshot();
+        assert_eq!(conv.turns[0].content.len(), 2);
+        match &conv.turns[0].content[0] {
+            AiContentBlock::Thinking { text } => assert_eq!(text, "thinking"),
+            other => panic!("expected thinking block, got {other:?}"),
+        }
+        match &conv.turns[0].content[1] {
+            AiContentBlock::Text { text } => assert_eq!(text, "answer"),
+            other => panic!("expected text block, got {other:?}"),
+        }
     }
 }

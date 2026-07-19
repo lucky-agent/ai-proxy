@@ -130,14 +130,9 @@ fn process_ai_request(
     // 请求侧先发一次快照：只带请求体，assistant 侧留空、streaming=true。
     // 与响应解耦——响应缺席/解析失败时请求体也能立即展示；响应到达后响应侧会
     // 再发一次 AiNormalized（同 id）覆盖此快照，补上 assistant 回复并定稿。
-    let req_snapshot = super::ai::AiConversation {
-        provider: provider.as_str().to_string(),
-        turns: Vec::new(),
-        streaming: true,
-        model: None,
-        usage: None,
-        finish_reason: None,
-    };
+    let mut req_snapshot =
+        super::ai::AiConversation::new(provider.as_str(), Vec::new(), true, None, None, None);
+    req_snapshot.start_ms = Some(ctx.start_ms());
     let turns = Arc::new(turns);
     emit_ai_normalized(
         ctx.sender(),
@@ -213,7 +208,7 @@ pub(crate) fn record_response(ctx: &ProxyCtx, resp: Response) -> Response {
     }
 
     // 读取body后resp会被消费掉
-    let logged_body = log_body_chunks(body, ctx, is_sse);
+    let logged_body = log_body_chunks(body, ctx, is_sse, status.as_u16());
 
     Response::from_parts(parts, logged_body)
 }
@@ -273,11 +268,17 @@ struct BodyObserver {
     chunk_bytes: usize,
     /// 距上次 AI 快照推送的累积字符数（节流用）。
     acc: usize,
+    /// 请求开始时刻（构造时从 ctx 拷入），时延差值的起点。
+    start_ms: i64,
+    /// 响应 HTTP 状态码；非流式解析失败时进兜底 conv 的 finish_reason。
+    status: u16,
+    /// 首个响应 chunk 到达时刻；on_chunk 首次触发时记录，与落库时间戳同源。
+    first_chunk_at: Option<i64>,
     finalized: bool,
 }
 
 impl BodyObserver {
-    fn new(ctx: &ProxyCtx, is_sse: bool) -> Self {
+    fn new(ctx: &ProxyCtx, is_sse: bool, status: u16) -> Self {
         let ai_req = ctx.ai_req();
         let ai_mode = ai_req.as_ref().map(|(provider, _, _)| {
             if is_sse {
@@ -303,6 +304,9 @@ impl BodyObserver {
             chunk_seq: 0,
             chunk_bytes: 0,
             acc: 0,
+            start_ms: ctx.start_ms(),
+            status,
+            first_chunk_at: None,
             finalized: false,
         }
     }
@@ -310,17 +314,13 @@ impl BodyObserver {
     /// 每 chunk 观测：累积 body、AI 旁挂增量解析、推送原始文本（不改透传字节）。
     fn on_chunk(&mut self, bytes: &Bytes) {
         let chunk_str = String::from_utf8_lossy(bytes).into_owned();
-        info!("Response chunk: {chunk_str}");
+        let now = crate::utils::date::now_ms();
+        // 首个 chunk 到达时刻：首字用时的终点（与落库共用同一个 now，两处严格一致）
+        self.first_chunk_at.get_or_insert(now);
         // ── SSE 逐 chunk 落库（writer 线程异步写，此处仅发消息）──
         if self.store_chunks {
             if let (Some(db), Some(db_id)) = (self.db.as_ref(), self.db_id) {
-                db.insert_chunk(
-                    db_id,
-                    &chunk_str,
-                    self.chunk_seq,
-                    crate::utils::date::now_ms(),
-                )
-                .ok();
+                db.insert_chunk(db_id, &chunk_str, self.chunk_seq, now).ok();
                 self.chunk_seq += 1;
                 self.chunk_bytes += chunk_str.len();
                 if self.chunk_bytes >= crate::utils::buf_pool::BODY_CAPTURE_LIMIT {
@@ -346,12 +346,17 @@ impl BodyObserver {
                             self.acc = 0;
                             // 节流增量快照不重发 request_turns（请求侧已首发，
                             // 前端按 requestId 缓存），省去热路径深克隆 + 序列化。
+                            let mut snap = parser.snapshot();
+                            snap.start_ms = Some(self.start_ms);
+                            // 流式进行中即注入首字用时，悬浮即可见（定稿前 usage 尚缺）
+                            snap.first_chunk_ms =
+                                self.first_chunk_at.map(|at| (at - self.start_ms).max(0) as u64);
                             emit_ai_normalized(
                                 &self.sender,
                                 self.request_id,
                                 sid,
                                 Vec::new(),
-                                parser.snapshot(),
+                                snap,
                             );
                         }
                     }
@@ -404,11 +409,31 @@ impl BodyObserver {
             let conv = match mode {
                 AiRespMode::Streaming(parser) => {
                     parser.finalize();
-                    Some(parser.snapshot())
+                    let mut snap = parser.snapshot();
+                    // 首字仅流式有意义；非流式保持 None，前端以字段有无区分
+                    snap.first_chunk_ms =
+                        self.first_chunk_at.map(|at| (at - self.start_ms).max(0) as u64);
+                    Some(snap)
                 }
-                AiRespMode::NonStreaming(buf) => provider.parse_response_body(buf),
+                AiRespMode::NonStreaming(buf) => {
+                    provider.parse_response_body(buf).or_else(|| {
+                        // 兜底：错误响应 / 非 JSON / 形状不符也必须发定稿事件，
+                        // 否则前端该请求永久停在 streaming 态且错误内容不可见。
+                        log::warn!(
+                            "[ai] unparsed non-streaming body for request {} (status {}, {} bytes)",
+                            self.request_id,
+                            self.status,
+                            buf.len()
+                        );
+                        Some(fallback_conversation(*provider, buf, self.status))
+                    })
+                }
             };
-            if let Some(conv) = conv {
+            if let Some(mut conv) = conv {
+                conv.start_ms = Some(self.start_ms);
+                // 总耗时：流式与非流式统一在定稿时注入（时钟回拨取 0，同现有口径）
+                conv.duration_ms =
+                    Some((crate::utils::date::now_ms() - self.start_ms).max(0) as u64);
                 // 保持事件顺序（AiNormalized 先于 AiSession），此处每请求只克隆一次。
                 // 定稿快照重新携带完整 request_turns：作为该请求的最终记录，
                 // 前端中途挂载错过首发时也能在此自愈。
@@ -425,8 +450,8 @@ impl BodyObserver {
     }
 }
 
-fn log_body_chunks(body: Body, ctx: &ProxyCtx, is_sse: bool) -> Body {
-    let observer = Arc::new(Mutex::new(BodyObserver::new(ctx, is_sse)));
+fn log_body_chunks(body: Body, ctx: &ProxyCtx, is_sse: bool, status: u16) -> Body {
+    let observer = Arc::new(Mutex::new(BodyObserver::new(ctx, is_sse, status)));
     let drop_observer = observer.clone();
 
     let stream = rama::futures::stream::unfold(
@@ -488,7 +513,7 @@ fn commit_ai_final(
         return;
     };
     let mut store = sessions.lock().expect("sessions lock");
-    store.set_title_if_first(session_id, request_id, conv);
+    store.refine_title(session_id, request_id, conv);
     if let Some(usage) = conv.usage.as_ref() {
         store.add_usage(session_id, usage);
     }
@@ -506,6 +531,36 @@ fn commit_ai_final(
             });
         }
     }
+}
+
+/// 兜底文本上限（4 KiB）：错误 body 通常很小，超长时只保留前缀。
+const AI_FALLBACK_TEXT_LIMIT: usize = 4096;
+
+/// 非流式 body 解析失败（错误响应 / 非 JSON / 形状不符）时的兜底定稿对话：
+/// 原文前缀作为 assistant 文本展示（限流/鉴权错误直接可读），
+/// `finish_reason` 标记 HTTP 状态，`streaming=false` 保证前端结案——
+/// 请求侧已首发 `streaming=true` 快照，缺定稿事件会让该请求永久停在进行态。
+fn fallback_conversation(
+    provider: super::ai::Provider,
+    body: &str,
+    status: u16,
+) -> super::ai::AiConversation {
+    // 截断处按 UTF-8 字符边界回退，避免 panic（同 push_capped 口径）
+    let mut end = body.len().min(AI_FALLBACK_TEXT_LIMIT);
+    while !body.is_char_boundary(end) {
+        end -= 1;
+    }
+    super::ai::AiConversation::new(
+        provider.as_str(),
+        vec![super::ai::AiTurn::new(
+            "assistant",
+            vec![super::ai::AiContentBlock::text(&body[..end])],
+        )],
+        false,
+        None,
+        None,
+        Some(format!("http_{status}")),
+    )
 }
 
 /// Build a generic error response returned directly to the client.
@@ -541,4 +596,61 @@ fn session_header_list(
         }
     }
     list
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proxy::ai::{AiContentBlock, Provider};
+
+    /// 错误响应体走兜底：原文进 assistant 文本，finish_reason 带状态码，非流式定稿。
+    #[test]
+    fn fallback_conversation_wraps_error_body() {
+        let body = r#"{"error":{"message":"rate limited"}}"#;
+        let conv = fallback_conversation(Provider::OpenAiChat, body, 429);
+        assert!(!conv.streaming);
+        assert_eq!(conv.provider, "openai");
+        assert_eq!(conv.finish_reason.as_deref(), Some("http_429"));
+        match &conv.turns[0].content[0] {
+            AiContentBlock::Text { text } => assert_eq!(text, body),
+            _ => panic!("expected text block"),
+        }
+        assert!(conv.usage.is_none());
+    }
+
+    /// 超长 body 按 UTF-8 字符边界截断到上限，不 panic。
+    #[test]
+    fn fallback_conversation_truncates_at_char_boundary() {
+        let body = "错".repeat(AI_FALLBACK_TEXT_LIMIT); // 3 字节/字符，远超上限
+        let conv = fallback_conversation(Provider::Anthropic, &body, 200);
+        match &conv.turns[0].content[0] {
+            AiContentBlock::Text { text } => {
+                assert!(text.len() <= AI_FALLBACK_TEXT_LIMIT);
+                assert!(!text.is_empty());
+                assert!(text.chars().all(|c| c == '错'));
+            }
+            _ => panic!("expected text block"),
+        }
+    }
+
+    /// 各协议对错误/非 JSON 响应体确实返回 None——兜底的触发前提。
+    #[test]
+    fn error_bodies_do_not_parse() {
+        assert!(
+            Provider::OpenAiChat
+                .parse_response_body(r#"{"error":{"message":"bad key"}}"#)
+                .is_none()
+        );
+        assert!(
+            Provider::Anthropic
+                .parse_response_body(r#"{"type":"error","error":{"type":"overloaded_error"}}"#)
+                .is_none()
+        );
+        assert!(Provider::Gemini.parse_response_body(r#"{"error":{"code":429}}"#).is_none());
+        assert!(
+            Provider::OpenAiResponses
+                .parse_response_body("<html>gateway error</html>")
+                .is_none()
+        );
+    }
 }

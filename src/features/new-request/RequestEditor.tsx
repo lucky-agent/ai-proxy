@@ -51,8 +51,8 @@ export default function RequestEditor(props: RequestEditorProps) {
       <TabsContent value="params" className="min-h-0 flex-1 overflow-hidden mt-0">
         <ScrollArea className="h-full"><KeyValueEditor entries={props.params} onChange={props.onParamsChange} title={t('detail.query')} addLabel={t('requestEditor.addParam')} emptyLabel={t('detail.noQuery')} /></ScrollArea>
       </TabsContent>
-      <TabsContent value="body" className="min-h-0 flex-1 overflow-hidden mt-0">
-        <ScrollArea className="h-full"><BodyTab body={props.body} bodyType={props.bodyType} onBodyChange={props.onBodyChange} onBodyTypeChange={props.onBodyTypeChange} /></ScrollArea>
+      <TabsContent value="body" className="min-h-0 flex-1 overflow-hidden mt-0 flex flex-col">
+        <BodyTab body={props.body} bodyType={props.bodyType} onBodyChange={props.onBodyChange} onBodyTypeChange={props.onBodyTypeChange} />
       </TabsContent>
       <TabsContent value="headers" className="min-h-0 flex-1 overflow-hidden mt-0">
         <ScrollArea className="h-full"><KeyValueEditor entries={props.headers} onChange={props.onHeadersChange} title={t('detail.headers')} addLabel={t('requestEditor.addHeader')} emptyLabel={t('detail.noHeaders')} /></ScrollArea>

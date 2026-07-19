@@ -14,6 +14,20 @@ export function formatTime(ts: number | null): string {
   if (ts === null) return ''
   return new Date(ts).toLocaleTimeString()
 }
+/** 时间戳展示：今天只显示时间；跨天带日期；跨年再带年份 */
+export function formatDayTime(ts: number): string {
+  const d = new Date(ts)
+  const now = new Date()
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString()
+  return d.toLocaleString(undefined, {
+    year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
 export function shortenUri(uri: string): string {
   try {
     const url = new URL(uri)

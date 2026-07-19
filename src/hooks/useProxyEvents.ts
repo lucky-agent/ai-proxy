@@ -43,7 +43,6 @@ export function useProxyEvents() {
       switch (event.type) {
         case 'request': {
           const { id, method, uri, timestamp, headers, decrypted } = event
-          console.log('[ProxyEvent] request', { id, method, uri, timestamp, decrypted })
           const query_params = 'query_params' in event ? (event as any).query_params : undefined
           counterRef.current += 1
 

@@ -8,7 +8,9 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
-use super::normalize::{AiContentBlock, AiConversation, AiTurn, AiUsage};
+use super::normalize::{
+    AiContentBlock, AiConversation, AiTurn, AiUsage, normalize_usage, parse_tool_input,
+};
 use super::{AiProtocol, StreamState};
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -18,10 +20,6 @@ use super::{AiProtocol, StreamState};
 pub(crate) struct OpenAiResponsesProtocol;
 
 impl AiProtocol for OpenAiResponsesProtocol {
-    fn name(&self) -> &'static str {
-        "openai"
-    }
-
     /// 解析 Responses API 请求体（`input[]` + 顶层 `instructions` + `tools[]`）。
     fn parse_request(&self, body: &str) -> Option<Vec<AiTurn>> {
         let p: Value = serde_json::from_str(body).ok()?;
@@ -38,11 +36,8 @@ impl AiProtocol for OpenAiResponsesProtocol {
             }
         }
 
-        if let Some(tools) = p.get("tools").and_then(Value::as_array) {
-            if !tools.is_empty() {
-                let tools_json = serde_json::to_string(tools).unwrap_or_default();
-                turns.push(AiTurn::new("tools_def", vec![AiContentBlock::text(tools_json)]));
-            }
+        if let Some(t) = p.get("tools").and_then(Value::as_array).and_then(|ts| AiTurn::tools_def(ts)) {
+            turns.push(t);
         }
 
         for m in input {
@@ -137,6 +132,12 @@ impl AiProtocol for OpenAiResponsesProtocol {
                         input: item.get("arguments").or_else(|| item.get("input")).cloned().unwrap_or(Value::Object(Default::default())),
                     });
                 }
+                "reasoning" => {
+                    let summary = reasoning_summary_text(item);
+                    if !summary.is_empty() {
+                        blocks.push(AiContentBlock::thinking(summary));
+                    }
+                }
                 _ => {}
             }
         }
@@ -145,14 +146,14 @@ impl AiProtocol for OpenAiResponsesProtocol {
             blocks.push(AiContentBlock::text(""));
         }
 
-        Some(AiConversation {
-            provider: "openai".to_string(),
-            turns: vec![AiTurn::new("assistant", blocks)],
-            streaming: false,
-            model: p.get("model").and_then(Value::as_str).map(String::from),
-            usage: p.get("usage").map(normalize_usage),
-            finish_reason: p.get("status").and_then(Value::as_str).map(String::from),
-        })
+        Some(AiConversation::new(
+            "openai",
+            vec![AiTurn::new("assistant", blocks)],
+            false,
+            p.get("model").and_then(Value::as_str).map(String::from),
+            p.get("usage").map(normalize_usage),
+            p.get("status").and_then(Value::as_str).map(String::from),
+        ))
     }
 
     fn create_stream_state(&self) -> Box<dyn StreamState> {
@@ -160,64 +161,18 @@ impl AiProtocol for OpenAiResponsesProtocol {
     }
 }
 
-/// 通用 usage 归一化：兼容 OpenAI Chat Completions (prompt/completion)、
-/// Anthropic (input/output)、Responses API (input/output)、Gemini (promptTokenCount/…) 四种命名。
-pub(crate) fn normalize_usage(usage: &Value) -> AiUsage {
-    fn get_u64(v: &Value, keys: &[&str]) -> Option<u64> {
-        for k in keys {
-            if let Some(val) = v.get(k).and_then(Value::as_u64) {
-                return Some(val);
-            }
-        }
-        None
-    }
-
-    let input_tokens = get_u64(usage, &["input_tokens", "prompt_tokens", "promptTokenCount", "inputTokens"]);
-    let output_tokens = get_u64(usage, &["output_tokens", "completion_tokens", "candidatesTokenCount", "outputTokens"]);
-    let total_tokens = get_u64(usage, &["total_tokens", "totalTokens", "totalTokenCount"]);
-
-    let cached_tokens = get_u64(usage, &["cache_read_input_tokens"])
-        .or_else(|| {
-            get_u64(usage, &["cached_tokens", "cachedContentTokenCount", "cacheReadInputTokens"])
+/// reasoning item 的 summary[] 文本拼接（加密的 encrypted_content 不采集）。
+fn reasoning_summary_text(item: &Value) -> String {
+    item.get("summary")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter(|s| s.get("type").and_then(Value::as_str) == Some("summary_text"))
+                .filter_map(|s| s.get("text").and_then(Value::as_str))
+                .collect::<Vec<_>>()
+                .join("")
         })
-        .or_else(|| {
-            usage
-                .get("input_tokens_details")
-                .or_else(|| usage.get("prompt_tokens_details"))
-                .and_then(|d| d.get("cached_tokens"))
-                .and_then(Value::as_u64)
-        });
-
-    let _cache_create = usage.get("cacheWriteInputTokens").and_then(Value::as_u64);
-
-    AiUsage {
-        prompt_tokens: input_tokens,
-        completion_tokens: output_tokens,
-        total_tokens: total_tokens.or_else(|| {
-            match (input_tokens, output_tokens) {
-                (None, None) => None,
-                (i, o) => Some(i.unwrap_or(0) + o.unwrap_or(0)),
-            }
-        }),
-        cached_tokens,
-        ..Default::default()
-    }
-}
-
-fn parse_tool_input(raw: &str) -> Value {
-    if raw.is_empty() {
-        return Value::String(String::new());
-    }
-    serde_json::from_str(raw).unwrap_or_else(|_| Value::String(raw.to_string()))
-}
-
-fn _blocks_to_text(blocks: &[Value], text_type: &str) -> String {
-    blocks
-        .iter()
-        .filter(|b| b.get("type").and_then(Value::as_str) == Some(text_type))
-        .filter_map(|b| b.get("text").and_then(Value::as_str))
-        .collect::<Vec<_>>()
-        .join("")
+        .unwrap_or_default()
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -227,12 +182,9 @@ fn _blocks_to_text(blocks: &[Value], text_type: &str) -> String {
 #[derive(Default)]
 struct OpenAiOutputItem {
     item_type: String,
-    #[allow(dead_code)]
-    role: String,
+    /// message 正文 / reasoning summary 的累积文本。
     text: String,
     tool_id: String,
-    #[allow(dead_code)]
-    tool_call_id: String,
     tool_name: String,
     tool_arguments: String,
 }
@@ -259,15 +211,15 @@ impl StreamState for OpenAiResponsesStreamState {
             }
             "response.output_item.added" => {
                 let idx = p.get("output_index").and_then(Value::as_i64).unwrap_or(0);
-                let item = p.get("item");
-                let item_type = item.and_then(|i| i.get("type")).and_then(Value::as_str).unwrap_or("").to_string();
-                let mut entry = OpenAiOutputItem { item_type, ..Default::default() };
-                if let Some(it) = item {
-                    if let Some(role) = it.get("role").and_then(Value::as_str) {
-                        entry.role = role.to_string();
-                    }
-                }
-                self.output_items.entry(idx).or_insert(entry);
+                let item_type = p
+                    .get("item")
+                    .and_then(|i| i.get("type"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                self.output_items
+                    .entry(idx)
+                    .or_insert(OpenAiOutputItem { item_type, ..Default::default() });
             }
             "response.output_text.delta" => {
                 let delta = p.get("delta").and_then(Value::as_str).unwrap_or("");
@@ -289,11 +241,13 @@ impl StreamState for OpenAiResponsesStreamState {
                         }
                     }
                     if let Some(t) = item.get("type").and_then(Value::as_str) { entry.item_type = t.to_string(); }
-                    if let Some(role) = item.get("role").and_then(Value::as_str) { entry.role = role.to_string(); }
                     if entry.item_type == "function_call" {
                         entry.tool_id = item.get("id").or_else(|| item.get("call_id")).and_then(Value::as_str).unwrap_or("").to_string();
                         entry.tool_name = item.get("name").and_then(Value::as_str).unwrap_or("").to_string();
                         entry.tool_arguments = item.get("arguments").and_then(Value::as_str).unwrap_or("").to_string();
+                    }
+                    if entry.item_type == "reasoning" {
+                        entry.text = reasoning_summary_text(item);
                     }
                 }
             }
@@ -333,6 +287,9 @@ impl StreamState for OpenAiResponsesStreamState {
                 "message" => {
                     if !item.text.is_empty() { blocks.push(AiContentBlock::text(item.text.clone())); }
                 }
+                "reasoning" => {
+                    if !item.text.is_empty() { blocks.push(AiContentBlock::thinking(item.text.clone())); }
+                }
                 "function_call" => {
                     let input = if item.tool_arguments.is_empty() {
                         Value::Object(Default::default())
@@ -345,14 +302,14 @@ impl StreamState for OpenAiResponsesStreamState {
             }
         }
         if blocks.is_empty() { blocks.push(AiContentBlock::text("")); }
-        AiConversation {
-            provider: "openai".to_string(),
-            turns: vec![AiTurn::new("assistant", blocks)],
-            streaming: !self.done,
-            model: self.model.clone(),
-            usage: self.usage.clone(),
-            finish_reason: self.status.clone(),
-        }
+        AiConversation::new(
+            "openai",
+            vec![AiTurn::new("assistant", blocks)],
+            !self.done,
+            self.model.clone(),
+            self.usage.clone(),
+            self.status.clone(),
+        )
     }
 
     fn finalize(&mut self) {
@@ -362,7 +319,6 @@ impl StreamState for OpenAiResponsesStreamState {
 
 fn merge_terminal_output_item(entry: &mut OpenAiOutputItem, item: &Value) {
     if let Some(t) = item.get("type").and_then(Value::as_str) { entry.item_type = t.to_string(); }
-    if let Some(role) = item.get("role").and_then(Value::as_str) { entry.role = role.to_string(); }
     if entry.item_type == "message" {
         if let Some(content) = item.get("content").and_then(Value::as_array) {
             entry.text = content
@@ -372,6 +328,9 @@ fn merge_terminal_output_item(entry: &mut OpenAiOutputItem, item: &Value) {
                 .collect::<Vec<_>>()
                 .join("");
         }
+    }
+    if entry.item_type == "reasoning" {
+        entry.text = reasoning_summary_text(item);
     }
     if entry.item_type == "function_call" {
         entry.tool_id = item.get("id").or_else(|| item.get("call_id")).and_then(Value::as_str).unwrap_or("").to_string();
@@ -383,61 +342,6 @@ fn merge_terminal_output_item(entry: &mut OpenAiOutputItem, item: &Value) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn usage_openai_chat_completion() {
-        let u = normalize_usage(&serde_json::json!({
-            "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15,
-            "prompt_tokens_details": {"cached_tokens": 3}
-        }));
-        assert_eq!(u.prompt_tokens, Some(10));
-        assert_eq!(u.completion_tokens, Some(5));
-        assert_eq!(u.total_tokens, Some(15));
-        assert_eq!(u.cached_tokens, Some(3));
-    }
-
-    #[test]
-    fn usage_responses_api() {
-        let u = normalize_usage(&serde_json::json!({
-            "input_tokens": 100, "output_tokens": 50, "total_tokens": 150,
-            "input_tokens_details": {"cached_tokens": 20}
-        }));
-        assert_eq!(u.prompt_tokens, Some(100));
-        assert_eq!(u.completion_tokens, Some(50));
-        assert_eq!(u.total_tokens, Some(150));
-        assert_eq!(u.cached_tokens, Some(20));
-    }
-
-    #[test]
-    fn usage_anthropic_fallback() {
-        let u = normalize_usage(&serde_json::json!({"input_tokens": 200, "output_tokens": 100}));
-        assert_eq!(u.prompt_tokens, Some(200));
-        assert_eq!(u.completion_tokens, Some(100));
-        assert_eq!(u.total_tokens, Some(300));
-    }
-
-    #[test]
-    fn usage_google_gemini_fallback() {
-        let u = normalize_usage(&serde_json::json!({
-            "promptTokenCount": 42, "candidatesTokenCount": 7, "totalTokenCount": 49, "cachedContentTokenCount": 8
-        }));
-        assert_eq!(u.prompt_tokens, Some(42));
-        assert_eq!(u.completion_tokens, Some(7));
-        assert_eq!(u.total_tokens, Some(49));
-        assert_eq!(u.cached_tokens, Some(8));
-    }
-
-    #[test]
-    fn usage_bedrock_converse() {
-        let u = normalize_usage(&serde_json::json!({
-            "inputTokens": 12, "outputTokens": 3, "totalTokens": 15,
-            "cacheReadInputTokens": 7, "cacheWriteInputTokens": 5
-        }));
-        assert_eq!(u.prompt_tokens, Some(12));
-        assert_eq!(u.completion_tokens, Some(3));
-        assert_eq!(u.total_tokens, Some(15));
-        assert_eq!(u.cached_tokens, Some(7));
-    }
 
     #[test]
     fn parse_basic_input() {
@@ -521,5 +425,49 @@ mod tests {
     #[test]
     fn rejects_non_response_object() {
         assert!(OpenAiResponsesProtocol.parse_response_body(r#"{"object":"chat.completion","choices":[{"message":{"role":"assistant","content":"hi"}}]}"#).is_none());
+    }
+
+    /// o 系列 reasoning item 的 summary 文本 → Thinking block。
+    #[test]
+    fn parse_response_reasoning_item() {
+        let conv = OpenAiResponsesProtocol.parse_response_body(r#"{
+            "id": "resp_1", "object": "response", "model": "o4-mini", "status": "completed",
+            "output": [
+                {"type": "reasoning", "summary": [{"type": "summary_text", "text": "step by step"}]},
+                {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "done"}]}
+            ]
+        }"#).unwrap();
+        assert_eq!(conv.turns[0].content.len(), 2);
+        match &conv.turns[0].content[0] {
+            AiContentBlock::Thinking { text } => assert_eq!(text, "step by step"),
+            other => panic!("expected thinking block, got {other:?}"),
+        }
+        match &conv.turns[0].content[1] {
+            AiContentBlock::Text { text } => assert_eq!(text, "done"),
+            other => panic!("expected text block, got {other:?}"),
+        }
+    }
+
+    /// 流式 reasoning item：output_item.done 时提取 summary 文本。
+    #[test]
+    fn stream_reasoning_item_done() {
+        let mut st = OpenAiResponsesStreamState::default();
+        st.apply("response.output_item.added", r#"{"output_index":0,"item":{"type":"reasoning"}}"#);
+        st.apply(
+            "response.output_item.done",
+            r#"{"output_index":0,"item":{"type":"reasoning","summary":[{"type":"summary_text","text":"thought hard"}]}}"#,
+        );
+        st.apply("response.output_item.added", r#"{"output_index":1,"item":{"type":"message","role":"assistant"}}"#);
+        st.apply("response.output_text.delta", r#"{"output_index":1,"delta":"hi"}"#);
+        let conv = st.snapshot();
+        assert_eq!(conv.turns[0].content.len(), 2);
+        match &conv.turns[0].content[0] {
+            AiContentBlock::Thinking { text } => assert_eq!(text, "thought hard"),
+            other => panic!("expected thinking block, got {other:?}"),
+        }
+        match &conv.turns[0].content[1] {
+            AiContentBlock::Text { text } => assert_eq!(text, "hi"),
+            other => panic!("expected text block, got {other:?}"),
+        }
     }
 }

@@ -58,9 +58,22 @@ function tokenizeCurl(raw: string): string[] {
 
       case 'S_SINGLE_QUOTE':
         if (ch === "'") {
-          tokens.push(current)
-          current = ''
-          state = 'S_NORMAL'
+          // shell 单引号转义：'\'' → 文字 '
+          // 结束当前引号 + 反斜杠转义的单引号 + 进入下一个引号
+          if (
+            i + 3 < preprocessed.length &&
+            preprocessed[i + 1] === '\\' &&
+            preprocessed[i + 2] === "'" &&
+            preprocessed[i + 3] === "'"
+          ) {
+            current += "'"
+            i += 3 // 跳过 \''，循环末尾 i++ 再进一位
+            // 保持在 S_SINGLE_QUOTE
+          } else {
+            tokens.push(current)
+            current = ''
+            state = 'S_NORMAL'
+          }
         } else {
           current += ch
         }

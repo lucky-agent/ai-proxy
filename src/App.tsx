@@ -22,6 +22,7 @@ import { useAiSessions } from '@/hooks/useAiSessions'
 import { useTheme } from '@/hooks/useTheme'
 import { useProseFontSize } from '@/hooks/useProseFontSize'
 import { classifyEntry, type TypeFilter } from '@/lib/format'
+import { formatCurl } from '@/lib/curl'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import ScriptEditor from '@/features/script-config/ScriptEditor'
 import type { ScriptItem } from '@/types/settings'
@@ -201,6 +202,25 @@ function App() {
   }, [])
   const { entries, clear } = useProxyEvents()
   const { sessions: aiSessions, mergedTimeline, conversationOf, removeSession, removeRequest } = useAiSessions()
+
+  // AI 气泡右键 → 复制 cURL：用 entries 中同 id 的原始代理请求数据生成
+  const handleCopyCurl = useCallback((requestId: number) => {
+    const entry = entries.find(e => e.id === requestId)
+    if (!entry) return
+    const headers: Record<string, string> = {}
+    for (const [k, v] of Object.entries(entry.requestHeaders)) {
+      // 跳过 host header，curl 会自动设置
+      if (k.toLowerCase() === 'host') continue
+      headers[k] = v
+    }
+    const curl = formatCurl({
+      method: entry.method,
+      url: entry.uri,
+      headers,
+      body: entry.requestBody,
+    })
+    navigator.clipboard.writeText(curl).catch(() => {})
+  }, [entries])
   const { theme, setTheme } = useTheme()
   const { proseFontSize, setProseFontSize } = useProseFontSize()
 
@@ -327,42 +347,51 @@ function App() {
         <ToolBar activeTabId={activeTabId} mountedViews={mountedViews} onViewChange={handleViewChange} />
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {mountedViews.has('proxy') && activeTabId === 'proxy' && (
-            <ProxyView
-              entries={entries}
-              error={error}
-              showSidebar={showSidebar}
-              detailPosition={detailPosition}
-              onAutoOpenDetail={() => setDetailPosition('bottom')}
-              typeFilter={typeFilter}
-              typeCounts={typeCounts}
-              onTypeFilterChange={setTypeFilter}
-              running={running}
-              status={status}
-              jumpTarget={proxyJump}
-              conversationOf={conversationOf}
-            />
+          {/* Proxy view — always mounted once opened, hidden via CSS when inactive */}
+          {mountedViews.has('proxy') && (
+            <div className={activeTabId === 'proxy' ? 'flex flex-col min-h-0 flex-1' : 'hidden'}>
+              <ProxyView
+                entries={entries}
+                error={error}
+                showSidebar={showSidebar}
+                detailPosition={detailPosition}
+                onAutoOpenDetail={() => setDetailPosition('bottom')}
+                typeFilter={typeFilter}
+                typeCounts={typeCounts}
+                onTypeFilterChange={setTypeFilter}
+                running={running}
+                status={status}
+                jumpTarget={proxyJump}
+                conversationOf={conversationOf}
+              />
+            </div>
           )}
-          {mountedViews.has('new-request') && activeTabId === 'new-request' && (
+          {/* New-request view — always mounted once opened, hidden via CSS when inactive */}
+          {mountedViews.has('new-request') && (
+            <div className={activeTabId === 'new-request' ? 'min-h-0 flex-1' : 'hidden'}>
               <NewRequestView
                 onSendSuccess={handleNewRequestSuccess}
                 entries={entries}
                 showSidebar={showSidebar}
                 detailPosition={detailPosition}
               />
-            )}
-            {mountedViews.has('ai') && activeTabId === 'ai' && (
+            </div>
+          )}
+          {/* AI view — always mounted once opened, hidden via CSS when inactive */}
+          {mountedViews.has('ai') && (
+            <div className={activeTabId === 'ai' ? 'min-h-0 flex-1' : 'hidden'}>
               <AiView
                 sessions={aiSessions}
                 mergedTimeline={mergedTimeline}
                 conversationOf={conversationOf}
                 showSidebar={showSidebar}
-                detailPosition={detailPosition}
                 onJumpToProxy={handleJumpToProxy}
                 onDeleteSession={removeSession}
                 onDeleteRequest={removeRequest}
+                onCopyCurl={handleCopyCurl}
               />
-            )}
+            </div>
+          )}
             {/* Script editor tabs */}
             {scriptTabs.map(tab => (
               <div key={tab.fileKey} className={activeTabId === tab.fileKey ? 'flex-1 flex flex-col min-h-0' : 'hidden'}>

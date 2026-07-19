@@ -16,7 +16,7 @@ interface SaveToCollectionDialogProps {
   /** The initial request name, pre-filled from the tab */
   initialRequestName: string
   addFolder: (parentId: number, name: string) => Promise<number | null>
-  onConfirm: (parentId: number, collectionId: number, requestName: string) => void
+  onConfirm: (parentId: number, requestName: string) => void
 }
 
 /** Collect all folder nodes (collections + sub-folders) in a flat list for selection. */
@@ -24,22 +24,21 @@ interface FlatFolder {
   id: number
   name: string
   depth: number
-  collectionId: number
 }
 
 function collectFolders(collections: ApiCollection[]): FlatFolder[] {
   const result: FlatFolder[] = []
   for (const col of collections) {
-    result.push({ id: col.id, name: col.name, depth: 0, collectionId: col.id })
-    walkNodes(col.children, 1, col.id)
+    result.push({ id: col.id, name: col.name, depth: 0 })
+    walkNodes(col.children, 1)
   }
   return result
 
-  function walkNodes(nodes: ApiTreeNode[], depth: number, collectionId: number) {
+  function walkNodes(nodes: ApiTreeNode[], depth: number) {
     for (const n of nodes) {
       if (n.type === 'folder') {
-        result.push({ id: n.id, name: n.name, depth, collectionId })
-        walkNodes(n.children, depth + 1, collectionId)
+        result.push({ id: n.id, name: n.name, depth })
+        walkNodes(n.children, depth + 1)
       }
     }
   }
@@ -80,7 +79,7 @@ export function SaveToCollectionDialog({
     if (selectedId == null) return
     const folder = folders.find(f => f.id === selectedId)
     if (folder) {
-      onConfirm(folder.id, folder.collectionId, requestName.trim() || initialRequestName)
+      onConfirm(folder.id, requestName.trim() || initialRequestName)
     }
     handleOpenChange(false)
   }, [selectedId, folders, requestName, initialRequestName, onConfirm, handleOpenChange])

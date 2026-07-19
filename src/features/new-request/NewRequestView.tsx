@@ -280,14 +280,13 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
   }, [openTab])
 
   // 弹窗确认：创建树节点 + 保存数据 + link tab
-  const handleSaveToCollection = useCallback(async (parentId: number, collectionId: number, requestName: string) => {
+  const handleSaveToCollection = useCallback(async (parentId: number, requestName: string) => {
     if (!activeTab) return
     const tabId = activeTab.id
 
     try {
       const resultJson = await invoke<string>('create_request', {
         parentId,
-        collectionId,
         name: requestName || activeTab.name || '未命名请求',
       })
       const { nodeId, requestId: newRequestId } = JSON.parse(resultJson) as { nodeId: number; requestId: number }

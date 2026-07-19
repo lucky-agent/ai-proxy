@@ -1,9 +1,10 @@
 /** AI 对话统一中间表示（IR），镜像后端 `src-tauri/src/proxy/ai/normalize.rs`。
  *  前端不再本地解析，仅消费后端 `AiNormalized` / `AiSession` 事件后展示。 */
 
-/** 内容块；text / tool_use / tool_result */
+/** 内容块；text / thinking / tool_use / tool_result */
 export type AiContentBlock =
   | { type: 'text'; text: string }
+  | { type: 'thinking'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
   | { type: 'tool_result'; tool_use_id: string; content: AiContentBlock[] }
 
@@ -16,7 +17,10 @@ export interface AiUsage {
   promptTokens?: number
   completionTokens?: number
   totalTokens?: number
+  /** 缓存命中（cache read）token 数 */
   cachedTokens?: number
+  /** 缓存写入（cache creation）token 数 */
+  cacheCreationTokens?: number
 }
 
 export interface AiConversation {
@@ -25,7 +29,14 @@ export interface AiConversation {
   streaming: boolean
   model?: string
   usage?: AiUsage
+  /** 停止原因，provider 原生值透传（stop / end_turn / STOP 等），可区分正常结束、截断、工具调用 */
   finishReason?: string
+  /** 首字用时 ms（请求发出 → 首个流式 chunk），仅流式请求有值 */
+  firstChunkMs?: number
+  /** 总耗时 ms（请求发出 → 流结束），定稿后有值 */
+  durationMs?: number
+  /** 请求开始时刻 Unix ms（代理收到请求），气泡时间戳用；每次快照恒有 */
+  startMs?: number
 }
 
 export type AiProvider = 'openai' | 'anthropic'

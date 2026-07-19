@@ -99,11 +99,12 @@ impl SessionStore {
                 self.touch_or_create(
                     &sid,
                     &scope,
-                    fingerprints,
+                    fingerprints.clone(),
                     request_id,
                     tick,
                     source.as_deref(),
                     &reason,
+                    messages,
                 );
                 return self.result(sid, reason);
             }
@@ -124,14 +125,14 @@ impl SessionStore {
                 }
             }
             if let Some((sid, _)) = best {
-                self.touch_or_create(&sid, &scope, fingerprints, request_id, tick, None, "prefix");
+                self.touch_or_create(&sid, &scope, fingerprints, request_id, tick, None, "prefix", messages);
                 return self.result(sid, "prefix".to_string());
             }
         }
 
         // ③ 新会话
         let sid = format!("sess-{}", Uuid::new_v4());
-        self.touch_or_create(&sid, &scope, fingerprints, request_id, tick, None, "new");
+        self.touch_or_create(&sid, &scope, fingerprints, request_id, tick, None, "new", messages);
         self.result(sid, "new".to_string())
     }
 
@@ -157,6 +158,7 @@ impl SessionStore {
         tick: u64,
         source: Option<&str>,
         match_reason: &str,
+        messages: &[AiTurn],
     ) {
         match self.sessions.get_mut(sid) {
             Some(entry) => {
@@ -172,6 +174,9 @@ impl SessionStore {
                 }
             }
             None => {
+                // 仅新会话时从第一条 user turn 提取标题（兜底），
+                // 后续由 refine_title 用响应 {"title": "..."} 覆盖
+                let title = super::normalize::extract_title_from_request(messages);
                 self.sessions.insert(
                     sid.to_string(),
                     SessionEntry {
@@ -180,7 +185,7 @@ impl SessionStore {
                         request_ids: vec![request_id],
                         last_fingerprints: fingerprints,
                         usage_total: AiUsage::default(),
-                        title: None,
+                        title,
                         source: source.map(str::to_string),
                         match_reason: match_reason.to_string(),
                         last_touched: tick,
@@ -198,9 +203,10 @@ impl SessionStore {
         }
     }
 
-    /// 仅当会话尚无标题、且 `request_id` 是该会话第一个请求时，
-    /// 尝试从响应 `conv` 提取 `{"title": "..."}` 写入会话标题。
-    pub(crate) fn set_title_if_first(
+    /// 首请求响应定稿时，尝试用 `{"title": "..."}`（模型生成标题）
+    /// 覆盖 `assign` 阶段从用户消息提取的兜底标题。
+    /// 非首请求的响应不操作（会话标题由首次交互定义）。
+    pub(crate) fn refine_title(
         &mut self,
         session_id: &str,
         request_id: u64,
@@ -209,12 +215,14 @@ impl SessionStore {
         let Some(entry) = self.sessions.get_mut(session_id) else {
             return;
         };
-        if entry.title.is_some()
-            || entry.request_ids.first().copied() != Some(request_id)
-        {
+        // 仅首请求的响应参与标题命名
+        if entry.request_ids.first().copied() != Some(request_id) {
             return;
         }
-        entry.title = super::normalize::extract_title(conv);
+        // 响应有 {"title":"..."} → 覆盖（比用户原始输入更精炼）
+        if let Some(title) = super::normalize::extract_title(conv) {
+            entry.title = Some(title);
+        }
     }
 
     /// 读取会话快照（供构造 AiSession 事件）。
@@ -266,14 +274,14 @@ mod tests {
     use crate::proxy::ai::normalize::AiContentBlock;
 
     fn conv_with_text(text: &str) -> AiConversation {
-        AiConversation {
-            provider: "openai".to_string(),
-            turns: vec![AiTurn::new("assistant", vec![AiContentBlock::text(text)])],
-            streaming: false,
-            model: None,
-            usage: None,
-            finish_reason: None,
-        }
+        AiConversation::new(
+            "openai",
+            vec![AiTurn::new("assistant", vec![AiContentBlock::text(text)])],
+            false,
+            None,
+            None,
+            None,
+        )
     }
 
     /// 两个请求经同一 session header 归入同一会话。
@@ -309,31 +317,57 @@ mod tests {
     fn title_set_only_from_first_request() {
         let (mut store, sid) = store_with_two_requests();
 
+        // 新会话创建时已有用户消息兜底标题
+        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("hi"));
+
         // 非首请求命中 title JSON → 不写入
-        store.set_title_if_first(&sid, 2, &conv_with_text(r#"{"title": "不该写入"}"#));
-        assert_eq!(store.get(&sid).unwrap().title, None);
+        store.refine_title(&sid, 2, &conv_with_text(r#"{"title": "不该写入"}"#));
+        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("hi"));
 
-        // 首请求 → 写入
-        store.set_title_if_first(&sid, 1, &conv_with_text(r#"{"title": "会话标题"}"#));
+        // 首请求 → 覆盖用户消息标题
+        store.refine_title(&sid, 1, &conv_with_text(r#"{"title": "会话标题"}"#));
         assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("会话标题"));
 
-        // 已有标题 → 不覆盖
-        store.set_title_if_first(&sid, 1, &conv_with_text(r#"{"title": "另一个"}"#));
-        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("会话标题"));
+        // refine_title 不 guard is_some：响应有 title 就覆盖（实践中首请求只定稿一次）
+        store.refine_title(&sid, 1, &conv_with_text(r#"{"title": "另一个"}"#));
+        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("另一个"));
     }
 
     #[test]
-    fn non_title_response_leaves_title_none() {
+    fn non_title_response_keeps_user_fallback() {
         let (mut store, sid) = store_with_two_requests();
-        store.set_title_if_first(&sid, 1, &conv_with_text("普通回复文本"));
-        assert_eq!(store.get(&sid).unwrap().title, None);
+        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("hi"));
+        // 普通回复不覆盖用户消息标题
+        store.refine_title(&sid, 1, &conv_with_text("普通回复文本"));
+        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("hi"));
     }
 
     #[test]
     fn unknown_session_is_noop() {
         let (mut store, _) = store_with_two_requests();
         // 不 panic 即可
-        store.set_title_if_first("sess-missing", 1, &conv_with_text(r#"{"title": "x"}"#));
+        store.refine_title("sess-missing", 1, &conv_with_text(r#"{"title": "x"}"#));
+    }
+
+    /// 用户消息无有意义内容时 title 为 None（如纯 tool_result 的请求）。
+    #[test]
+    fn empty_user_message_yields_no_title() {
+        let mut store = SessionStore::new(10);
+        let headers: HashMap<String, String> = HashMap::new();
+        let no_headers: Vec<(String, Option<String>)> = Vec::new();
+        // tool 角色的消息不算 user turn
+        let msgs = vec![AiTurn::new("tool", vec![AiContentBlock::text("result")])];
+        let r = store.assign(
+            Provider::OpenAiChat,
+            "api.test",
+            &no_headers,
+            &headers,
+            &msgs,
+            false,
+            1,
+        );
+        assert_eq!(r.match_reason, "new");
+        assert_eq!(store.get(&r.session_id).unwrap().title, None);
     }
 
     /// 无 session header 时，续轮请求（历史为前一轮的前缀扩展）经指纹链归入同一会话。

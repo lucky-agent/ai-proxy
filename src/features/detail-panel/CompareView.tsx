@@ -9,6 +9,7 @@ type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string
 /** 将单个 content block 渲染为纯文本摘要 */
 function blockSummary(block: AiContentBlock): string {
   if (block.type === 'text') return block.text.slice(0, 200) + (block.text.length > 200 ? '…' : '')
+  if (block.type === 'thinking') return `🧠 ${block.text.slice(0, 120)}${block.text.length > 120 ? '…' : ''}`
   if (block.type === 'tool_use') return `🔧 ${block.name}(${JSON.stringify(block.input).slice(0, 80)}${JSON.stringify(block.input).length > 80 ? '…' : ''})`
   if (block.type === 'tool_result') {
     const inner = block.content.map(b => blockSummary(b)).join(' | ')

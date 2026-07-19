@@ -2,7 +2,7 @@
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 
-export type BodyType = 'json' | 'xml' | 'text' | 'urlencoded' | 'multipart'
+export type BodyType = 'auto' | 'json' | 'xml' | 'text' | 'urlencoded' | 'multipart'
 
 export interface KeyValuePair {
   key: string

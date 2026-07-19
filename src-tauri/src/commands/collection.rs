@@ -51,13 +51,12 @@ pub fn create_folder(
 pub fn create_request(
     state: tauri::State<'_, AppState>,
     parent_id: i64,
-    collection_id: i64,
     name: String,
 ) -> Result<String, String> {
     let db = state.db();
     let ts = crate::utils::date::now_ms();
     // Insert into collection_requests table first to get the request_id
-    let request_id = db.insert_collection_request(collection_id, &name, Method::GET.as_str(), "", ts)
+    let request_id = db.insert_collection_request(&name, Method::GET.as_str(), "", ts)
         .map_err(|e| e.to_string())?;
     // Then create the node referencing it
     let node_id = db.create_request_node(parent_id, &name, request_id, ts)

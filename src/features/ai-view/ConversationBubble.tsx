@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, ChevronDown, WrenchIcon, FileTextIcon, ExternalLinkIcon, CopyIcon, CheckIcon, CodeIcon, TextIcon } from 'lucide-react'
+import { ChevronRight, ChevronDown, WrenchIcon, FileTextIcon, ExternalLinkIcon, CopyIcon, CheckIcon, CodeIcon, TextIcon, BrainIcon } from 'lucide-react'
 import { type AiTurn, type AiContentBlock } from '@/types/ai'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { isLikelyMarkdown } from '@/lib/markdown'
@@ -9,6 +9,7 @@ import { MarkdownContent } from '@/components/markdown/MarkdownContent'
 /** 把单个 content block 拼成可复制的纯文本 */
 function blockToText(block: AiContentBlock): string {
   if (block.type === 'text') return block.text
+  if (block.type === 'thinking') return `[thinking]\n${block.text}`
   if (block.type === 'tool_use') {
     let input = ''
     try { input = JSON.stringify(block.input, null, 2) } catch { input = String(block.input) }
@@ -51,13 +52,53 @@ function TextBlock({ text, showMd, inverted }: { text: string; showMd: boolean; 
 
 /** 单个 content block 的渲染 */
 function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock; showMd: boolean; headerActions?: React.ReactNode }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
+  const [thinkingCopied, setThinkingCopied] = useState(false)
+
+  const copyThinking = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try { await navigator.clipboard.writeText(block.type === 'thinking' ? block.text : ''); setThinkingCopied(true); setTimeout(() => setThinkingCopied(false), 1200) } catch {}
+  }
 
   if (block.type === 'text') {
     return <TextBlock text={block.text} showMd={showMd} inverted={false} />
   }
 
+  if (block.type === 'thinking') {
+    return (
+      <div className="mt-1.5 rounded-lg border border-sky-500/20 bg-sky-500/5 overflow-hidden">
+        <button
+          className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-ui-sm font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
+          <BrainIcon className="size-3 flex-shrink-0" />
+          <span className="truncate flex-1">{t('aiView.thinking', '思考过程')}</span>
+          <button
+            type="button"
+            onClick={copyThinking}
+            className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
+          >
+            {thinkingCopied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
+          </button>
+          {headerActions}
+        </button>
+        {expanded && (
+          <div className="max-h-48 overflow-y-auto border-t border-sky-500/15 px-3 py-2 text-prose-sm text-foreground/70 whitespace-pre-wrap break-words">
+            {block.text}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (block.type === 'tool_use') {
+    const copyToolUse = async (e: React.MouseEvent) => {
+      e.stopPropagation()
+      const text = `[tool_use] ${block.name}\n${JSON.stringify(block.input, null, 2)}`
+      try { await navigator.clipboard.writeText(text) } catch {}
+    }
     return (
       <div className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 overflow-hidden">
         <button
@@ -67,6 +108,13 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
           {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
           <WrenchIcon className="size-3 flex-shrink-0" />
           <span className="truncate flex-1">{block.name}</span>
+          <button
+            type="button"
+            onClick={copyToolUse}
+            className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
+          >
+            <CopyIcon className="size-3" />
+          </button>
           {headerActions}
         </button>
         {expanded && (
@@ -79,6 +127,11 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
   }
 
   if (block.type === 'tool_result') {
+    const copyToolResult = async (e: React.MouseEvent) => {
+      e.stopPropagation()
+      const text = `[tool_result]\n${block.content.map(blockToText).join('\n')}`
+      try { await navigator.clipboard.writeText(text) } catch {}
+    }
     return (
       <div className="mt-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
         <button
@@ -88,6 +141,13 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
           {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
           <FileTextIcon className="size-3 flex-shrink-0" />
           <span className="truncate flex-1">tool result</span>
+          <button
+            type="button"
+            onClick={copyToolResult}
+            className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
+          >
+            <CopyIcon className="size-3" />
+          </button>
           {headerActions}
         </button>
         {expanded && (

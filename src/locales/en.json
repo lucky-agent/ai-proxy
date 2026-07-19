@@ -253,12 +253,33 @@
     "newChat": "New chat",
     "empty": "No conversations yet",
     "deleteSession": "Delete session",
-    "deleteRequest": "Delete request"
+    "deleteRequest": "Delete request",
+    "model": "Model",
+    "groupBy": "Grouped by",
+    "source": "Source",
+    "turns": "Turns",
+    "turnsValue": "{{count}} requests",
+    "firstChunk": "First token",
+    "totalTime": "Duration"
   },
   "aiView": {
     "jumpToProxy": "View in proxy",
+    "copyCurl": "Copy as cURL",
     "viewMarkdown": "Render Markdown",
-    "viewRaw": "View raw"
+    "viewRaw": "View raw",
+    "thinking": "Thinking",
+    "toolFilterAll": "All",
+    "toolFilterNoTools": "Chat Only",
+    "toolFilterLabel": "Tools",
+    "toolCallInput": "Input",
+    "toolCallResult": "Result",
+    "toolCallExpandAll": "Expand all",
+    "toolCallCollapse": "Collapse",
+    "toolCallSkippedBefore": "Skipped before",
+    "toolCallSkippedMiddle": "Skipped in middle",
+    "toolCallSkippedClickHint": "click to switch",
+    "toolCallTextHidden": "Text messages collapsed",
+    "toolCallsSummary": "{{count}} call(s) · {{reqs}} request(s)"
   },
   "requestEditor": {
     "params": "Params",
@@ -277,6 +298,7 @@
     "password": "Password",
     "token": "Token",
     "bodyFormat": "Format",
+    "bodyFormatAuto": "Auto",
     "bodyFormatJson": "JSON",
     "bodyFormatXml": "XML",
     "bodyFormatText": "Text",
