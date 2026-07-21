@@ -104,6 +104,8 @@ impl State {
         self.read_settings.read().expect("settings lock")
     }
 
+
+
     pub(crate) fn event_channel(&self) -> Option<Channel<ProxyEvent>> {
         self.event_channel
             .read()

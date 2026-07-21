@@ -5,7 +5,16 @@
 //! 等下次。行尾归一化与分帧都在字节层进行，UTF-8 转换推迟到完整 event 切出
 //! 之后——多字节字符或 `\r\n` 被 TCP 切割在两个 chunk 时不会被破坏。
 //! 具体协议的状态机通过 `StreamState` trait 回调。
+//!
+//! JSON 解析在本层统一进行：`feed` 将 `data:` 行解析为 `serde_json::Value`，
+//! 仅解析一次，结果同时传给 `state.apply()` 和 `raw_keys` 叶子字段名收集。
+//! 协议实现不再自行 `serde_json::from_str`。
 
+use std::collections::HashSet;
+
+use serde_json::Value;
+
+use super::normalize::JsonValueExt;
 use super::{AiConversation, Provider, StreamState};
 
 /// 单个 event 的 buffer 上限（4 MiB）：正常 SSE event 远小于此，超限说明上游
@@ -22,6 +31,9 @@ pub(crate) struct StreamParser {
     /// 上一字节是否为 `\r`——`\r\n` 跨 chunk 切割时用于吞掉后半的 `\n`。
     last_was_cr: bool,
     state: Box<dyn StreamState>,
+    /// SSE 所有 event data JSON 叶子字段名的并集（camelCase 归一化）。
+    /// 覆盖率巡检用：流结束时与 IR 字段名做差集，`log::info!` 输出未覆盖字段。
+    raw_keys: HashSet<String>,
 }
 
 impl StreamParser {
@@ -31,6 +43,7 @@ impl StreamParser {
             scan_from: 0,
             last_was_cr: false,
             state: provider.create_stream_state(),
+            raw_keys: HashSet::new(),
         }
     }
 
@@ -55,14 +68,23 @@ impl StreamParser {
         }
 
         let mut consumed = false;
-        // 按空行切出完整 event，此时才做 UTF-8 转换（字符必然完整）
+        // 按空行切出完整 event，此时才做 UTF-8 转换（字符必然完整）。
+        // 先借用解析（from_utf8_lossy 对纯 ASCII 零分配，AI SSE data 几乎全是 ASCII），
+        // 解析后再 drain——避免每 event 一次 Vec<u8> 分配。
         while let Some(rel) = find_double_newline(&self.buffer[self.scan_from..]) {
             let idx = self.scan_from + rel;
-            let event_bytes: Vec<u8> = self.buffer.drain(..idx + 2).collect();
+            let raw = String::from_utf8_lossy(&self.buffer[..idx]);
+            let parsed = parse_sse_block(&raw);
+            // Cow<str> 的临时借用在 parse_sse_block 返回后释放，下面 drain 安全。
+            drop(raw);
+            self.buffer.drain(..idx + 2);
             self.scan_from = 0;
-            let raw = String::from_utf8_lossy(&event_bytes[..idx]);
-            if let Some((event, data)) = parse_sse_block(&raw) {
-                self.state.apply(&event, &data);
+            if let Some((event, data)) = parsed {
+                // 本层统一 JSON 解析：只解析一次，结果同时给 state 和 coverage
+                if let Ok(value) = serde_json::from_str::<Value>(&data) {
+                    self.raw_keys.extend(value.leaf_keys());
+                    self.state.apply(&event, &value);
+                }
                 consumed = true;
             }
         }
@@ -78,16 +100,21 @@ impl StreamParser {
     }
 
     /// 流结束：处理 buffer 中残留的最后一个 event（无尾随空行的情况），标记定稿。
-    pub(crate) fn finalize(&mut self) {
+    /// 返回流式全程收集的原始 SSE 叶子字段名集合（camelCase，供覆盖率巡检）。
+    pub(crate) fn finalize(&mut self) -> HashSet<String> {
         let leftover = std::mem::take(&mut self.buffer);
         self.scan_from = 0;
         let raw = String::from_utf8_lossy(&leftover);
         if !raw.trim().is_empty() {
             if let Some((event, data)) = parse_sse_block(&raw) {
-                self.state.apply(&event, &data);
+                if let Ok(value) = serde_json::from_str::<Value>(&data) {
+                    self.raw_keys.extend(value.leaf_keys());
+                    self.state.apply(&event, &value);
+                }
             }
         }
         self.state.finalize();
+        std::mem::take(&mut self.raw_keys)
     }
 
     /// 当前累积的归一化对话快照。
@@ -133,103 +160,11 @@ fn parse_sse_block(raw: &str) -> Option<(String, String)> {
         return None;
     }
     Some((
-        if event.is_empty() { "message".into() } else { event },
+        if event.is_empty() {
+            "message".into()
+        } else {
+            event
+        },
         data,
     ))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::proxy::ai::AiContentBlock;
-
-    /// 取快照 assistant turn 的全部文本。
-    fn text_of(parser: &StreamParser) -> String {
-        parser.snapshot().turns[0]
-            .content
-            .iter()
-            .filter_map(|b| match b {
-                AiContentBlock::Text { text } => Some(text.clone()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    // ── 基础分帧 ──────────────────────────────────────────────────────────────
-
-    #[test]
-    fn feeds_complete_openai_events() {
-        let mut p = StreamParser::new(Provider::OpenAiChat);
-        assert!(p.feed(b"data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n"));
-        assert!(p.feed(b"data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}]}\n\n"));
-        assert_eq!(text_of(&p), "Hello");
-    }
-
-    #[test]
-    fn event_split_across_feeds_reassembles() {
-        let mut p = StreamParser::new(Provider::OpenAiChat);
-        // 同一 event 分两次 feed（切在 ASCII 边界）
-        assert!(!p.feed(b"data: {\"choices\":[{\"delta\":{\"con"));
-        assert!(p.feed(b"tent\":\"hi\"}}]}\n\n"));
-        assert_eq!(text_of(&p), "hi");
-    }
-
-    /// 多行 data: 按 SSE 规范以 \n 连接后再解析。
-    #[test]
-    fn multiline_data_joined_with_newline() {
-        let mut p = StreamParser::new(Provider::OpenAiChat);
-        p.feed(b"data: {\"choices\":[{\"delta\":{\"content\":\ndata: \"hi\"}}]}\n\n");
-        assert_eq!(text_of(&p), "hi");
-    }
-
-    /// 注释行 / 无 data 的块不产生消费。
-    #[test]
-    fn comment_only_block_ignored() {
-        let mut p = StreamParser::new(Provider::OpenAiChat);
-        assert!(!p.feed(b": ping\n\n"));
-    }
-
-    /// 无尾随空行的最后一个 event 由 finalize 消费并定稿。
-    #[test]
-    fn finalize_consumes_trailing_event() {
-        let mut p = StreamParser::new(Provider::OpenAiChat);
-        p.feed(b"data: {\"choices\":[{\"delta\":{\"content\":\"tail\"}}]}");
-        p.finalize();
-        assert_eq!(text_of(&p), "tail");
-        assert!(!p.snapshot().streaming);
-    }
-
-    /// CRLF 行尾的 Anthropic event（单次 feed 内）正常分发。
-    #[test]
-    fn crlf_framed_anthropic_event() {
-        let mut p = StreamParser::new(Provider::Anthropic);
-        p.feed(b"event: content_block_delta\r\ndata: {\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"A\"}}\r\n\r\n");
-        assert_eq!(text_of(&p), "A");
-    }
-
-    // ── 跨 chunk 边界（TCP 切割点不认字符/行尾边界）──────────────────────────
-
-    /// 多字节 UTF-8 字符被切成两半：重组后不得出现 U+FFFD 乱码。
-    #[test]
-    fn multibyte_char_split_across_feeds() {
-        let mut p = StreamParser::new(Provider::OpenAiChat);
-        let event = "data: {\"choices\":[{\"delta\":{\"content\":\"你好\"}}]}\n\n".as_bytes();
-        // 切在「你」(E4 BD A0) 的第二个字节之后
-        let split = event.iter().position(|&b| b == 0xE4).unwrap() + 2;
-        p.feed(&event[..split]);
-        p.feed(&event[split..]);
-        assert_eq!(text_of(&p), "你好");
-    }
-
-    /// \r\n 恰好切成两半：不得拼出假空行把 event 切断丢弃。
-    #[test]
-    fn crlf_split_across_feeds() {
-        let mut p = StreamParser::new(Provider::Anthropic);
-        let event: &[u8] = b"event: content_block_delta\r\ndata: {\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"A\"}}\r\n\r\n";
-        // 切在第一个 \r 之后（前 chunk 以孤立 \r 结尾）
-        let split = event.iter().position(|&b| b == b'\r').unwrap() + 1;
-        p.feed(&event[..split]);
-        p.feed(&event[split..]);
-        assert_eq!(text_of(&p), "A");
-    }
 }

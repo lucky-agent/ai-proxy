@@ -55,6 +55,8 @@ function App() {
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   // 从 AI 视图跳转到代理视图并定位某条流量的指令（含自增 nonce）。
   const [proxyJump, setProxyJump] = useState<ProxyJumpTarget | null>(null)
+  // 从 AI 视图导入请求到 new-request 编辑器（含自增 nonce 确保重复触发）
+  const [importEditorTrigger, setImportEditorTrigger] = useState<{ entryId: number; nonce: number } | null>(null)
   // mountedViews: which views have their component currently mounted.
   // Closing a tab = unmount (remove from set) + switch to proxy.
   // Clicking a tab = mount (add to set) + switch to it.
@@ -221,6 +223,13 @@ function App() {
     })
     navigator.clipboard.writeText(curl).catch(() => {})
   }, [entries])
+
+  // AI 气泡右键 → 导入编辑器：切视图并下发导入指令
+  const handleImportToEditor = useCallback((requestId: number) => {
+    setMountedViews(prev => new Set(prev).add('new-request'))
+    setActiveTabId('new-request')
+    setImportEditorTrigger(prev => ({ entryId: requestId, nonce: (prev?.nonce ?? 0) + 1 }))
+  }, [])
   const { theme, setTheme } = useTheme()
   const { proseFontSize, setProseFontSize } = useProseFontSize()
 
@@ -362,7 +371,6 @@ function App() {
                 running={running}
                 status={status}
                 jumpTarget={proxyJump}
-                conversationOf={conversationOf}
               />
             </div>
           )}
@@ -374,6 +382,7 @@ function App() {
                 entries={entries}
                 showSidebar={showSidebar}
                 detailPosition={detailPosition}
+                importEditorTrigger={importEditorTrigger}
               />
             </div>
           )}
@@ -389,6 +398,7 @@ function App() {
                 onDeleteSession={removeSession}
                 onDeleteRequest={removeRequest}
                 onCopyCurl={handleCopyCurl}
+                onImportToEditor={handleImportToEditor}
               />
             </div>
           )}

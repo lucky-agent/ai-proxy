@@ -68,7 +68,6 @@ export function useProxyEvents() {
             requestQuery: query_params,
             decrypted,
             requestContentType: event.content_type,
-            requestContentLength: event.content_length,
             status: null,
             responseTimestamp: null,
             durationMs: null,
@@ -76,9 +75,7 @@ export function useProxyEvents() {
             responseBody: '',
             responseChunks: [],
             responseContentType: undefined,
-            responseContentLength: undefined,
             error: null,
-            aiHint: event.ai_hint ?? 'none',
           })
           triggerUpdate()
           break
@@ -105,7 +102,6 @@ export function useProxyEvents() {
             entry.durationMs = duration_ms
             entry.responseHeaders = headers
             entry.responseContentType = event.content_type
-            entry.responseContentLength = event.content_length
             entriesRef.current.set(id, entry)
           }
           triggerUpdate()

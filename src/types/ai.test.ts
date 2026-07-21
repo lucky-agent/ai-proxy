@@ -1,22 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { isAiProvider, type AiHint } from './ai'
+import { isAiProvider } from './ai'
 
-describe('AiHint 类型 guard', () => {
-  it('识别 none / candidate 字符串', () => {
-    const a: AiHint = 'none'
-    const b: AiHint = 'candidate'
-    expect(a).toBe('none')
-    expect(b).toBe('candidate')
-  })
-
-  it('识别 provider 对象', () => {
-    const c: AiHint = { provider: 'openai' }
-    expect(c).toEqual({ provider: 'openai' })
-  })
-
-  it('isAiProvider 校验合法 provider', () => {
+describe('isAiProvider 类型 guard', () => {
+  it('识别合法 provider', () => {
     expect(isAiProvider('openai')).toBe(true)
     expect(isAiProvider('anthropic')).toBe(true)
+    expect(isAiProvider('gemini')).toBe(true)
+    expect(isAiProvider('openai-responses')).toBe(true)
+  })
+
+  it('非 provider 字符串返回 false', () => {
+    expect(isAiProvider('none')).toBe(false)
+    expect(isAiProvider('candidate')).toBe(false)
     expect(isAiProvider('gpt')).toBe(false)
+    expect(isAiProvider('')).toBe(false)
   })
 })

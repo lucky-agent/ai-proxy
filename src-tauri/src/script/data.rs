@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 
-use rama::http::body::CollectOptions;
-use rama::http::body::util::BodyExt;
 use rama::http::{Body, Method, Request, Response, StatusCode, header};
 use rama::net::uri::Uri;
 use serde::{Deserialize, Serialize};
 
-use crate::utils::buf_pool::BODY_CAPTURE_LIMIT;
+use crate::utils::buf_pool;
 
 use super::engine;
 
@@ -73,17 +71,18 @@ impl ResponseData {
 
 /// 收集 rama Body 的所有 chunk，返回 UTF-8 字符串。
 /// body 超过收集上限时返回 `Err(重组后的原始 body)`，调用方应跳过脚本原样转发。
+///
+/// 委托给 [`buf_pool::collect_body`]，复用同一套 capped-collect 逻辑。
 pub async fn collect_body_str(body: Body) -> Result<String, Body> {
-    match body
-        .collect_with(CollectOptions::new().with_max_size(BODY_CAPTURE_LIMIT))
-        .await
-    {
-        Ok(collected) => Ok(String::from_utf8_lossy(&collected.to_bytes()).into_owned()),
-        Err(err) if err.is_cap_reached() => Err(err
-            .into_full_body()
-            .expect("cap reached implies forwardable remainder")),
+    match buf_pool::collect_body(body).await {
+        buf_pool::CollectedBody::Full(bytes) => {
+            Ok(String::from_utf8_lossy(&bytes).into_owned())
+        }
+        buf_pool::CollectedBody::Capped { body, .. } => Err(body),
         // 流错误：保留已读部分（与旧行为一致——忽略出错的 chunk）
-        Err(err) => Ok(String::from_utf8_lossy(&err.bytes_read()).into_owned()),
+        buf_pool::CollectedBody::Error { prefix, .. } => {
+            Ok(String::from_utf8_lossy(&prefix).into_owned())
+        }
     }
 }
 

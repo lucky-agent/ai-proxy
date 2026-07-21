@@ -114,13 +114,12 @@
   --badge-patch: oklch(0.55 0.18 290);
   --badge-head: oklch(0.5 0.06 220);
   --badge-options: oklch(0.5 0.12 250);
-  --badge-connect: oklch(0.55 0.16 260);
-  --badge-bypass: oklch(0.5 0.08 180);
   --badge-success: oklch(0.55 0.22 150);
   --badge-redirect: oklch(0.6 0.2 85);
-  --badge-client-err: oklch(0.53 0.24 25);
-  --badge-server-err: oklch(0.5 0.25 25);
+  --badge-client-error: oklch(0.53 0.24 25);
+  --badge-server-error: oklch(0.5 0.25 25);
   --badge-error: oklch(0.5 0.25 25);
+  --badge-pending: oklch(0.5 0.06 100);
   --scrollbar-thumb: oklch(0.717 0 0);
   --scrollbar-thumb-hover: oklch(0.595 0 0);
   --scrollbar-track: transparent;
@@ -177,13 +176,12 @@
   --badge-patch: oklch(0.7 0.18 290);
   --badge-head: oklch(0.65 0.06 220);
   --badge-options: oklch(0.63 0.12 250);
-  --badge-connect: oklch(0.7 0.16 260);
-  --badge-bypass: oklch(0.65 0.08 180);
   --badge-success: oklch(0.7 0.22 150);
   --badge-redirect: oklch(0.75 0.2 85);
-  --badge-client-err: oklch(0.65 0.24 25);
-  --badge-server-err: oklch(0.62 0.25 25);
+  --badge-client-error: oklch(0.65 0.24 25);
+  --badge-server-error: oklch(0.62 0.25 25);
   --badge-error: oklch(0.62 0.25 25);
+  --badge-pending: oklch(0.55 0.04 100);
   --scrollbar-thumb: oklch(0.269 0 0);
   --scrollbar-thumb-hover: oklch(0.338 0 0);
   --scrollbar-track: transparent;
@@ -281,12 +279,12 @@
   display: none;
 }
 
-/* shiki 代码高亮 */
-.shiki-root {
+/* react-shiki 代码高亮 */
+.shiki-body {
   font-size: var(--text-prose-md, 0.8125rem);
   line-height: 1.5;
 }
-.shiki-root .shiki {
+.shiki-body .rs-root pre {
   background: transparent !important;
   /* 切断对气泡文字色的继承：streamdown 只在 token span 上设 --sdm-c，pre 本身 fallback
      到 inherit。蓝色 user 气泡会继承 text-white，落在亮色 bg-background 白底上隐形。
@@ -298,19 +296,19 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
-.shiki-root .shiki code {
+.shiki-body .rs-root pre code {
   font-family: var(--font-mono, 'Geist Mono', 'Menlo', monospace);
   counter-reset: step;
   counter-increment: step 0;
 }
-.shiki-root .shiki .line {
+.shiki-body .rs-root .line {
   display: block;
   line-height: 1.5;
 }
-.shiki-root .shiki .line:empty {
+.shiki-body .rs-root .line:empty {
   display: none;
 }
-.shiki-root .shiki .line::after {
+.shiki-body .rs-root .line::after {
   content: none;
 }
 
@@ -421,7 +419,7 @@
 }
 .md-content pre { font-size: var(--text-prose-md, 0.8125rem); }
 /* streamdown 代码块 pre 自带 shiki 主题背景（github-dark 为蓝灰 #24292e），与中性灰的
-   wrapper/工具栏浮块色调冲突。与 .shiki-root 同约定：背景强制透明，继承 code-block-body
+   wrapper/工具栏浮块色调冲突。与 .shiki-body 同约定：背景强制透明，继承 code-block-body
    的 bg-background（蓝底暗色气泡则继承半透明黑叠蓝的深蓝卡片） */
 .md-content [data-streamdown="code-block-body"] pre {
   background-color: transparent;
@@ -515,4 +513,17 @@
 }
 .animate-fade-out-overlay {
   animation: fade-out-overlay 0.1s ease-in both;
+}
+
+/* ═══ 列表项选中效果：左侧彩色强调条 + 抬高底色 ═══
+   用法：基础容器加 .list-item-base，选中态加 .list-item-selected。
+   border-left 走 inline style 的 borderLeftWidth 或 Tailwind border-l-[3px] 自由控制宽度；
+   此 class 仅管颜色与背景，避免 tailwind-merge 冲突。 */
+.list-item-base {
+  border-left-style: solid;
+  border-left-color: transparent;
+}
+.list-item-selected {
+  border-left-color: var(--badge-get);
+  background-color: var(--surface-elevated);
 }

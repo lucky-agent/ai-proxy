@@ -1,5 +1,7 @@
 //! 后端 AI 语义归一化引擎。
 
+use serde_json::Value;
+
 pub(crate) mod anthropic;
 pub(crate) mod gemini;
 pub(crate) mod normalize;
@@ -8,14 +10,14 @@ pub(crate) mod openai_responses;
 pub(crate) mod session;
 pub(crate) mod stream;
 
-pub(crate) use normalize::{AiContentBlock, AiConversation, AiTurn, AiUsage};
+pub(crate) use normalize::{AiContentBlock, AiConversation, AiTurn, AiUsage, JsonValueExt};
 
 /// AI 协议完整接口。新增协议只需实现此 trait + 在 Provider 加一个变体。
 pub(crate) trait AiProtocol {
     /// 解析非流式请求体 → turns。
-    fn parse_request(&self, body: &str) -> Option<Vec<AiTurn>>;
+    fn parse_request(&self, root: &Value) -> Option<Vec<AiTurn>>;
     /// 解析非流式响应体 → conversation。
-    fn parse_response_body(&self, body: &str) -> Option<AiConversation>;
+    fn parse_response_body(&self, root: &Value) -> Option<AiConversation>;
     /// 创建流式 SSE 状态机。
     fn create_stream_state(&self) -> Box<dyn StreamState>;
 }
@@ -23,7 +25,7 @@ pub(crate) trait AiProtocol {
 /// 流式 SSE 状态机接口。各协议自行实现，`stream.rs` 只调 trait 方法。
 pub(crate) trait StreamState: Send {
     /// 消纳一个已分帧的 SSE event。
-    fn apply(&mut self, event: &str, data: &str);
+    fn apply(&mut self, event: &str, root: &Value);
     /// 当前累积的归一化对话快照。
     fn snapshot(&self) -> AiConversation;
     /// 流结束：标记定稿。
@@ -71,24 +73,14 @@ impl Provider {
         }
     }
 
-    pub(crate) fn from_str(s: &str) -> Option<Provider> {
-        match s {
-            "openai" => Some(Provider::OpenAiChat),
-            "openai-responses" => Some(Provider::OpenAiResponses),
-            "anthropic" => Some(Provider::Anthropic),
-            "gemini" => Some(Provider::Gemini),
-            _ => None,
-        }
-    }
-
     /// 解析请求体为 turns。
-    pub(crate) fn parse_request(self, body: &str) -> Vec<AiTurn> {
-        self.protocol().parse_request(body).unwrap_or_default()
+    pub(crate) fn parse_request(self, root: &Value) -> Vec<AiTurn> {
+        self.protocol().parse_request(root).unwrap_or_default()
     }
 
     /// 解析非流式响应体为 conversation。
-    pub(crate) fn parse_response_body(self, body: &str) -> Option<AiConversation> {
-        self.protocol().parse_response_body(body)
+    pub(crate) fn parse_response_body(self, root: &Value) -> Option<AiConversation> {
+        self.protocol().parse_response_body(root)
     }
 
     /// 创建流式 SSE 状态机。
@@ -97,8 +89,13 @@ impl Provider {
     }
 }
 
-/// 从 URL 规则的 provider 字符串还原变体。
-/// 无 hint 时返回 None——未命中 URL 规则的不做 AI 解析。
-pub(crate) fn provider_for_request(hint_provider: Option<&str>) -> Option<Provider> {
-    hint_provider.and_then(Provider::from_str)
+impl From<crate::config::AiProvider> for Provider {
+    fn from(p: crate::config::AiProvider) -> Self {
+        match p {
+            crate::config::AiProvider::OpenAI => Provider::OpenAiChat,
+            crate::config::AiProvider::OpenAIResponses => Provider::OpenAiResponses,
+            crate::config::AiProvider::Anthropic => Provider::Anthropic,
+            crate::config::AiProvider::Gemini => Provider::Gemini,
+        }
+    }
 }

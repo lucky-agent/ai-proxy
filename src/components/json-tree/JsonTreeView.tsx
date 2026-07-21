@@ -94,7 +94,7 @@ function TreeNode({
         {expanded ? (
           <span className="text-muted-foreground/70">{openBracket}</span>
         ) : (
-          <span className="text-muted-foreground/70 truncate min-w-0">
+          <span className="text-muted-foreground truncate min-w-0" style={{ opacity: 0.3 }}>
             {`${openBracket} ${previewValue(value)} ${closeBracket}`}
           </span>
         )}

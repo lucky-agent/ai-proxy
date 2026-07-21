@@ -22,7 +22,6 @@ use mitm::{http_connect_proxy, new_http_mitm_proxy};
 use state::State;
 
 pub(crate) mod ai;
-pub(crate) mod ai_hint;
 pub(crate) mod cert;
 pub(crate) mod client;
 pub(crate) mod ctx;

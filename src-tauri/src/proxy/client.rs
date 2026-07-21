@@ -61,8 +61,8 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
 
     // capped_body 非 None 表示 body 超过收集上限：仅记录前缀，原样转发完整流。
     let (body_bytes, capped_body) = match crate::utils::buf_pool::collect_body(body).await {
-        Ok(buf_pool::CollectedBody::Full(bytes)) => (bytes, None),
-        Ok(buf_pool::CollectedBody::Capped { prefix, body }) => {
+        buf_pool::CollectedBody::Full(bytes) => (bytes, None),
+        buf_pool::CollectedBody::Capped { prefix, body } => {
             log::warn!(
                 "[probe] {} request body exceeds capture limit, logging {} bytes prefix only",
                 ctx.request_id(),
@@ -70,10 +70,10 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
             );
             (prefix, Some(body))
         }
-        Err(err) => {
+        buf_pool::CollectedBody::Error { error, .. } => {
             return Ok(parser::error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                err.to_string(),
+                error.to_string(),
             ));
         }
     };
@@ -92,8 +92,7 @@ pub(crate) async fn http_mitm_proxy(req: Request) -> Result<Response, Infallible
     // 仅 origin-form 且非 CONNECT 隧道时才是直接访问本服务。
     // absolute-form（如 `GET http://host/path`）是正向代理请求，应转发上游。
     if !from_connect_tunnel && !req.uri().is_absolute() {
-        let (_, body) = req.into_parts();
-        return Ok(parser::direct_response(&ctx, body));
+        return Ok(parser::direct_response(&ctx, req.into_body()));
     }
 
     // ---- forward to upstream ----
@@ -208,15 +207,18 @@ pub(crate) fn build_upstream_service(
     upstream_proxy: bool,
     skip_tls_verify: bool,
 ) -> BoxService<Request, Response, rama::error::BoxError> {
-    use std::collections::HashMap;
-    use std::sync::{LazyLock, Mutex};
+    use std::sync::OnceLock;
 
-    static CACHE: LazyLock<
-        Mutex<HashMap<(bool, bool), BoxService<Request, Response, rama::error::BoxError>>>,
-    > = LazyLock::new(|| Mutex::new(HashMap::new()));
+    /// 用两位 bool 索引 4 种组合，一次写入后无锁命中。
+    fn cache_key(up: bool, skip: bool) -> usize {
+        ((up as usize) << 1) | (skip as usize)
+    }
 
-    let key = (upstream_proxy, skip_tls_verify);
-    if let Some(svc) = CACHE.lock().unwrap().get(&key) {
+    static CACHE: [OnceLock<BoxService<Request, Response, rama::error::BoxError>>; 4] =
+        [OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new()];
+
+    let idx = cache_key(upstream_proxy, skip_tls_verify);
+    if let Some(svc) = CACHE[idx].get() {
         return svc.clone();
     }
 
@@ -259,6 +261,6 @@ pub(crate) fn build_upstream_service(
         .into_layer(client)
         .boxed();
 
-    CACHE.lock().unwrap().insert(key, svc.clone());
-    svc
+    // get_or_init：多个请求竞争时只有第一个构建，其余等待后复用。
+    CACHE[idx].get_or_init(|| svc).clone()
 }

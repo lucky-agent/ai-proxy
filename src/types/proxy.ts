@@ -1,4 +1,4 @@
-import type { AiHint, AiConversation, AiUsage, AiTurn } from '@/types/ai'
+import type { AiConversation, AiUsage, AiTurn } from '@/types/ai'
 
 export interface RequestEvent {
   id: number
@@ -9,8 +9,6 @@ export interface RequestEvent {
   query_params?: Record<string, string>
   decrypted: boolean
   content_type?: string
-  content_length?: number
-  ai_hint?: AiHint
 }
 
 export interface ResponseEvent {
@@ -20,7 +18,6 @@ export interface ResponseEvent {
   duration_ms: number
   headers: Record<string, string>
   content_type?: string
-  content_length?: number
 }
 
 export interface ResponseChunkEvent {
@@ -48,8 +45,6 @@ export type ProxyEvent =
       headers: Record<string, string>
       decrypted: boolean
       content_type?: string
-      content_length?: number
-      ai_hint?: AiHint
     }
   | { type: 'request_chunk'; id: number; chunk: string }
   | {
@@ -60,7 +55,6 @@ export type ProxyEvent =
       duration_ms: number
       headers: Record<string, string>
       content_type?: string
-      content_length?: number
     }
   | { type: 'response_chunk'; id: number; chunk: string }
   | { type: 'error'; id: number; error: string }
@@ -79,7 +73,6 @@ export type ProxyEvent =
       scope_host: string
       request_ids: number[]
       usage_total: AiUsage
-      turn_count: number
       match_reason: string
       /** 会话标题：来自首请求响应的 {"title": "..."}，无则缺省 */
       title?: string
@@ -107,7 +100,6 @@ export interface TrafficEntry {
   requestBody: string | null
   requestQuery?: Record<string, string>
   requestContentType?: string
-  requestContentLength?: number
   status: number | null
   responseTimestamp: number | null
   durationMs: number | null
@@ -115,8 +107,6 @@ export interface TrafficEntry {
   responseBody: string | null
   responseChunks: ChunkRecord[]
   responseContentType?: string
-  responseContentLength?: number
   error: string | null
   decrypted?: boolean
-  aiHint: AiHint
 }

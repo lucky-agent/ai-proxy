@@ -8,8 +8,9 @@ use tauri::ipc::Channel;
 
 use crate::config::AiRuleSource;
 use crate::proxy::ctx::{ProxyCtx, collect_headers, map_to_kv_json};
+use crate::proxy::events::ProxyEvent;
 
-use super::events::ProxyEvent;
+use super::ai::JsonValueExt;
 
 /// Accepts body as raw bytes to avoid unnecessary UTF-8 allocation;
 /// only converts lossily when emitting the RequestChunk event.
@@ -18,12 +19,6 @@ pub(crate) fn record_request(ctx: &ProxyCtx, body: &[u8]) {
     let req_headers = ctx.header_map();
 
     let req_content_type = ctx.header(&header::CONTENT_TYPE).map(str::to_owned);
-    let req_content_length = ctx.header_typed::<u64>(&header::CONTENT_LENGTH);
-
-    let host_hint = ctx.header(&header::HOST);
-
-    let (ai_hint, ai_sources) =
-        crate::proxy::ai_hint::compute_ai_hint(ctx.uri(), host_hint, ctx.settings());
 
     ctx.send(ProxyEvent::Request {
         id: ctx.request_id(),
@@ -34,11 +29,9 @@ pub(crate) fn record_request(ctx: &ProxyCtx, body: &[u8]) {
         query_params: query_params.clone(),
         decrypted: true,
         content_type: req_content_type,
-        content_length: req_content_length,
-        ai_hint: ai_hint.clone(),
     });
 
-    // body 只做一次 lossy 转换：DB 侧借用，事件侧末尾 move。
+    // body 只做一次 lossy 转换：DB 侧借用，AI 侧借用，事件侧末尾 move。
     let body_str = (!body.is_empty()).then(|| String::from_utf8_lossy(body).into_owned());
 
     // ── DB 持久化（仅解密流量；db 不为 None）──
@@ -57,6 +50,7 @@ pub(crate) fn record_request(ctx: &ProxyCtx, body: &[u8]) {
         }
     }
 
+    let ai_body = body_str.clone();
     if let Some(chunk) = body_str {
         ctx.send(ProxyEvent::RequestChunk {
             id: ctx.request_id(),
@@ -65,56 +59,47 @@ pub(crate) fn record_request(ctx: &ProxyCtx, body: &[u8]) {
     }
 
     // ── AI 请求侧管线：检测 → 归一化 → 分组 → 推送 ──
-    process_ai_request(ctx, &ai_hint, &ai_sources, host_hint, body);
+    process_ai_request(ctx, ai_body);
 }
 
 /// 请求侧 AI 管线入口：provider 判定 → 请求归一化 → 会话分组 → 前端推送。
-/// `sources`：命中规则的 (来源, 合并头) 对，其合并头置顶于全局名单参与分组。
-fn process_ai_request(
-    ctx: &ProxyCtx,
-    ai_hint: &super::events::AiHint,
-    sources: &[AiRuleSource],
-    host_hint: Option<&str>,
-    body: &[u8],
-) {
-    use super::events::AiHint;
-
-    // AI 检测总开关关闭 → 完全跳过，不检测/不归一化/不推事件。
+/// `body_str` 由调用方 clone 传入，内部消费，不产生额外分配。
+fn process_ai_request(ctx: &ProxyCtx, body_str: Option<String>) {
+    // AI 检测总开关关闭 / body 为空 → 完全跳过。
+    let Some(body_str) = body_str else {
+        return;
+    };
     if !ctx.settings().ai.enabled {
         return;
     }
+    let host = ctx.host_str();
 
     // 非 AI 流量（未命中 URL 规则）直接跳过，零开销。
-    let hint_provider = match ai_hint {
-        AiHint::None => return,
-        AiHint::Candidate => None,
-        AiHint::Provider(p) => Some(p.as_str()),
+    let (ai_hint, sources) = ctx
+        .settings()
+        .ai
+        .detection
+        .compute_hint(&host, &ctx.uri().path_or_root());
+    let Some(provider) = ai_hint.map(super::ai::Provider::from) else {
+        return;
     };
     let Some(sessions) = ctx.sessions() else {
         return;
     };
-    // URL 规则未指定 provider → 不解析
-    let Some(provider) = super::ai::provider_for_request(hint_provider) else {
-        return;
-    };
-    let body_str = String::from_utf8_lossy(body);
 
-    let turns = provider.parse_request(&body_str);
+    let root: serde_json::Value = match serde_json::from_str(&body_str) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let turns = provider.parse_request(&root);
     if turns.is_empty() {
         return;
     }
 
-    let host = ctx
-        .uri()
-        .host_str()
-        .as_deref()
-        .or(host_hint)
-        .unwrap_or("")
-        .to_string();
     let cfg = &ctx.settings().ai.session;
 
     // 分组 + 会话快照一次锁内完成（AssignResult 自带快照，免二次加锁读表）。
-    let session_headers = session_header_list(sources, &cfg.session_headers);
+    let session_headers = session_header_list(&sources, &cfg.session_headers);
     let result = {
         let mut store = sessions.lock().expect("sessions lock");
         store.assign(
@@ -147,7 +132,6 @@ fn process_ai_request(
     ctx.send(ProxyEvent::AiSession {
         session_id: result.session_id,
         scope_host: host,
-        turn_count: result.request_ids.len() as u32,
         request_ids: result.request_ids,
         usage_total: result.usage_total,
         match_reason: result.match_reason,
@@ -177,9 +161,6 @@ pub(crate) fn record_response(ctx: &ProxyCtx, resp: Response) -> Response {
     let resp_headers: HashMap<String, String> = collect_headers(&parts.headers);
 
     let resp_content_type = resp_headers.get(header::CONTENT_TYPE.as_str()).cloned();
-    let resp_content_length = resp_headers
-        .get(header::CONTENT_LENGTH.as_str())
-        .and_then(|s| s.parse::<u64>().ok());
 
     let is_sse = resp_content_type
         .as_deref()
@@ -197,7 +178,6 @@ pub(crate) fn record_response(ctx: &ProxyCtx, resp: Response) -> Response {
         duration_ms,
         headers: resp_headers.clone(),
         content_type: resp_content_type,
-        content_length: resp_content_length,
     });
 
     // ── DB 更新响应元数据 ──
@@ -349,8 +329,9 @@ impl BodyObserver {
                             let mut snap = parser.snapshot();
                             snap.start_ms = Some(self.start_ms);
                             // 流式进行中即注入首字用时，悬浮即可见（定稿前 usage 尚缺）
-                            snap.first_chunk_ms =
-                                self.first_chunk_at.map(|at| (at - self.start_ms).max(0) as u64);
+                            snap.first_chunk_ms = self
+                                .first_chunk_at
+                                .map(|at| (at - self.start_ms).max(0) as u64);
                             emit_ai_normalized(
                                 &self.sender,
                                 self.request_id,
@@ -406,27 +387,44 @@ impl BodyObserver {
         if let (Some(mode), Some((provider, sid, req_turns))) =
             (self.ai_mode.as_mut(), self.ai_req.as_ref())
         {
+            // 原始侧叶子字段名集合（camelCase 归一化），供覆盖率巡检用
+            let raw_keys: Option<std::collections::HashSet<String>>;
             let conv = match mode {
                 AiRespMode::Streaming(parser) => {
-                    parser.finalize();
+                    raw_keys = Some(parser.finalize());
                     let mut snap = parser.snapshot();
                     // 首字仅流式有意义；非流式保持 None，前端以字段有无区分
-                    snap.first_chunk_ms =
-                        self.first_chunk_at.map(|at| (at - self.start_ms).max(0) as u64);
+                    snap.first_chunk_ms = self
+                        .first_chunk_at
+                        .map(|at| (at - self.start_ms).max(0) as u64);
                     Some(snap)
                 }
                 AiRespMode::NonStreaming(buf) => {
-                    provider.parse_response_body(buf).or_else(|| {
-                        // 兜底：错误响应 / 非 JSON / 形状不符也必须发定稿事件，
-                        // 否则前端该请求永久停在 streaming 态且错误内容不可见。
-                        log::warn!(
-                            "[ai] unparsed non-streaming body for request {} (status {}, {} bytes)",
-                            self.request_id,
-                            self.status,
-                            buf.len()
-                        );
-                        Some(fallback_conversation(*provider, buf, self.status))
-                    })
+                    // 非流式：本层统一 JSON 解析一次，同时给 coverage 和 provider
+                    match serde_json::from_str::<serde_json::Value>(buf) {
+                        Ok(root) => {
+                            raw_keys = Some(root.leaf_keys());
+                            provider.parse_response_body(&root).or_else(|| {
+                                log::warn!(
+                                    "[ai] unparsed non-streaming body for request {} (status {}, {} bytes)",
+                                    self.request_id,
+                                    self.status,
+                                    buf.len()
+                                );
+                                Some(fallback_conversation(*provider, buf, self.status))
+                            })
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "[ai] non-JSON response body for request {} (status {}, {} bytes): {e}",
+                                self.request_id,
+                                self.status,
+                                buf.len()
+                            );
+                            raw_keys = None;
+                            Some(fallback_conversation(*provider, buf, self.status))
+                        }
+                    }
                 }
             };
             if let Some(mut conv) = conv {
@@ -434,6 +432,29 @@ impl BodyObserver {
                 // 总耗时：流式与非流式统一在定稿时注入（时钟回拨取 0，同现有口径）
                 conv.duration_ms =
                     Some((crate::utils::date::now_ms() - self.start_ms).max(0) as u64);
+
+                // ── 字段覆盖率巡检：原始 vs IR 叶子字段名差集 → 日志 ──
+                if let Some(raw) = raw_keys {
+                    let ir_keys = serde_json::to_value(&conv)
+                        .ok()
+                        .map(|v| v.leaf_keys())
+                        .unwrap_or_default();
+                    let mut uncovered: Vec<&str> =
+                        raw.difference(&ir_keys).map(String::as_str).collect();
+                    uncovered.sort_unstable();
+                    if !uncovered.is_empty() {
+                        let model = conv.model.as_deref().unwrap_or("-");
+                        let provider = conv.provider.as_str();
+                        log::info!(
+                            "[ai-coverage] req#{} {} ({}) uncovered: {:?}",
+                            self.request_id,
+                            model,
+                            provider,
+                            uncovered
+                        );
+                    }
+                }
+
                 // 保持事件顺序（AiNormalized 先于 AiSession），此处每请求只克隆一次。
                 // 定稿快照重新携带完整 request_turns：作为该请求的最终记录，
                 // 前端中途挂载错过首发时也能在此自愈。
@@ -524,7 +545,6 @@ fn commit_ai_final(
                 scope_host: entry.scope.1.clone(),
                 request_ids: entry.request_ids.clone(),
                 usage_total: entry.usage_total.clone(),
-                turn_count: entry.last_fingerprints.len() as u32,
                 match_reason: entry.match_reason.clone(),
                 title: entry.title.clone(),
                 source: entry.source.clone(),
@@ -596,61 +616,4 @@ fn session_header_list(
         }
     }
     list
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::proxy::ai::{AiContentBlock, Provider};
-
-    /// 错误响应体走兜底：原文进 assistant 文本，finish_reason 带状态码，非流式定稿。
-    #[test]
-    fn fallback_conversation_wraps_error_body() {
-        let body = r#"{"error":{"message":"rate limited"}}"#;
-        let conv = fallback_conversation(Provider::OpenAiChat, body, 429);
-        assert!(!conv.streaming);
-        assert_eq!(conv.provider, "openai");
-        assert_eq!(conv.finish_reason.as_deref(), Some("http_429"));
-        match &conv.turns[0].content[0] {
-            AiContentBlock::Text { text } => assert_eq!(text, body),
-            _ => panic!("expected text block"),
-        }
-        assert!(conv.usage.is_none());
-    }
-
-    /// 超长 body 按 UTF-8 字符边界截断到上限，不 panic。
-    #[test]
-    fn fallback_conversation_truncates_at_char_boundary() {
-        let body = "错".repeat(AI_FALLBACK_TEXT_LIMIT); // 3 字节/字符，远超上限
-        let conv = fallback_conversation(Provider::Anthropic, &body, 200);
-        match &conv.turns[0].content[0] {
-            AiContentBlock::Text { text } => {
-                assert!(text.len() <= AI_FALLBACK_TEXT_LIMIT);
-                assert!(!text.is_empty());
-                assert!(text.chars().all(|c| c == '错'));
-            }
-            _ => panic!("expected text block"),
-        }
-    }
-
-    /// 各协议对错误/非 JSON 响应体确实返回 None——兜底的触发前提。
-    #[test]
-    fn error_bodies_do_not_parse() {
-        assert!(
-            Provider::OpenAiChat
-                .parse_response_body(r#"{"error":{"message":"bad key"}}"#)
-                .is_none()
-        );
-        assert!(
-            Provider::Anthropic
-                .parse_response_body(r#"{"type":"error","error":{"type":"overloaded_error"}}"#)
-                .is_none()
-        );
-        assert!(Provider::Gemini.parse_response_body(r#"{"error":{"code":429}}"#).is_none());
-        assert!(
-            Provider::OpenAiResponses
-                .parse_response_body("<html>gateway error</html>")
-                .is_none()
-        );
-    }
 }

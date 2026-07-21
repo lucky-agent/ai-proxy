@@ -14,7 +14,13 @@ import { Empty, EmptyTitle } from '@/components/ui/empty'
 import { Badge } from '@/components/ui/badge'
 import type { TrafficEntry } from '@/types/proxy'
 import { statusCategory, formatDuration, formatTime, formatCurl } from '@/lib/format'
+import { METHOD_BG_COLORS } from '@/lib/http-constants'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+
+const METHOD_COLOR_VAR = (method: string) => {
+  const v = (METHOD_BG_COLORS as Record<string, string>)[method.toUpperCase()]
+  return v ?? 'var(--badge-get)'
+}
 import { cn } from '@/lib/utils'
 
 export type ListEntry = TrafficEntry
@@ -248,12 +254,13 @@ export default function RequestList({
               <ContextMenuTrigger>
                 <div
                   className={cn(
-                    'grid text-prose-md border-b border-surface-elevated/50 cursor-pointer transition-colors hover:bg-surface-elevated/50 border-l-2',
-                    entry.id === selectedId
-                      ? 'bg-primary/10 border-primary'
-                      : 'border-transparent'
+                    'grid text-prose-md border-b border-surface-elevated/50 cursor-pointer transition-colors hover:bg-surface-elevated/50 list-item-base',
+                    entry.id === selectedId && 'list-item-selected'
                   )}
-                  style={rowStyle}
+                  style={{
+                    ...rowStyle,
+                    borderLeftWidth: 3,
+                  }}
                   onClick={() => onSelectEntry(entry.id)}>
                   <div className="px-2 py-2 min-w-0 tabular-nums text-ui-xs text-muted-foreground text-left">
                     {entry.requestNumber}
@@ -272,9 +279,9 @@ export default function RequestList({
                     <Badge
                       className="rounded font-semibold uppercase"
                       style={{
-                        color: `var(--badge-${entry.method.toLowerCase()})`,
-                        background: `color-mix(in oklch, var(--badge-${entry.method.toLowerCase()}) 10%, transparent)`,
-                        borderColor: `color-mix(in oklch, var(--badge-${entry.method.toLowerCase()}) 20%, transparent)`,
+                        color: METHOD_COLOR_VAR(entry.method),
+                        background: `color-mix(in oklch, ${METHOD_COLOR_VAR(entry.method)} 10%, transparent)`,
+                        borderColor: `color-mix(in oklch, ${METHOD_COLOR_VAR(entry.method)} 20%, transparent)`,
                       }}>
                       {entry.method}
                     </Badge>

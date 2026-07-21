@@ -158,11 +158,18 @@ export default function RequestTabBar({
         {tabs.map(tab => {
           const isActive = tab.id === activeTabId
           return (
-            <button
+            <div
               key={tab.id}
-              type="button"
+              role="tab"
+              tabIndex={0}
               data-tab-id={tab.id}
               onClick={() => onActivate(tab.id)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onActivate(tab.id)
+                }
+              }}
               className={cn(
                 'group/tab relative flex shrink-0 items-center gap-1.5 h-8 max-w-[160px] px-3',
                 'text-xs border-r border-border cursor-pointer select-none scroll-mx-[68px]',
@@ -198,7 +205,7 @@ export default function RequestTabBar({
               >
                 <XIcon className="size-2.5" />
               </button>
-            </button>
+            </div>
           )
         })}
 

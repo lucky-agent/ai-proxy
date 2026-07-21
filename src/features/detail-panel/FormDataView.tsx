@@ -209,7 +209,7 @@ function MultipartPartCard({ part }: { part: FormField }) {
                 </TooltipContent>
               </Tooltip>
             </div>
-            {highlightedBody ? <div className='shiki-root whitespace-pre-wrap break-all overflow-x-auto px-2.5 py-1.5' dangerouslySetInnerHTML={{ __html: highlightedBody }} /> : <pre className='whitespace-pre-wrap break-all px-2.5 py-1.5 text-foreground/80 font-mono'>{part.value}</pre>}
+            {highlightedBody ? <div className='shiki-body whitespace-pre-wrap break-all overflow-x-auto px-2.5 py-1.5'>{highlightedBody}</div> : <pre className='whitespace-pre-wrap break-all px-2.5 py-1.5 text-foreground/80 font-mono'>{part.value}</pre>}
           </div>
         </div>
       </CollapsibleContent>

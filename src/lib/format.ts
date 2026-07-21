@@ -10,6 +10,36 @@ export function formatDuration(ms: number | null): string {
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
 }
+
+/** 字节数人性化展示：B / KB / MB。仅当 bytes > 0 时返回有效字符串，否则返回空。 */
+export function formatBodySize(bytes: number | undefined | null): string {
+  if (bytes == null || bytes <= 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1).replace(/\.0$/, '')} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')} MB`
+}
+
+/** Token 数量格式化：中文用万/亿，英文用 K/M/B。保留 1 位小数，末尾零省略。缩略值前缀 ≈。 */
+export function formatTokenCount(n: number | null | undefined, locale: string = 'en'): string {
+  if (n == null) return '-'
+  const isZh = locale === 'zh'
+  if (isZh) {
+    if (n >= 1_0000_0000) return `≈${(n / 1_0000_0000).toFixed(1).replace(/\.0$/, '')} 亿`
+    if (n >= 1_0000) return `≈${(n / 1_0000).toFixed(1).replace(/\.0$/, '')} 万`
+    return n.toLocaleString()
+  }
+  // en: K / M / B
+  if (n >= 1_000_000_000) return `≈${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`
+  if (n >= 1_000_000) return `≈${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (n >= 1_000) return `≈${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+  return n.toLocaleString()
+}
+
+/** Token 精确值（带千分位），作为 tooltip 内容 */
+export function formatTokenExact(n: number | null | undefined): string {
+  if (n == null) return '-'
+  return n.toLocaleString()
+}
 export function formatTime(ts: number | null): string {
   if (ts === null) return ''
   return new Date(ts).toLocaleTimeString()

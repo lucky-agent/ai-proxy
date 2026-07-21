@@ -111,7 +111,6 @@ export function useAiSessions() {
           title: event.title ?? prev?.title,
           requestIds: event.request_ids,
           usageTotal: event.usage_total ?? EMPTY_USAGE,
-          turnCount: event.turn_count,
           matchReason: event.match_reason,
           // 来源归属同 title：缺省时保留已确认的值
           source: event.source ?? prev?.source,
@@ -134,7 +133,6 @@ export function useAiSessions() {
             scopeHost: '',
             requestIds: [event.id],
             usageTotal: EMPTY_USAGE,
-            turnCount: 0,
             matchReason: '',
             conversations: {},
           }

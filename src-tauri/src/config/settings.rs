@@ -100,7 +100,18 @@ impl Default for ScriptConfig {
     }
 }
 
-/// AI 流量检测配置
+/// AI 厂商标识。用于 URL 规则匹配和前端展示。
+/// 序列化为小写：`"openai"` / `"openai-responses"` / `"anthropic"` / `"gemini"`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AiProvider {
+    OpenAI,
+    #[serde(rename = "openai-responses")]
+    OpenAIResponses,
+    Anthropic,
+    Gemini,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AiDetectionConfig {
     /// URL glob 规则列表，首条命中即止。
@@ -114,6 +125,28 @@ impl Default for AiDetectionConfig {
         Self {
             url_patterns: default_ai_url_rules(),
         }
+    }
+}
+
+impl AiDetectionConfig {
+    /// 遍历 url_patterns，首条 domain_match 命中即止。
+    /// 候选串 = host + path（host 由调用方通过 ctx.host_str() 统一获取，已含 Host 头回退）。
+    /// 返回 (Option<AiProvider>, 命中规则的来源对列表)；未命中为 (None, 空)。
+    pub fn compute_hint(
+        &self,
+        host: &str,
+        path: &str,
+    ) -> (Option<AiProvider>, Vec<AiRuleSource>) {
+        let candidate = format!("{host}{path}");
+        for rule in &self.url_patterns {
+            if rule.url.is_empty() || !rule.enabled {
+                continue;
+            }
+            if domain_match::domain_match(&rule.url, &candidate) {
+                return (rule.provider, rule.sources.clone());
+            }
+        }
+        (None, Vec::new())
     }
 }
 
@@ -135,9 +168,9 @@ pub struct AiUrlRule {
     /// URL glob，候选串为 host + path（已剥 scheme/query/默认端口）
     #[serde(default)]
     pub url: String,
-    /// "openai" | "anthropic" | null；null/非法 → Candidate
+    /// 命中的 AI 厂商；None → Candidate
     #[serde(default)]
-    pub provider: Option<String>,
+    pub provider: Option<AiProvider>,
     /// 该条规则是否启用，缺省视为启用（兼容旧配置）
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -210,31 +243,31 @@ pub(crate) fn default_ai_url_rules() -> Vec<AiUrlRule> {
     vec![
         AiUrlRule {
             url: "api.openai.com/v1/chat/completions".into(),
-            provider: Some("openai".into()),
+            provider: Some(AiProvider::OpenAI),
             enabled: true,
             sources: Vec::new(),
         },
         AiUrlRule {
             url: "api.openai.com/v1/responses".into(),
-            provider: Some("openai-responses".into()),
+            provider: Some(AiProvider::OpenAIResponses),
             enabled: true,
             sources: Vec::new(),
         },
         AiUrlRule {
             url: "api.anthropic.com/v1/messages".into(),
-            provider: Some("anthropic".into()),
+            provider: Some(AiProvider::Anthropic),
             enabled: true,
             sources: Vec::new(),
         },
         AiUrlRule {
             url: "api.deepseek.com/v1/chat/completions".into(),
-            provider: Some("openai".into()),
+            provider: Some(AiProvider::OpenAI),
             enabled: true,
             sources: Vec::new(),
         },
         AiUrlRule {
             url: "*.openai.azure.com/openai/deployments/*/chat/completions".into(),
-            provider: Some("openai".into()),
+            provider: Some(AiProvider::OpenAI),
             enabled: true,
             sources: Vec::new(),
         },
@@ -246,13 +279,13 @@ pub(crate) fn default_ai_url_rules() -> Vec<AiUrlRule> {
         },
         AiUrlRule {
             url: "generativelanguage.googleapis.com/v1beta/models/*".into(),
-            provider: Some("gemini".into()),
+            provider: Some(AiProvider::Gemini),
             enabled: true,
             sources: Vec::new(),
         },
         AiUrlRule {
             url: "generativelanguage.googleapis.com/v1alpha/models/*".into(),
-            provider: Some("gemini".into()),
+            provider: Some(AiProvider::Gemini),
             enabled: true,
             sources: Vec::new(),
         },

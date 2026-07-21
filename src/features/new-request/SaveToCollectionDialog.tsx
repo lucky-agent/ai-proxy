@@ -147,12 +147,12 @@ export function SaveToCollectionDialog({
                     role="button"
                     tabIndex={0}
                     className={cn(
-                      'group flex items-center gap-1.5 pr-1 cursor-pointer rounded-sm text-xs transition-colors',
+                      'group flex items-center gap-1.5 pr-1 cursor-pointer rounded-sm text-xs transition-colors list-item-base',
                       selectedId === f.id
-                        ? 'bg-primary/10 text-foreground'
+                        ? 'list-item-selected text-foreground'
                         : 'text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50',
                     )}
-                    style={{ paddingLeft: `${f.depth * 14 + 8}px` }}
+                    style={{ paddingLeft: `${f.depth * 14 + 8}px`, borderLeftWidth: 3 }}
                     onClick={() => setSelectedId(f.id)}
                     onKeyDown={e => {
                       if (e.key === 'Enter') setSelectedId(f.id)

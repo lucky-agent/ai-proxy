@@ -3,8 +3,14 @@ import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { statusCategory, formatDuration } from '@/lib/format'
+import { METHOD_BG_COLORS } from '@/lib/http-constants'
 import type { TrafficEntry } from '@/types/proxy'
 import { Badge } from '@/components/ui/badge'
+
+const METHOD_COLOR_VAR = (method: string) => {
+  const v = (METHOD_BG_COLORS as Record<string, string>)[method.toUpperCase()]
+  return v ?? 'var(--badge-get)'
+}
 
 export default function SummaryBar({ entry, onClose, showUriTooltip = true }: { entry: TrafficEntry; onClose?: () => void; showUriTooltip?: boolean }) {
   const { t } = useTranslation()
@@ -15,9 +21,9 @@ export default function SummaryBar({ entry, onClose, showUriTooltip = true }: { 
       <Badge
         className="shrink-0 rounded font-semibold uppercase"
         style={{
-          color: `var(--badge-${entry.method.toLowerCase()})`,
-          background: `color-mix(in oklch, var(--badge-${entry.method.toLowerCase()}) 10%, transparent)`,
-          borderColor: `color-mix(in oklch, var(--badge-${entry.method.toLowerCase()}) 20%, transparent)`,
+          color: METHOD_COLOR_VAR(entry.method),
+          background: `color-mix(in oklch, ${METHOD_COLOR_VAR(entry.method)} 10%, transparent)`,
+          borderColor: `color-mix(in oklch, ${METHOD_COLOR_VAR(entry.method)} 20%, transparent)`,
         }}>
         {entry.method}
       </Badge>

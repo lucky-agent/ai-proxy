@@ -1,7 +1,6 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue, memo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { TrafficEntry, ProxyJumpTarget } from '@/types/proxy'
-import type { AiConversation } from '@/types/ai'
 import { extractHost, classifyEntry, type TypeFilter } from '@/lib/format'
 import { buildFullUrl } from '@/lib/http-constants'
 import DomainSidebar from './DomainSidebar'
@@ -21,10 +20,9 @@ interface Props {
   onAutoOpenDetail: () => void
   typeFilter: TypeFilter
   jumpTarget?: ProxyJumpTarget | null
-  conversationOf?: (id: number) => AiConversation | undefined
 }
 
-export default function TrafficLog({ entries, showSidebar, detailPosition, onAutoOpenDetail, typeFilter, jumpTarget, conversationOf }: Props) {
+export default function TrafficLog({ entries, showSidebar, detailPosition, onAutoOpenDetail, typeFilter, jumpTarget }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
   const [sortColumn, setSortColumn] = useState<SortColumn>(null)
@@ -144,11 +142,15 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
 
   const selected = entries.find(e => e.id === selectedId)
 
+  // 延迟 DetailPanel 的 entry 更新：选中高亮立即生效，DetailPanel 在下一空闲帧渲染
+  const deferredSelected = useDeferredValue(selected)
+
   const handleSelectEntry = useCallback(
     (id: number) => {
       setSelectedId(id)
       if (detailPosition === 'hidden') {
-        onAutoOpenDetail()
+        // 先让行高亮渲染一帧，再打开 detail 面板——否则布局重排阻塞高亮绘制
+        setTimeout(() => onAutoOpenDetail(), 0)
       }
     },
     [detailPosition, onAutoOpenDetail]
@@ -208,7 +210,7 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
     />
   )
 
-  const detailPanel = <DetailPanel entry={selected} conversation={selected ? conversationOf?.(selected.id) : undefined} onClose={handleCloseDetail} />
+  const detailPanel = <MemoDetailPanel entry={deferredSelected} onClose={handleCloseDetail} />
 
   // Inner content: varies by detailPosition.
   const mainContent = (() => {
@@ -291,3 +293,5 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
     </div>
   )
 }
+
+const MemoDetailPanel = memo(DetailPanel)

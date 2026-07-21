@@ -5,6 +5,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+import { cn } from '@/lib/utils'
 
 interface Props {
   domains: [string, number][]
@@ -55,11 +56,13 @@ export default function DomainSidebar({
           {pinned.map(([host, count]) => (
           <div
             key={host}
-            className={`flex items-center gap-1 pl-7 pr-2 py-1.5 text-xs cursor-pointer transition-colors border-b border-surface-elevated/30 ${
+            className={cn(
+              'flex items-center gap-1 pl-7 pr-2 py-1.5 text-xs cursor-pointer transition-colors border-b border-surface-elevated/30 list-item-base',
               selectedDomain === host
-                ? 'bg-surface-elevated text-foreground'
+                ? 'list-item-selected text-foreground'
                 : 'hover:bg-surface-elevated/50 text-muted-foreground'
-            }`}
+            )}
+            style={{ borderLeftWidth: 3 }}
             onClick={() => onSelectDomain(host)}>
             <Tooltip>
               <TooltipTrigger className="flex-1 truncate text-left">
@@ -86,11 +89,13 @@ export default function DomainSidebar({
         {/* 全部 */}
         <Collapsible open={!listCollapsed} onOpenChange={(v) => setListCollapsed(!v)}>
           <div
-            className={`flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+            className={cn(
+              'flex items-center gap-2 px-3 py-1.5 text-xs transition-colors list-item-base',
               !selectedDomain
-                ? 'bg-surface-elevated text-foreground'
+                ? 'list-item-selected text-foreground'
                 : 'hover:bg-surface-elevated/50 text-muted-foreground'
-            }`}
+            )}
+            style={{ borderLeftWidth: 3 }}
           >
             <CollapsibleTrigger
               className="shrink-0 p-0 rounded hover:bg-surface-elevated/50 transition-colors"
@@ -111,11 +116,13 @@ export default function DomainSidebar({
           {domains.map(([host, count]) => (
             <div
               key={host}
-              className={`flex items-center gap-1 pl-7 pr-2 py-1.5 text-xs cursor-pointer transition-colors border-b border-surface-elevated/30 group ${
+              className={cn(
+                'flex items-center gap-1 pl-7 pr-2 py-1.5 text-xs cursor-pointer transition-colors border-b border-surface-elevated/30 group list-item-base',
                 selectedDomain === host
-                  ? 'bg-surface-elevated text-foreground'
+                  ? 'list-item-selected text-foreground'
                   : 'hover:bg-surface-elevated/50 text-muted-foreground'
-              }`}
+              )}
+              style={{ borderLeftWidth: 3 }}
               onClick={() => onSelectDomain(host)}>
               <span className="flex-1 truncate" title={host}>
                 {host}

@@ -39,13 +39,11 @@ export interface AiConversation {
   startMs?: number
 }
 
-export type AiProvider = 'openai' | 'anthropic'
-
-/** 镜像后端 AiHint 枚举（`proxy.ts` 仍依赖） */
-export type AiHint = 'none' | 'candidate' | { provider: string }
+/** 镜像后端 AiProvider 枚举 */
+export type AiProvider = 'openai' | 'openai-responses' | 'anthropic' | 'gemini'
 
 export function isAiProvider(s: string): s is AiProvider {
-  return s === 'openai' || s === 'anthropic'
+  return s === 'openai' || s === 'openai-responses' || s === 'anthropic' || s === 'gemini'
 }
 
 /** 前端会话状态：由 useAiSessions 从 AiNormalized / AiSession 事件累积。 */
@@ -57,7 +55,6 @@ export interface AiSessionState {
   /** 组内请求 id，有序 */
   requestIds: number[]
   usageTotal: AiUsage
-  turnCount: number
   /** 归组依据：`header:<name>` / `prefix` / `new` / `usage` */
   matchReason: string
   /** 来源归属（客户端名）：后端按命中的合并头确认，无则缺省 */

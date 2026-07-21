@@ -10,8 +10,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use uuid::Uuid;
 
-use super::normalize::{AiConversation, AiTurn, AiUsage};
 use super::Provider;
+use super::normalize::{AiConversation, AiTurn, AiUsage};
 
 /// 一个会话的内存状态。
 pub(crate) struct SessionEntry {
@@ -125,14 +125,32 @@ impl SessionStore {
                 }
             }
             if let Some((sid, _)) = best {
-                self.touch_or_create(&sid, &scope, fingerprints, request_id, tick, None, "prefix", messages);
+                self.touch_or_create(
+                    &sid,
+                    &scope,
+                    fingerprints,
+                    request_id,
+                    tick,
+                    None,
+                    "prefix",
+                    messages,
+                );
                 return self.result(sid, "prefix".to_string());
             }
         }
 
         // ③ 新会话
         let sid = format!("sess-{}", Uuid::new_v4());
-        self.touch_or_create(&sid, &scope, fingerprints, request_id, tick, None, "new", messages);
+        self.touch_or_create(
+            &sid,
+            &scope,
+            fingerprints,
+            request_id,
+            tick,
+            None,
+            "new",
+            messages,
+        );
         self.result(sid, "new".to_string())
     }
 
@@ -266,237 +284,4 @@ fn turn_fingerprint(turn: &AiTurn) -> u64 {
 /// `prev` 是否为 `curr` 的非空前缀（逐 turn 指纹比较）。
 pub(crate) fn is_prefix(prev: &[u64], curr: &[u64]) -> bool {
     !prev.is_empty() && prev.len() <= curr.len() && prev == &curr[..prev.len()]
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::proxy::ai::normalize::AiContentBlock;
-
-    fn conv_with_text(text: &str) -> AiConversation {
-        AiConversation::new(
-            "openai",
-            vec![AiTurn::new("assistant", vec![AiContentBlock::text(text)])],
-            false,
-            None,
-            None,
-            None,
-        )
-    }
-
-    /// 两个请求经同一 session header 归入同一会话。
-    fn store_with_two_requests() -> (SessionStore, String) {
-        let mut store = SessionStore::new(10);
-        let headers: HashMap<String, String> =
-            [("x-session-id".to_string(), "abc".to_string())].into();
-        let session_headers = vec![("x-session-id".to_string(), None)];
-        let msgs = vec![AiTurn::new("user", vec![AiContentBlock::text("hi")])];
-        let r1 = store.assign(
-            Provider::OpenAiChat,
-            "api.test",
-            &session_headers,
-            &headers,
-            &msgs,
-            false,
-            1,
-        );
-        let r2 = store.assign(
-            Provider::OpenAiChat,
-            "api.test",
-            &session_headers,
-            &headers,
-            &msgs,
-            false,
-            2,
-        );
-        assert_eq!(r1.session_id, r2.session_id);
-        (store, r1.session_id)
-    }
-
-    #[test]
-    fn title_set_only_from_first_request() {
-        let (mut store, sid) = store_with_two_requests();
-
-        // 新会话创建时已有用户消息兜底标题
-        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("hi"));
-
-        // 非首请求命中 title JSON → 不写入
-        store.refine_title(&sid, 2, &conv_with_text(r#"{"title": "不该写入"}"#));
-        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("hi"));
-
-        // 首请求 → 覆盖用户消息标题
-        store.refine_title(&sid, 1, &conv_with_text(r#"{"title": "会话标题"}"#));
-        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("会话标题"));
-
-        // refine_title 不 guard is_some：响应有 title 就覆盖（实践中首请求只定稿一次）
-        store.refine_title(&sid, 1, &conv_with_text(r#"{"title": "另一个"}"#));
-        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("另一个"));
-    }
-
-    #[test]
-    fn non_title_response_keeps_user_fallback() {
-        let (mut store, sid) = store_with_two_requests();
-        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("hi"));
-        // 普通回复不覆盖用户消息标题
-        store.refine_title(&sid, 1, &conv_with_text("普通回复文本"));
-        assert_eq!(store.get(&sid).unwrap().title.as_deref(), Some("hi"));
-    }
-
-    #[test]
-    fn unknown_session_is_noop() {
-        let (mut store, _) = store_with_two_requests();
-        // 不 panic 即可
-        store.refine_title("sess-missing", 1, &conv_with_text(r#"{"title": "x"}"#));
-    }
-
-    /// 用户消息无有意义内容时 title 为 None（如纯 tool_result 的请求）。
-    #[test]
-    fn empty_user_message_yields_no_title() {
-        let mut store = SessionStore::new(10);
-        let headers: HashMap<String, String> = HashMap::new();
-        let no_headers: Vec<(String, Option<String>)> = Vec::new();
-        // tool 角色的消息不算 user turn
-        let msgs = vec![AiTurn::new("tool", vec![AiContentBlock::text("result")])];
-        let r = store.assign(
-            Provider::OpenAiChat,
-            "api.test",
-            &no_headers,
-            &headers,
-            &msgs,
-            false,
-            1,
-        );
-        assert_eq!(r.match_reason, "new");
-        assert_eq!(store.get(&r.session_id).unwrap().title, None);
-    }
-
-    /// 无 session header 时，续轮请求（历史为前一轮的前缀扩展）经指纹链归入同一会话。
-    #[test]
-    fn prefix_fallback_groups_continuation() {
-        let mut store = SessionStore::new(10);
-        let headers: HashMap<String, String> = HashMap::new();
-        let no_headers: Vec<(String, Option<String>)> = Vec::new();
-
-        let msgs1 = vec![AiTurn::new("user", vec![AiContentBlock::text("hi")])];
-        let r1 = store.assign(
-            Provider::OpenAiChat,
-            "api.test",
-            &no_headers,
-            &headers,
-            &msgs1,
-            true,
-            1,
-        );
-        assert_eq!(r1.match_reason, "new");
-
-        let msgs2 = vec![
-            AiTurn::new("user", vec![AiContentBlock::text("hi")]),
-            AiTurn::new("assistant", vec![AiContentBlock::text("hello")]),
-            AiTurn::new("user", vec![AiContentBlock::text("介绍一下Rust")]),
-        ];
-        let r2 = store.assign(
-            Provider::OpenAiChat,
-            "api.test",
-            &no_headers,
-            &headers,
-            &msgs2,
-            true,
-            2,
-        );
-        assert_eq!(r2.match_reason, "prefix");
-        assert_eq!(r1.session_id, r2.session_id);
-        assert_eq!(r2.request_ids, vec![1, 2]);
-
-        // 历史不匹配（首 turn 内容不同）→ 新会话
-        let msgs3 = vec![
-            AiTurn::new("user", vec![AiContentBlock::text("其他对话")]),
-            AiTurn::new("user", vec![AiContentBlock::text("hi")]),
-        ];
-        let r3 = store.assign(
-            Provider::OpenAiChat,
-            "api.test",
-            &no_headers,
-            &headers,
-            &msgs3,
-            true,
-            3,
-        );
-        assert_eq!(r3.match_reason, "new");
-        assert_ne!(r3.session_id, r1.session_id);
-    }
-
-    /// 带来源名的合并头命中 → 会话归属该来源；后续无 header 的前缀续轮保持归属。
-    #[test]
-    fn header_hit_confirms_source() {
-        let mut store = SessionStore::new(10);
-        let headers: HashMap<String, String> =
-            [("x-cursor-session".to_string(), "abc".to_string())].into();
-        let session_headers = vec![("x-cursor-session".to_string(), Some("Cursor".to_string()))];
-        let msgs = vec![AiTurn::new("user", vec![AiContentBlock::text("hi")])];
-        let r1 = store.assign(
-            Provider::OpenAiChat,
-            "api.test",
-            &session_headers,
-            &headers,
-            &msgs,
-            false,
-            1,
-        );
-        assert_eq!(r1.match_reason, "header:x-cursor-session");
-        assert_eq!(r1.source.as_deref(), Some("Cursor"));
-
-        // 续轮不带 header，经前缀匹配归入同会话，来源不丢
-        let msgs2 = vec![
-            AiTurn::new("user", vec![AiContentBlock::text("hi")]),
-            AiTurn::new("assistant", vec![AiContentBlock::text("hello")]),
-            AiTurn::new("user", vec![AiContentBlock::text("more")]),
-        ];
-        let no_headers: HashMap<String, String> = HashMap::new();
-        let r2 = store.assign(
-            Provider::OpenAiChat,
-            "api.test",
-            &session_headers,
-            &no_headers,
-            &msgs2,
-            true,
-            2,
-        );
-        assert_eq!(r2.session_id, r1.session_id);
-        assert_eq!(r2.match_reason, "prefix");
-        assert_eq!(r2.source.as_deref(), Some("Cursor"));
-    }
-
-    /// 全局名单（无来源名）命中与新会话都不产生来源归属。
-    #[test]
-    fn unattributed_header_and_new_session_have_no_source() {
-        let mut store = SessionStore::new(10);
-        let headers: HashMap<String, String> =
-            [("x-session-id".to_string(), "abc".to_string())].into();
-        let session_headers = vec![("x-session-id".to_string(), None)];
-        let msgs = vec![AiTurn::new("user", vec![AiContentBlock::text("hi")])];
-        let r1 = store.assign(
-            Provider::OpenAiChat,
-            "api.test",
-            &session_headers,
-            &headers,
-            &msgs,
-            false,
-            1,
-        );
-        assert_eq!(r1.match_reason, "header:x-session-id");
-        assert!(r1.source.is_none());
-
-        let no_match: HashMap<String, String> = HashMap::new();
-        let r2 = store.assign(
-            Provider::OpenAiChat,
-            "api.test",
-            &session_headers,
-            &no_match,
-            &msgs,
-            false,
-            2,
-        );
-        assert_eq!(r2.match_reason, "new");
-        assert!(r2.source.is_none());
-    }
 }

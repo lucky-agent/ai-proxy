@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { MessageSquareIcon, ChevronRight, ChevronDown, Trash2Icon, CodeIcon, TextIcon, TerminalIcon } from 'lucide-react'
+import { MessageSquareIcon, ChevronRight, ChevronDown, Trash2Icon, CodeIcon, TextIcon, TerminalIcon, SquareArrowOutUpRightIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
@@ -12,7 +12,30 @@ import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { AiSessionState, AiUsage } from '@/types/ai'
 import { cn } from '@/lib/utils'
-import { formatDuration } from '@/lib/format'
+import { formatDuration, formatTokenCount, formatTokenExact } from '@/lib/format'
+import i18n from '@/i18n'
+
+/** Token 展示组件：缩略值 + hover 显示精确千分位数字（仅缩略时显示 tooltip） */
+function TokenValue({ value, className }: { value: number | null | undefined; className?: string }) {
+  const locale = i18n.language?.startsWith('zh') ? 'zh' : 'en'
+  const display = formatTokenCount(value, locale)
+  const exact = formatTokenExact(value)
+  const isAbbreviated = display.startsWith('≈')
+
+  if (!isAbbreviated) return <span className={className}>{display}</span>
+
+  return (
+    <Tooltip delay={200}>
+      <TooltipTrigger
+        render={<span className={cn('cursor-default', className)}>{display}</span>}
+      />
+      <TooltipContent side="top" className="bg-popover text-popover-foreground border border-border text-ui-sm px-2 py-1">
+        <span className="font-mono tabular-nums">{exact}</span>
+        <span className="text-muted-foreground ml-1">tokens</span>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
 
 /** 选中项：仅 sessionId = 选中会话头（合并时间线）；带 requestId = 选中单次请求 */
 export interface AiSelection {
@@ -28,6 +51,8 @@ interface AiSidebarProps {
   onDeleteRequest: (sessionId: string, requestId: number) => void
   /** 复制该请求的 cURL（右键菜单项） */
   onCopyCurl?: (requestId: number) => void
+  /** 导入到编辑器（右键菜单项） */
+  onImportToEditor?: (requestId: number) => void
   /** sessionId → 是否 md 渲染 */
   mdSessions: Record<string, boolean>
   onToggleMd: (sessionId: string) => void
@@ -39,27 +64,28 @@ const TIP_GRID = 'grid grid-cols-[auto_auto] gap-x-5 gap-y-1 text-ui-sm py-0.5'
 
 /** Token 用量行组（Prompt/Completion/Cache Read/Write/Total）；缓存行无值时隐藏 */
 function UsageRows({ usage }: { usage: AiUsage }) {
+  const locale = i18n.language?.startsWith('zh') ? 'zh' : 'en'
   return (
     <>
       <span className="text-muted-foreground">Prompt</span>
-      <span className="text-right font-mono tabular-nums">{usage.promptTokens?.toLocaleString() ?? '-'}</span>
+      <span className="text-right font-mono tabular-nums">{formatTokenCount(usage.promptTokens, locale)}</span>
       <span className="text-muted-foreground">Completion</span>
-      <span className="text-right font-mono tabular-nums">{usage.completionTokens?.toLocaleString() ?? '-'}</span>
+      <span className="text-right font-mono tabular-nums">{formatTokenCount(usage.completionTokens, locale)}</span>
       {usage.cachedTokens != null && (
         <>
           <span className="text-muted-foreground">Cache Read</span>
-          <span className="text-right font-mono tabular-nums">{usage.cachedTokens.toLocaleString()}</span>
+          <span className="text-right font-mono tabular-nums">{formatTokenCount(usage.cachedTokens, locale)}</span>
         </>
       )}
       {usage.cacheCreationTokens != null && (
         <>
           <span className="text-muted-foreground">Cache Write</span>
-          <span className="text-right font-mono tabular-nums">{usage.cacheCreationTokens.toLocaleString()}</span>
+          <span className="text-right font-mono tabular-nums">{formatTokenCount(usage.cacheCreationTokens, locale)}</span>
         </>
       )}
       <span className="font-semibold text-violet-400">Total</span>
       <span className="text-right font-mono tabular-nums font-semibold text-violet-400">
-        {usage.totalTokens?.toLocaleString() ?? '-'}
+        {formatTokenCount(usage.totalTokens, locale)}
       </span>
     </>
   )
@@ -72,6 +98,7 @@ function SessionGroup({
   onDeleteSession,
   onDeleteRequest,
   onCopyCurl,
+  onImportToEditor,
   mdSessions,
   onToggleMd,
 }: {
@@ -81,11 +108,12 @@ function SessionGroup({
   onDeleteSession: (sessionId: string) => void
   onDeleteRequest: (sessionId: string, requestId: number) => void
   onCopyCurl?: (requestId: number) => void
+  onImportToEditor?: (requestId: number) => void
   mdSessions: Record<string, boolean>
   onToggleMd: (sessionId: string) => void
 }) {
   const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const headSelected = selection?.sessionId === session.sessionId && !selection?.requestId
   const total = session.usageTotal.totalTokens
 
@@ -105,9 +133,10 @@ function SessionGroup({
         <ContextMenuTrigger>
           <button
             className={cn(
-              'w-full text-left px-3 py-2.5 transition-colors',
-              headSelected ? 'bg-accent/40' : 'hover:bg-surface-base/50',
+              'w-full text-left px-3 py-2.5 transition-colors list-item-base',
+              headSelected ? 'list-item-selected' : 'hover:bg-surface-base/50',
             )}
+            style={{ borderLeftWidth: 3 }}
             onClick={() => onSelect({ sessionId: session.sessionId })}
           >
             <div className="flex items-center gap-1.5 mb-0.5">
@@ -172,7 +201,11 @@ function SessionGroup({
               </TooltipContent>
             </Tooltip>
             <p className="text-ui-xs text-muted-foreground/50 mt-0.5">
-              {total != null ? `Σ ${total.toLocaleString()} tokens` : '— tokens'}
+              {total != null ? (
+                <TokenValue value={total} className="inline-flex items-center gap-0.5" />
+              ) : (
+                '— tokens'
+              )}
             </p>
           </button>
         </ContextMenuTrigger>
@@ -196,14 +229,15 @@ function SessionGroup({
                 <ContextMenuTrigger>
                   <button
                     className={cn(
-                      'w-full text-left pl-8 pr-3 py-1.5 text-ui-xs font-mono transition-colors',
-                      sel ? 'bg-accent/40 text-foreground' : 'text-muted-foreground hover:bg-surface-base/40',
+                      'w-full text-left pl-8 pr-3 py-1.5 text-ui-xs font-mono transition-colors list-item-base',
+                      sel ? 'list-item-selected text-foreground' : 'text-muted-foreground hover:bg-surface-base/40',
                     )}
+                    style={{ borderLeftWidth: 3 }}
                     onClick={() => onSelect({ sessionId: session.sessionId, requestId: rid })}
                   >
                     <span className="flex items-center gap-1.5 w-full">
                       <span className="cursor-default">
-                        #{i + 1}
+                        {t('aiSidebar.turnLabel', '轮次 {{n}}', { n: i + 1 })}
                       </span>
                       {conv?.model && (
                         <span className="ml-auto">
@@ -218,7 +252,7 @@ function SessionGroup({
                             <TooltipContent side="right" className={TIP_CLASS}>
                               <div className={TIP_GRID}>
                                 <div className="col-span-2 text-ui-xs font-bold tracking-wider text-muted-foreground">
-                                  #{i + 1} · TOKEN
+                                  {t('aiSidebar.turnLabel', '轮次 {{n}}', { n: i + 1 })} · TOKEN
                                 </div>
                                 <UsageRows usage={conv?.usage ?? {}} />
                                 {hasLatency && <div className="col-span-2 border-t border-border/60 my-0.5" />}
@@ -250,7 +284,13 @@ function SessionGroup({
                   {onCopyCurl && (
                     <ContextMenuItem onClick={() => onCopyCurl(rid)}>
                       <TerminalIcon className="size-3.5" />
-                      <span>{t('aiView.copyCurl', '复制为 cURL')}</span>
+                      <span>{t('aiView.copyCurl', '复制 cURL')}</span>
+                    </ContextMenuItem>
+                  )}
+                  {onImportToEditor && (
+                    <ContextMenuItem onClick={() => onImportToEditor(rid)}>
+                      <SquareArrowOutUpRightIcon className="size-3.5" />
+                      <span>{t('aiView.importToEditor', '导入编辑')}</span>
                     </ContextMenuItem>
                   )}
                   <ContextMenuItem variant="destructive" onClick={() => onDeleteRequest(session.sessionId, rid)}>
@@ -267,16 +307,23 @@ function SessionGroup({
   )
 }
 
-export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDeleteRequest, onCopyCurl, mdSessions, onToggleMd }: AiSidebarProps) {
+export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDeleteRequest, onCopyCurl, onImportToEditor, mdSessions, onToggleMd }: AiSidebarProps) {
   const { t } = useTranslation()
+  const locale = i18n.language?.startsWith('zh') ? 'zh' : 'en'
+  const grandTotal = sessions.reduce((sum, s) => sum + (s.usageTotal.totalTokens ?? 0), 0)
 
   return (
     <div className="flex h-full flex-col bg-surface-base/30">
       <div className="flex items-center px-3 py-2">
         <span className="text-ui-xs font-bold uppercase tracking-wider text-muted-foreground">
-          {t('aiSidebar.title', 'AI 会话')}
+          {t('aiSidebar.title', 'AI 对话')}
+          <span className="text-muted-foreground/50 ml-1">({sessions.length})</span>
         </span>
-        <span className="ml-auto text-ui-xs text-muted-foreground/50">{sessions.length}</span>
+        <span className="ml-auto text-ui-xs flex items-center gap-1.5">
+          {grandTotal > 0 && (
+            <TokenValue value={grandTotal} className="font-mono tabular-nums text-violet-400/70" />
+          )}
+        </span>
       </div>
 
       <Separator />
@@ -298,6 +345,7 @@ export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDe
                 onDeleteSession={onDeleteSession}
                 onDeleteRequest={onDeleteRequest}
                 onCopyCurl={onCopyCurl}
+                onImportToEditor={onImportToEditor}
                 mdSessions={mdSessions}
                 onToggleMd={onToggleMd}
               />

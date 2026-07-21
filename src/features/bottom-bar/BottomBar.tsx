@@ -64,7 +64,7 @@ export function BottomBar({
       <Separator orientation="horizontal" className="absolute top-0 left-0 right-0" />
       {/* Left: host sidebar toggle */}
 <Tooltip>
-          <TooltipTrigger className="inline-flex">
+          <TooltipTrigger render={<span className="inline-flex" />}>
             <button
               type="button"
               onClick={onToggleSidebar}
@@ -95,7 +95,7 @@ export function BottomBar({
 
       {/* Center-right: script toggle */}
 <Tooltip>
-          <TooltipTrigger className="inline-flex">
+          <TooltipTrigger render={<span className="inline-flex" />}>
             <button
               type="button"
               onClick={onToggleScript}
@@ -119,7 +119,7 @@ export function BottomBar({
 
       {/* Center-right: SSL toggle */}
 <Tooltip>
-          <TooltipTrigger className="inline-flex">
+          <TooltipTrigger render={<span className="inline-flex" />}>
             <button
               type="button"
               onClick={onToggleSsl}
@@ -143,7 +143,7 @@ export function BottomBar({
 
       {/* Right: detail position toggle */}
       <Tooltip>
-        <TooltipTrigger className="inline-flex">
+        <TooltipTrigger render={<span className="inline-flex" />}>
           <button
             type="button"
             onClick={handleDetailClick}

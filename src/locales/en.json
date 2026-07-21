@@ -39,17 +39,14 @@
     "status": "Status",
     "duration": "Duration",
     "time": "Time",
-    "edited": "Edited",
     "ssl": "SSL",
     "edit": "Edit",
     "repeat": "Repeat",
-    "copyCurl": "Copy as cURL",
+    "copyCurl": "Copy cURL",
     "emptyTitle": "No traffic captured yet.",
-    "emptyHint": "Start the proxy to intercept requests.",
     "pending": "..."
   },
   "detail": {
-    "selectHint": "Select a request to view details",
     "pending": "Pending",
     "headers": "Header",
     "body": "Body",
@@ -67,7 +64,6 @@
     "noFormData": "No form data",
     "formData": "Form-Data",
     "copyUri": "Copy URI",
-    "copyCurl": "Copy as cURL",
     "copied": "Copied",
     "stream": "Stream",
     "streamChunks": "Chunks",
@@ -75,15 +71,11 @@
     "noStreamData": "No stream data",
     "noSseEvents": "No SSE events",
     "streamMerged": "Merged",
-    "mergeFormat": "Format",
     "mergeFormatOpenai": "OpenAI",
+    "mergeFormatAnthropic": "Anthropic",
     "errorStatus": "Error",
     "console": "Console",
-    "noConsole": "No console output",
-    "compare": "AI Compare",
-    "compareIR": "IR",
-    "compareRaw": "Raw JSON",
-    "compareWaiting": "Waiting for normalized data…"
+    "noConsole": "No console output"
   },
   "settings": {
     "title": "Settings",
@@ -117,10 +109,6 @@
     "aiConfig": "AI Detection",
     "quit": "Quit"
   },
-  "toolbar": {
-    "expand": "Expand toolbar",
-    "collapse": "Collapse toolbar"
-  },
   "sendRequest": {
     "title": "New Request",
     "description": "Compose and send a new HTTP request.",
@@ -130,24 +118,19 @@
   },
   "collection": {
     "title": "Collections",
-    "defaultCollection": "Default",
     "newFolder": "New folder",
     "newRequest": "New request",
     "rename": "Rename",
     "duplicate": "Duplicate",
     "delete": "Delete",
-    "deleteConfirm": "Confirm delete?",
-    "renameFolder": "Rename folder",
-    "renameRequest": "Rename request",
     "emptyTree": "No requests yet. Click the buttons above to add.",
     "saveToCollection": "Save to collection",
     "saveToCollectionDesc": "Choose a parent folder for this request.",
     "requestName": "Request name",
     "importCurl": "Import cURL",
-    "copyCurl": "Copy as cURL",
+    "copyCurl": "Copy cURL",
     "curlDialogTitle": "Import cURL",
-    "curlDialogPlaceholder": "Paste cURL command here...",
-    "curlParseError": "Unable to parse cURL command"
+    "curlDialogPlaceholder": "Paste cURL command here..."
   },
   "layout": {
     "hostSidebar": "Host sidebar",
@@ -170,8 +153,7 @@
     "saving": "Saving...",
     "duplicateDomain": "Domain already exists",
     "emptyWhitelist": "No domains yet. Add a domain to see it here.",
-    "toolbarToggle": "SSL Decrypt",
-    "toolbarAddPlaceholder": "Add domain..."
+    "toolbarToggle": "SSL Decrypt"
   },
   "scriptConfig": {
     "title": "Script Config",
@@ -181,27 +163,19 @@
     "scriptCount": "· {{n}}",
     "colEnabled": "On",
     "colName": "Name",
-    "colMethod": "Method",
     "colDomain": "Domain",
     "addScript": "Add Script",
     "placeholderName": "Enter script name",
     "placeholderDomain": "Domain rule (e.g. *.example.com)",
     "delete": "Delete",
     "editScript": "Edit Script",
-    "newScript": "New Script",
-    "saveFirst": "Please save config before editing scripts",
-    "saveEditorFirst": "Please save the script in editor first",
-    "maximize": "Maximize",
-    "restore": "Restore",
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving...",
     "duplicateName": "Script name already exists",
     "nameRequired": "Script name is required",
     "emptyList": "No scripts yet. Add a script to see it here.",
-    "toolbarToggle": "Scripts",
-    "toolbarAddPlaceholder": "Add script...",
-    "toolbarAddDomain": "Domain..."
+    "toolbarToggle": "Scripts"
   },
   "matchTest": {
     "placeholder": "Type a URL to test matching…",
@@ -233,6 +207,7 @@
     "sourcesEmpty": "None configured — sessions group by global merge headers",
     "mergeHeaderGlobal": "Uses global merge headers",
     "providerAuto": "Auto-detect",
+    "back": "Back",
     "duplicateUrl": "This URL rule already exists",
     "emptyList": "No rules yet. Add a rule to see it here.",
     "edit": "Edit",
@@ -250,35 +225,29 @@
   },
   "aiSidebar": {
     "title": "AI Chat",
-    "newChat": "New chat",
     "empty": "No conversations yet",
     "deleteSession": "Delete session",
     "deleteRequest": "Delete request",
     "model": "Model",
     "groupBy": "Grouped by",
-    "source": "Source",
     "turns": "Turns",
     "turnsValue": "{{count}} requests",
+    "turnLabel": "Turn {{n}}",
     "firstChunk": "First token",
     "totalTime": "Duration"
   },
   "aiView": {
+    "waiting": "Waiting for normalized data…",
     "jumpToProxy": "View in proxy",
-    "copyCurl": "Copy as cURL",
-    "viewMarkdown": "Render Markdown",
-    "viewRaw": "View raw",
+    "copyCurl": "Copy cURL",
     "thinking": "Thinking",
     "toolFilterAll": "All",
     "toolFilterNoTools": "Chat Only",
-    "toolFilterLabel": "Tools",
     "toolCallInput": "Input",
     "toolCallResult": "Result",
     "toolCallExpandAll": "Expand all",
     "toolCallCollapse": "Collapse",
-    "toolCallSkippedBefore": "Skipped before",
-    "toolCallSkippedMiddle": "Skipped in middle",
-    "toolCallSkippedClickHint": "click to switch",
-    "toolCallTextHidden": "Text messages collapsed",
+    "importToEditor": "Import to Editor",
     "toolCallsSummary": "{{count}} call(s) · {{reqs}} request(s)"
   },
   "requestEditor": {
@@ -297,13 +266,9 @@
     "username": "Username",
     "password": "Password",
     "token": "Token",
-    "bodyFormat": "Format",
-    "bodyFormatAuto": "Auto",
     "bodyFormatJson": "JSON",
     "bodyFormatXml": "XML",
-    "bodyFormatText": "Text",
-    "bodyFormatUrlencoded": "Form URL-Encoded",
-    "bodyFormatMultipart": "Multipart"
+    "bodyFormatText": "Text"
   },
   "tab": {
     "untitled": "Untitled Request",

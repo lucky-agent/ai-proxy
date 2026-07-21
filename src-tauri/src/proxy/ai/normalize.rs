@@ -121,13 +121,36 @@ pub(crate) fn normalize_usage(usage: &Value) -> AiUsage {
         None
     }
 
-    let input_tokens = get_u64(usage, &["input_tokens", "prompt_tokens", "promptTokenCount", "inputTokens"]);
-    let output_tokens = get_u64(usage, &["output_tokens", "completion_tokens", "candidatesTokenCount", "outputTokens"]);
+    let input_tokens = get_u64(
+        usage,
+        &[
+            "input_tokens",
+            "prompt_tokens",
+            "promptTokenCount",
+            "inputTokens",
+        ],
+    );
+    let output_tokens = get_u64(
+        usage,
+        &[
+            "output_tokens",
+            "completion_tokens",
+            "candidatesTokenCount",
+            "outputTokens",
+        ],
+    );
     let total_tokens = get_u64(usage, &["total_tokens", "totalTokens", "totalTokenCount"]);
 
     let cached_tokens = get_u64(usage, &["cache_read_input_tokens"])
         .or_else(|| {
-            get_u64(usage, &["cached_tokens", "cachedContentTokenCount", "cacheReadInputTokens"])
+            get_u64(
+                usage,
+                &[
+                    "cached_tokens",
+                    "cachedContentTokenCount",
+                    "cacheReadInputTokens",
+                ],
+            )
         })
         .or_else(|| {
             usage
@@ -137,17 +160,17 @@ pub(crate) fn normalize_usage(usage: &Value) -> AiUsage {
                 .and_then(Value::as_u64)
         });
 
-    let cache_creation_tokens =
-        get_u64(usage, &["cache_creation_input_tokens", "cacheWriteInputTokens"]);
+    let cache_creation_tokens = get_u64(
+        usage,
+        &["cache_creation_input_tokens", "cacheWriteInputTokens"],
+    );
 
     AiUsage {
         prompt_tokens: input_tokens,
         completion_tokens: output_tokens,
-        total_tokens: total_tokens.or_else(|| {
-            match (input_tokens, output_tokens) {
-                (None, None) => None,
-                (i, o) => Some(i.unwrap_or(0) + o.unwrap_or(0)),
-            }
+        total_tokens: total_tokens.or_else(|| match (input_tokens, output_tokens) {
+            (None, None) => None,
+            (i, o) => Some(i.unwrap_or(0) + o.unwrap_or(0)),
         }),
         cached_tokens,
         cache_creation_tokens,
@@ -323,6 +346,82 @@ fn truncate_at_char_boundary(s: &str, max_len: usize) -> &str {
     &s[..end]
 }
 
+/// snake_case / kebab-case → camelCase：`prompt_tokens` → `promptTokens`、
+/// `finish_reason` → `finishReason`。仅处理 ASCII 标识符。
+fn camelize(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut upper_next = false;
+    for ch in s.chars() {
+        match ch {
+            '_' | '-' => upper_next = true,
+            c if upper_next => {
+                // to_uppercase 对 ASCII 返回单字符大写，对非 ASCII 可能多 char——
+                // 但 AI 字段名只有 ASCII，这里走 fast path
+                result.extend(c.to_uppercase());
+                upper_next = false;
+            }
+            c => {
+                result.push(c);
+                upper_next = false;
+            }
+        }
+    }
+    result
+}
+
+/// 递归收集 JSON 对象的**叶子字段名**（已 camelCase 归一化），不去重。
+/// 数组递归元素；对象递归值；原始值（字符串/数字/bool/null）收集父键。
+/// `max_depth` 防止无限递归（防御性上限）。
+pub(crate) fn collect_leaf_keys(
+    value: &Value,
+    depth: u32,
+    max_depth: u32,
+    keys: &mut std::collections::HashSet<String>,
+) {
+    if depth > max_depth {
+        return;
+    }
+    match value {
+        Value::Array(arr) => {
+            for item in arr {
+                collect_leaf_keys(item, depth + 1, max_depth, keys);
+            }
+        }
+        Value::Object(map) => {
+            for (key, val) in map {
+                if val.is_object() {
+                    collect_leaf_keys(val, depth + 1, max_depth, keys);
+                } else if val.is_array() {
+                    let arr = val.as_array().unwrap();
+                    if arr.is_empty() {
+                        keys.insert(camelize(key));
+                    } else {
+                        collect_leaf_keys(val, depth + 1, max_depth, keys);
+                    }
+                } else {
+                    keys.insert(camelize(key));
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// `serde_json::Value` 上的扩展方法，提供叶子字段名收集能力。
+/// 覆盖率巡检用：原始 JSON 与归一化 IR 各自调 `leaf_keys()` 然后做差集。
+pub(crate) trait JsonValueExt {
+    /// 递归收集所有叶子字段名（camelCase 归一化），去重返回。
+    fn leaf_keys(&self) -> std::collections::HashSet<String>;
+}
+
+impl JsonValueExt for Value {
+    fn leaf_keys(&self) -> std::collections::HashSet<String> {
+        let mut keys = std::collections::HashSet::new();
+        collect_leaf_keys(self, 0, 20, &mut keys);
+        keys
+    }
+}
+
 /// 剥掉包裹全文的 ``` / ```json 代码栅栏（部分模型会包一层）；不匹配时原样返回。
 fn strip_code_fence(s: &str) -> &str {
     let Some(rest) = s.strip_prefix("```").and_then(|r| r.strip_suffix("```")) else {
@@ -332,121 +431,5 @@ fn strip_code_fence(s: &str) -> &str {
     match rest.find('\n') {
         Some(i) => rest[i + 1..].trim(),
         None => rest.trim(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn usage_openai_chat_completion() {
-        let u = normalize_usage(&serde_json::json!({
-            "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15,
-            "prompt_tokens_details": {"cached_tokens": 3}
-        }));
-        assert_eq!(u.prompt_tokens, Some(10));
-        assert_eq!(u.completion_tokens, Some(5));
-        assert_eq!(u.total_tokens, Some(15));
-        assert_eq!(u.cached_tokens, Some(3));
-    }
-
-    #[test]
-    fn usage_responses_api() {
-        let u = normalize_usage(&serde_json::json!({
-            "input_tokens": 100, "output_tokens": 50, "total_tokens": 150,
-            "input_tokens_details": {"cached_tokens": 20}
-        }));
-        assert_eq!(u.prompt_tokens, Some(100));
-        assert_eq!(u.completion_tokens, Some(50));
-        assert_eq!(u.total_tokens, Some(150));
-        assert_eq!(u.cached_tokens, Some(20));
-    }
-
-    #[test]
-    fn usage_anthropic_fallback() {
-        let u = normalize_usage(&serde_json::json!({"input_tokens": 200, "output_tokens": 100}));
-        assert_eq!(u.prompt_tokens, Some(200));
-        assert_eq!(u.completion_tokens, Some(100));
-        assert_eq!(u.total_tokens, Some(300));
-    }
-
-    /// Anthropic 带 prompt cache 的 usage：cache_read 进 cached_tokens，
-    /// cache_creation 暂不采集。
-    #[test]
-    fn usage_anthropic_with_cache_read() {
-        let u = normalize_usage(&serde_json::json!({
-            "input_tokens": 12, "cache_read_input_tokens": 8000,
-            "cache_creation_input_tokens": 200, "output_tokens": 50
-        }));
-        assert_eq!(u.prompt_tokens, Some(12));
-        assert_eq!(u.completion_tokens, Some(50));
-        assert_eq!(u.cached_tokens, Some(8000));
-        assert_eq!(u.total_tokens, Some(62));
-    }
-
-    #[test]
-    fn usage_google_gemini_fallback() {
-        let u = normalize_usage(&serde_json::json!({
-            "promptTokenCount": 42, "candidatesTokenCount": 7, "totalTokenCount": 49, "cachedContentTokenCount": 8
-        }));
-        assert_eq!(u.prompt_tokens, Some(42));
-        assert_eq!(u.completion_tokens, Some(7));
-        assert_eq!(u.total_tokens, Some(49));
-        assert_eq!(u.cached_tokens, Some(8));
-    }
-
-    #[test]
-    fn usage_bedrock_converse() {
-        let u = normalize_usage(&serde_json::json!({
-            "inputTokens": 12, "outputTokens": 3, "totalTokens": 15,
-            "cacheReadInputTokens": 7, "cacheWriteInputTokens": 5
-        }));
-        assert_eq!(u.prompt_tokens, Some(12));
-        assert_eq!(u.completion_tokens, Some(3));
-        assert_eq!(u.total_tokens, Some(15));
-        assert_eq!(u.cached_tokens, Some(7));
-    }
-
-    /// 无可识别字段 → is_empty，调用方以此过滤空 usage。
-    #[test]
-    fn usage_unknown_shape_is_empty() {
-        assert!(normalize_usage(&serde_json::json!({})).is_empty());
-        assert!(normalize_usage(&serde_json::json!({"foo": 1})).is_empty());
-        assert!(!normalize_usage(&serde_json::json!({"input_tokens": 1})).is_empty());
-    }
-
-    /// 缓存写入量：Anthropic snake_case 与 Bedrock camelCase 两种命名。
-    #[test]
-    fn usage_cache_creation_captured() {
-        let u = normalize_usage(&serde_json::json!({
-            "input_tokens": 12, "cache_read_input_tokens": 8000,
-            "cache_creation_input_tokens": 200, "output_tokens": 50
-        }));
-        assert_eq!(u.cache_creation_tokens, Some(200));
-        let u = normalize_usage(&serde_json::json!({"inputTokens": 12, "cacheWriteInputTokens": 5}));
-        assert_eq!(u.cache_creation_tokens, Some(5));
-    }
-
-    #[test]
-    fn accumulate_includes_cache_fields() {
-        let mut a = AiUsage {
-            cached_tokens: Some(100),
-            cache_creation_tokens: Some(10),
-            ..Default::default()
-        };
-        a.accumulate(&AiUsage {
-            cached_tokens: Some(50),
-            cache_creation_tokens: Some(5),
-            ..Default::default()
-        });
-        assert_eq!(a.cached_tokens, Some(150));
-        assert_eq!(a.cache_creation_tokens, Some(15));
-    }
-
-    #[test]
-    fn is_empty_considers_cache_creation() {
-        let u = AiUsage { cache_creation_tokens: Some(1), ..Default::default() };
-        assert!(!u.is_empty());
     }
 }

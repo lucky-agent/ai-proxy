@@ -65,6 +65,7 @@ export default function RequestPanel({ entry, onTitleClick }: Props) {
       tab={tab}
       onTabChange={setTab}
       tabs={tabs}
+      bodySize={entry?.requestBody?.length}
       onTitleClick={onTitleClick}>
       <RequestPanelContent tab={tab} entry={entry} t={t} />
     </SidePanel>

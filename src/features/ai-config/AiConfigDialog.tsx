@@ -42,8 +42,9 @@ const AI_CHECKBOX =
   'after:-inset-1 data-checked:border-ai-user-bubble data-checked:bg-ai-user-bubble data-checked:text-ai-user-bubble-text dark:data-checked:bg-ai-user-bubble'
 
 function providerDotClass(provider: string | null) {
-  if (provider === 'openai') return 'bg-ai-provider-openai'
+  if (provider === 'openai' || provider === 'openai-responses') return 'bg-ai-provider-openai'
   if (provider === 'anthropic') return 'bg-ai-provider-anthropic'
+  if (provider === 'gemini') return 'bg-ai-provider-gemini'
   return 'border-[1.5px] border-muted-foreground/70'
 }
 

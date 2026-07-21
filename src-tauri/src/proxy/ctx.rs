@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex, OnceLock};
 
+use rama::http::header;
 use rama::http::request::Parts;
-use rama::http::HeaderName;
-use rama::http::{HeaderMap, Method};
+use rama::http::{HeaderMap, HeaderName, Method};
 use rama::net::address::HostWithOptPort;
 use rama::net::uri::Uri;
 use rama::net::{AuthorityInputExt, ProtocolInputExt};
@@ -27,6 +26,7 @@ pub(crate) struct ProxyCtx {
     header_map: OnceLock<HashMap<String, String>>,
     start_ms: i64,
     sender: Option<Channel<ProxyEvent>>,
+    /// 本请求的 Settings 快照（构造时克隆，请求期间稳定不变）。
     settings: Settings,
     /// AI 会话表（proxy 流量有；resend 等场景为 None）。
     sessions: Option<Arc<Mutex<SessionStore>>>,
@@ -162,10 +162,16 @@ impl ProxyCtx {
         self.parts.headers.get(name).and_then(|v| v.to_str().ok())
     }
 
-    /// 读取请求头并解析为目标类型（如 Content-Length → u64）。
-    /// 解析失败返回 None；调用方无需自行 and_then parse。
-    pub(crate) fn header_typed<T: FromStr>(&self, name: &HeaderName) -> Option<T> {
-        self.header(name).and_then(|s| s.parse().ok())
+    /// 从 URI 取 host；若 URI 为 origin-form（MITM 解密后），回退到 Host 请求头。
+    /// 两者都不可用时返回 ""。
+    pub(crate) fn host_str(&self) -> String {
+        self.parts
+            .uri
+            .host_str()
+            .as_deref()
+            .or_else(|| self.header(&header::HOST))
+            .unwrap_or("")
+            .to_string()
     }
 
     /// 解码后的查询参数（惰性解析，多次调用只解析一次）。

@@ -28,7 +28,7 @@ use rama::net::address::HostWithPort;
 use rama::net::uri::Uri;
 
 use super::client::http_mitm_proxy;
-use super::events::{AiHint, ProxyEvent};
+use super::events::ProxyEvent;
 use super::state::{State, ViaConnectTunnel};
 use crate::utils::request_ext::RequestExt;
 
@@ -141,8 +141,6 @@ async fn tunnel_connect_proxy<P>(
             query_params: HashMap::new(),
             decrypted: false,
             content_type: None,
-            content_length: None,
-            ai_hint: AiHint::None,
         })
         .ok();
     }
@@ -167,7 +165,6 @@ async fn tunnel_connect_proxy<P>(
                     duration_ms,
                     headers: HashMap::new(),
                     content_type: None,
-                    content_length: None,
                 })
                 .ok();
             }

@@ -1,4 +1,4 @@
-import { SparklesIcon } from 'lucide-react'
+import { SparklesIcon, ArrowUpIcon, ArrowDownIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useState, useMemo, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { AiSidebar, type AiSelection } from './AiSidebar'
@@ -9,6 +9,7 @@ import type { ToolFilterItem } from './ToolFilterBar'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { usePanelRef } from 'react-resizable-panels'
 import { formatDayTime } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import type { AiConversation, AiSessionState, AiTurn, AiContentBlock } from '@/types/ai'
 
 // ─── 工具调用提取 / 配对 ───────────────────────────────────────────
@@ -92,7 +93,7 @@ function renderConversation(
         <ConversationBubble
           turn={turn}
           isStreaming={turn.role === 'assistant' && isLast && isStreamingReq(requestId)}
-          reqLabel={showLabel ? `#${idx}` : undefined}
+          reqLabel={showLabel ? t('aiSidebar.turnLabel', '轮次 {{n}}', { n: idx }) : undefined}
           onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
           defaultView={mdSessions[selection.sessionId] ? 'md' : 'raw'}
         />
@@ -142,7 +143,7 @@ function renderNoTools(
         <ConversationBubble
           turn={stripped}
           isStreaming={stripped.role === 'assistant' && isLast && isStreamingReq(requestId)}
-          reqLabel={showLabel ? `#${idx}` : undefined}
+          reqLabel={showLabel ? t('aiSidebar.turnLabel', '轮次 {{n}}', { n: idx }) : undefined}
           onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
           defaultView={mdSessions[selection.sessionId] ? 'md' : 'raw'}
         />
@@ -198,7 +199,7 @@ function renderToolCards(
         <ToolCallCard
           key={`card-${requestId}-${block.id}`}
           entry={entry}
-          reqLabel={`#${idx}`}
+          reqLabel={t('aiSidebar.turnLabel', '轮次 {{n}}', { n: idx })}
           defaultExpanded
           onJump={onJumpToProxy ? () => onJumpToProxy(requestId) : undefined}
         />,
@@ -244,9 +245,11 @@ interface AiViewProps {
   onDeleteRequest: (sessionId: string, requestId: number) => void
   /** 右键复制该轮对应请求的 cURL（使用代理记录的原始请求数据） */
   onCopyCurl?: (requestId: number) => void
+  /** 右键导入到新请求编辑器 */
+  onImportToEditor?: (requestId: number) => void
 }
 
-export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, onJumpToProxy, onDeleteSession, onDeleteRequest, onCopyCurl }: AiViewProps) {
+export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, onJumpToProxy, onDeleteSession, onDeleteRequest, onCopyCurl, onImportToEditor }: AiViewProps) {
   const { t } = useTranslation()
   const [selection, setSelection] = useState<AiSelection | null>(null)
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
@@ -314,9 +317,13 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
+  const [atTop, setAtTop] = useState(true)
+  const [atBottom, setAtBottom] = useState(true)
 
   useEffect(() => {
     stickToBottom.current = true
+    setAtTop(true)
+    setAtBottom(true)
   }, [selection])
 
   useEffect(() => {
@@ -324,10 +331,20 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight
   }, [rendered, selectedTools, isNoTools])
 
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
     stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+    setAtTop(el.scrollTop < 4)
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 4)
+  }, [])
+
+  const scrollToTop = () => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  const scrollToBottom = () => {
+    const el = scrollRef.current
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }
 
   const handleToggleAll = useCallback(() => {
@@ -360,10 +377,11 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
   const isAll = !isNoTools && selectedTools.size === 0
 
   return (
-    <ResizablePanelGroup orientation="horizontal" id="ai-view" className="h-full bg-surface-deep">
+    <>
+    <ResizablePanelGroup orientation="horizontal" className="h-full bg-surface-deep">
       <ResizablePanel id="ai-sidebar" defaultSize="22%" minSize="15%" maxSize="40%" collapsible collapsedSize={0} panelRef={aiSidebarPanelRef}>
         <div className="h-full overflow-hidden">
-          <AiSidebar sessions={sessions} selection={selection} onSelect={setSelection} onDeleteSession={handleDeleteSession} onDeleteRequest={handleDeleteRequest} onCopyCurl={onCopyCurl} mdSessions={mdSessions} onToggleMd={toggleMdSession} />
+          <AiSidebar sessions={sessions} selection={selection} onSelect={setSelection} onDeleteSession={handleDeleteSession} onDeleteRequest={handleDeleteRequest} onCopyCurl={onCopyCurl} onImportToEditor={onImportToEditor} mdSessions={mdSessions} onToggleMd={toggleMdSession} />
         </div>
       </ResizablePanel>
 
@@ -382,13 +400,47 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
                 onToggleTool={handleToggleTool}
               />
             )}
-            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-3 p-4">
+            <div className="relative flex-1 group/chat min-h-0">
+            <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 overflow-y-auto space-y-3 p-4">
               {isAll
                 ? renderConversation(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t, conversationOf)
                 : isNoTools
                 ? renderNoTools(rendered, selection, reqIndex, isStreamingReq, mdSessions, onJumpToProxy, t)
                 : renderToolCards(rendered, selectedTools, reqIndex, mdSessions, onJumpToProxy, t)
               }
+            </div>
+
+            {/* 滚到底部 — 右上角，hover 可见 */}
+            <div
+              className={cn(
+                'absolute right-3 top-3 z-10 transition-opacity',
+                atBottom ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/chat:opacity-100 hover:!opacity-100',
+              )}
+            >
+              <button
+                type="button"
+                onClick={scrollToBottom}
+                className="flex items-center justify-center size-8 rounded-full bg-popover/90 border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-popover transition-colors cursor-pointer"
+              >
+                <ArrowDownIcon className="size-4" />
+              </button>
+            </div>
+
+            {/* 滚到顶部 — 右下角，hover 可见 */}
+            <div
+              className={cn(
+                'absolute right-3 bottom-3 z-10 transition-opacity',
+                atTop ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/chat:opacity-100 hover:!opacity-100',
+              )}
+            >
+              <button
+                type="button"
+                onClick={scrollToTop}
+                className="flex items-center justify-center size-8 rounded-full bg-popover/90 border border-border shadow-md text-muted-foreground hover:text-foreground hover:bg-popover transition-colors cursor-pointer"
+              >
+                <ArrowUpIcon className="size-4" />
+              </button>
+            </div>
             </div>
           </div>
         ) : (
@@ -399,5 +451,6 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
         )}
       </ResizablePanel>
     </ResizablePanelGroup>
+    </>
   )
 }

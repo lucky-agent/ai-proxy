@@ -54,13 +54,13 @@ pub async fn resend_request(
         Ok(resp) => {
             let (parts, body) = resp.into_parts();
 
-            let resp_bytes = match crate::utils::buf_pool::collect_body(body)
-                .await
-                .map_err(|e| format!("resend failed: {e:?}"))?
-            {
+            let resp_bytes = match crate::utils::buf_pool::collect_body(body).await {
                 crate::utils::buf_pool::CollectedBody::Full(bytes) => bytes,
                 // 超过收集上限：仅展示前缀，丢弃剩余流
                 crate::utils::buf_pool::CollectedBody::Capped { prefix, .. } => prefix,
+                crate::utils::buf_pool::CollectedBody::Error { error, .. } => {
+                    return Err(format!("resend failed: {error:?}"));
+                }
             };
 
             let resp_body = String::from_utf8_lossy(&resp_bytes);
@@ -85,11 +85,6 @@ pub async fn resend_request(
                     .get("content-type")
                     .and_then(|v| v.to_str().ok())
                     .map(|s| s.to_string()),
-                content_length: parts
-                    .headers
-                    .get("content-length")
-                    .and_then(|v| v.to_str().ok())
-                    .and_then(|s| s.parse::<u64>().ok()),
             });
 
             Ok(ctx.request_id())

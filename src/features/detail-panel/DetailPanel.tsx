@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { TrafficEntry } from '@/types/proxy'
-import type { AiConversation } from '@/types/ai'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import type { PanelImperativeHandle } from 'react-resizable-panels'
 import SummaryBar from './components/SummaryBar'
@@ -13,11 +12,9 @@ interface Props {
   onClose?: () => void
   /** 是否展示左侧请求面板，默认 true。false 时只展示响应面板 */
   showRequest?: boolean
-  /** AI 归一化对话，用于对比视图 */
-  conversation?: AiConversation
 }
 
-export default function DetailPanel({ entry, onClose, showRequest = true, conversation }: Props) {
+export default function DetailPanel({ entry, onClose, showRequest = true }: Props) {
   const requestPanelRef = useRef<PanelImperativeHandle>(null)
   const responsePanelRef = useRef<PanelImperativeHandle>(null)
 
@@ -91,7 +88,7 @@ export default function DetailPanel({ entry, onClose, showRequest = true, conver
       {/* response-only 模式（new-request 响应区）下 URL 已在上方输入框可见，不再弹 tooltip */}
       {entry && <SummaryBar entry={displayEntry} onClose={onClose} showUriTooltip={showRequest} />}
 
-      <ResizablePanelGroup orientation="horizontal" id="detail-panel" className="min-h-0 flex-1">
+      <ResizablePanelGroup key={showRequest ? '2col' : '1col'} orientation="horizontal" id={showRequest ? 'detail-panel' : 'detail-panel-response'} className="min-h-0 flex-1">
         {showRequest && (
           <>
             <ResizablePanel
@@ -117,7 +114,7 @@ export default function DetailPanel({ entry, onClose, showRequest = true, conver
           collapsedSize={0}
           panelRef={responsePanelRef}>
           <div className="flex flex-col min-h-0 min-w-0 h-full overflow-hidden">
-            <ResponsePanel entry={displayEntry} conversation={conversation} onTitleClick={handleResponseTitleClick} />
+            <ResponsePanel entry={displayEntry} onTitleClick={handleResponseTitleClick} />
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

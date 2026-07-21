@@ -2,8 +2,9 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { formatBodySize } from '@/lib/format'
 
-export type PanelTab = 'header' | 'query' | 'body' | 'raw' | 'form' | 'stream' | 'cookies' | 'console' | 'compare'
+export type PanelTab = 'header' | 'query' | 'body' | 'raw' | 'form' | 'stream' | 'cookies' | 'console'
 
 export interface TabDef {
   id: PanelTab
@@ -17,6 +18,7 @@ export default function SidePanel({
   tabs,
   children,
   onTitleClick,
+  bodySize,
 }: {
   title: string
   tab: PanelTab
@@ -24,8 +26,11 @@ export default function SidePanel({
   tabs: TabDef[]
   children: ReactNode
   onTitleClick?: () => void
+  /** body 字节数，用于标题右侧展示，如 "Response (2.4 KB)"。nil / 0 时不展示。 */
+  bodySize?: number | null
 }) {
   const { t } = useTranslation()
+  const sizeLabel = formatBodySize(bodySize)
 
   return (
     <Tabs value={tab} onValueChange={(v) => onTabChange(v as PanelTab)} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -38,6 +43,7 @@ export default function SidePanel({
                 className="px-3 py-1.5 text-xs font-medium text-foreground cursor-pointer hover:bg-surface-elevated/50 rounded transition-colors"
               >
                 {title}
+                {sizeLabel && <span className="ml-0.5 text-muted-foreground font-normal">({sizeLabel})</span>}
               </span>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-ui-sm">
@@ -47,6 +53,7 @@ export default function SidePanel({
         ) : (
           <span className="px-3 py-1.5 text-xs font-medium text-foreground">
             {title}
+            {sizeLabel && <span className="ml-0.5 text-muted-foreground font-normal">({sizeLabel})</span>}
           </span>
         )}
         <TabsList variant="line" className="px-0 rounded-none bg-transparent h-auto">

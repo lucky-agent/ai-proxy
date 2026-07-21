@@ -116,11 +116,11 @@ export function ApiTreeItem({
       <ContextMenuTrigger>
         <div
           className={cn(
-            'group flex items-center gap-1 px-2 py-1 cursor-pointer rounded-sm text-xs transition-colors',
-            isSelected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50',
+            'group flex items-center gap-1 px-2 py-1 cursor-pointer rounded-sm text-xs transition-colors list-item-base',
+            isSelected ? 'list-item-selected text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50',
             contextMenuOpen && 'bg-surface-elevated/50 text-foreground'
           )}
-          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+          style={{ paddingLeft: `${depth * 12 + 8}px`, borderLeftWidth: 3 }}
           onClick={handleClick}
           onDoubleClick={() => setRenaming(true)}
         >

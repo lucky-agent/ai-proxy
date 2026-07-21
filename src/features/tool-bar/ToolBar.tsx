@@ -23,24 +23,21 @@ export function ToolBar({ activeTabId, mountedViews, onViewChange }: ToolBarProp
     <div className="flex w-[42px] shrink-0 flex-col items-center border-r border-border bg-surface-deep py-1.5">
       {VIEW_ITEMS.map(({ id, icon: Icon, labelKey }) => (
         <Tooltip key={id}>
-          <TooltipTrigger className="inline-flex">
-            <button
-              type="button"
-              onClick={() => onViewChange(id)}
-              className={cn(
-                'relative flex h-8 w-8 items-center justify-center rounded-md transition-colors my-0.5',
-                activeTabId === id
-                  ? 'bg-surface-elevated text-foreground'
-                  : mountedViews.has(id)
-                    ? 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
-                    : 'text-muted-foreground/50 hover:bg-surface-elevated/50 hover:text-foreground'
-              )}
-            >
-              <Icon className="size-[18px]" />
-              {activeTabId === id && (
-                <span className="absolute -left-1.5 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-primary" />
-              )}
-            </button>
+          <TooltipTrigger
+            onClick={() => onViewChange(id)}
+            className={cn(
+              'inline-flex relative h-8 w-8 items-center justify-center rounded-md transition-colors my-0.5',
+              activeTabId === id
+                ? 'bg-surface-elevated text-foreground'
+                : mountedViews.has(id)
+                  ? 'text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground'
+                  : 'text-muted-foreground/50 hover:bg-surface-elevated/50 hover:text-foreground'
+            )}
+          >
+            <Icon className="size-[18px]" />
+            {activeTabId === id && (
+              <span className="absolute -left-1.5 top-1/2 -translate-y-1/2 h-4 w-[2px] rounded-full bg-primary" />
+            )}
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8} className="bg-popover text-popover-foreground text-ui-sm">
             {t(labelKey)}

@@ -30,6 +30,8 @@ interface NewRequestViewProps {
   entries: TrafficEntry[]
   showSidebar: boolean
   detailPosition: DetailPosition
+  /** 从 AI 视图导入请求到编辑器（含 nonce 确保重复触发） */
+  importEditorTrigger?: { entryId: number; nonce: number } | null
 }
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
@@ -40,7 +42,7 @@ function serializeCookies(cookies: KeyValuePair[]): string | null {
   return filled.map(c => `${c.key.trim()}=${c.value}`).join('; ')
 }
 
-export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosition }: NewRequestViewProps) {
+export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosition, importEditorTrigger }: NewRequestViewProps) {
   const { t } = useLocale()
   const {
     collections,
@@ -395,6 +397,26 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
       if (saveFeedbackTimer.current) clearTimeout(saveFeedbackTimer.current)
     }
   }, [])
+
+  // 响应从 AI 视图导入请求的触发
+  useEffect(() => {
+    if (!importEditorTrigger) return
+    const entry = entries.find(e => e.id === importEditorTrigger.entryId)
+    if (!entry) return
+    const headerPairs: KeyValuePair[] = Object.entries(entry.requestHeaders).map(([k, v]) => ({ key: k, value: v }))
+    openTab(null, {
+      id: Date.now(),
+      type: 'request',
+      name: entry.uri,
+      method: (entry.method as typeof METHODS[number]) || 'GET',
+      url: entry.uri,
+      params: [],
+      headers: headerPairs,
+      cookies: [],
+      bodyType: 'json',
+      body: entry.requestBody ?? '',
+    })
+  }, [importEditorTrigger])
 
   if (loading) {
     return (
