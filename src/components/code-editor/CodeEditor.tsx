@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { EditorState } from '@codemirror/state'
+import { useEffect, useMemo, useRef } from 'react'
+import { EditorState, type Extension } from '@codemirror/state'
 import {
   EditorView,
   keymap,
@@ -27,6 +27,7 @@ import {
   indentWithTab,
 } from '@codemirror/commands'
 import {
+  autocompletion,
   closeBrackets,
   closeBracketsKeymap,
   completionKeymap,
@@ -45,29 +46,34 @@ interface CodeEditorProps {
   onChange: (value: string) => void
 }
 
+function detectLanguage(content: string): 'json' | 'xml' | null {
+  const trimmed = content.trim()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json'
+  if (trimmed.startsWith('<')) return 'xml'
+  return null
+}
+
 export default function CodeEditor({ value, language, onChange }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
-  const langRef = useRef(language)
-  const extsRef = useRef<any[] | null>(null)
 
-function detectLanguage(content: string): 'json' | 'xml' | null {
-    const trimmed = content.trim()
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json'
-    if (trimmed.startsWith('<')) return 'xml'
-    return null
-  }
+  // Resolve effective language: explicit prop takes priority, auto mode detects from content
+  const effectiveLang =
+    language === 'auto' ? detectLanguage(value) ?? 'text' : language
 
-  // Build extensions set once per language
-  if (extsRef.current === null || langRef.current !== language) {
-    langRef.current = language
-    const effectiveLang = language === 'auto'
-      ? detectLanguage(value) ?? 'text'
-      : language
-    const lang = effectiveLang === 'json' ? jsonLang() : effectiveLang === 'xml' ? xmlLang() : effectiveLang === 'javascript' ? jsLang() : null
-    const exts: any[] = [
+  // Build extensions declaratively — reacts to both language prop and content-driven auto-detection
+  const extensions = useMemo((): Extension[] => {
+    const lang =
+      effectiveLang === 'json'
+        ? jsonLang()
+        : effectiveLang === 'xml'
+          ? xmlLang()
+          : effectiveLang === 'javascript'
+            ? jsLang()
+            : null
+    return [
       lineNumbers(),
       highlightActiveLineGutter(),
       highlightSpecialChars(),
@@ -80,6 +86,7 @@ function detectLanguage(content: string): 'json' | 'xml' | null {
       syntaxHighlighting(classHighlighter),
       bracketMatching(),
       closeBrackets(),
+      autocompletion(),
       rectangularSelection(),
       crosshairCursor(),
       highlightActiveLine(),
@@ -94,20 +101,28 @@ function detectLanguage(content: string): 'json' | 'xml' | null {
         ...lintKeymap,
         indentWithTab,
       ]),
+      ...(lang ? [lang] : []),
       EditorView.theme(
         {
           '&': { height: '100%', backgroundColor: 'transparent' },
-          '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--color-muted-foreground)', border: 'none' },
+          '.cm-gutters': {
+            backgroundColor: 'transparent',
+            color: 'var(--color-muted-foreground)',
+            border: 'none',
+          },
           '.cm-activeLineGutter': { backgroundColor: 'var(--color-surface-elevated)' },
           '.cm-activeLine': { backgroundColor: 'var(--color-surface-elevated)' },
           '.cm-cursor': { borderLeftColor: '#528bff' },
-          '.cm-matchingBracket': { backgroundColor: 'var(--color-surface-elevated)', outline: '1px solid var(--color-muted-foreground)' },
+          '.cm-matchingBracket': {
+            backgroundColor: 'var(--color-surface-elevated)',
+            outline: '1px solid var(--color-muted-foreground)',
+          },
           '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
             backgroundColor: 'var(--color-surface-elevated)',
           },
           '.cm-scroller': {
             fontFamily: 'var(--font-sans, "Geist Variable", "Menlo", monospace)',
-            fontSize: 'var(--text-prose-lg, 0.875rem)', // 14px @scale=1，随「内容字号」设置缩放
+            fontSize: 'var(--text-prose-lg, 0.875rem)',
           },
         },
         { dark: true },
@@ -118,21 +133,16 @@ function detectLanguage(content: string): 'json' | 'xml' | null {
         }
       }),
     ]
-    if (lang) exts.push(lang)
-    extsRef.current = exts
-  }
+  }, [effectiveLang])
 
+  // Create/destroy editor when extensions (language) change
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
-    // Destroy previous view (language switch)
     viewRef.current?.destroy()
 
-    const state = EditorState.create({
-      doc: value,
-      extensions: extsRef.current!,
-    })
+    const state = EditorState.create({ doc: value, extensions })
     const view = new EditorView({ state, parent: container })
     viewRef.current = view
 
@@ -140,9 +150,11 @@ function detectLanguage(content: string): 'json' | 'xml' | null {
       view.destroy()
       viewRef.current = null
     }
-  }, [language])
+    // Only recreate on language/auto-detect change, not on every value change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extensions])
 
-  // Sync external value into the editor
+  // Sync external value into the editor without rebuilding
   useEffect(() => {
     const view = viewRef.current
     if (!view) return

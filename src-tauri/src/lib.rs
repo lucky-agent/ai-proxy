@@ -18,7 +18,7 @@ use crate::commands::{
     move_node, save_request, duplicate_request, save_script_config, save_script_content, save_settings, save_ssl_config, set_locale,
     set_prose_font_size, set_script_enabled, set_ssl_enabled,
     set_theme, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
-    get_ai_config, save_ai_config, test_rule_match,
+    get_ai_config, save_ai_config, set_ai_enabled, test_rule_match, get_backend_memory_stats,
 };
 use crate::config::{Settings, Store};
 
@@ -139,12 +139,14 @@ pub fn run() {
             start_proxy,
             stop_proxy,
             get_status,
+            get_backend_memory_stats,
             open_url,
             get_ssl_config,
             save_ssl_config,
             set_ssl_enabled,
             get_ai_config,
             save_ai_config,
+            set_ai_enabled,
             test_rule_match,
             get_script_config,
             save_script_config,

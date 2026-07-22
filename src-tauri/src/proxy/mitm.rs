@@ -27,10 +27,13 @@ use rama::http::Method;
 use rama::net::address::HostWithPort;
 use rama::net::uri::Uri;
 
-use super::client::http_mitm_proxy;
+use super::client::forward_to_upstream;
 use super::events::ProxyEvent;
+use super::layer::direct::direct_reply_layer;
+use super::layer::script::ScriptLayer;
+use super::layer::traffic_record::TrafficRecorderLayer;
 use super::state::{State, ViaConnectTunnel};
-use crate::utils::request_ext::RequestExt;
+use super::ext::RequestExt;
 
 pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infallible> {
     let start_ts = crate::utils::date::now_ms();
@@ -201,12 +204,18 @@ pub(crate) fn new_http_mitm_proxy()
 -> impl Service<rama::http::Request, Output = rama::http::Response, Error = Infallible> + Clone {
     Arc::new(
         (
+            // HijackLayer must be outermost: direct requests bypass the entire proxy pipeline.
+            direct_reply_layer(),
             MapResponseBodyLayer::new_boxed_streaming_body(),
             TraceLayer::new_for_http(),
             ConsumeErrLayer::default(),
             RemoveResponseHeaderLayer::hop_by_hop(),
             RemoveRequestHeaderLayer::hop_by_hop(),
+            ScriptLayer,
+            // TrafficRecorderLayer is the error boundary:
+            // BoxError from forward_to_upstream → Infallible via error_response.
+            TrafficRecorderLayer,
         )
-            .into_layer(service_fn(http_mitm_proxy)),
+            .into_layer(service_fn(forward_to_upstream)),
     )
 }

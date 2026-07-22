@@ -30,14 +30,11 @@ pub(crate) struct ProxyCtx {
     settings: Settings,
     /// AI 会话表（proxy 流量有；resend 等场景为 None）。
     sessions: Option<Arc<Mutex<SessionStore>>>,
-    /// 请求侧归一化判定出的 (provider, session_id, 请求 turns)，供响应侧消费。
+    /// 请求侧归一化判定出的 (provider, session_id)，供响应侧消费。
     /// 每请求最多写一次（请求侧），之后只读（响应侧），故用 OnceLock 而非 Mutex。
-    /// turns 用 Arc 共享：响应侧 body 流闭包克隆时只复制指针，不深拷贝对话历史。
-    /// Provider 变体自带协议解析逻辑——调用方无需知道 Chat/Responses 区分。
     ai_req: OnceLock<(
         crate::proxy::ai::Provider,
         String,
-        Arc<Vec<crate::proxy::ai::AiTurn>>,
     )>,
     /// DB 连接（proxy 解密流量有；resend 等场景为 None）。
     db: Option<Arc<Db>>,
@@ -125,18 +122,16 @@ impl ProxyCtx {
         &self,
         provider: crate::proxy::ai::Provider,
         session_id: String,
-        request_turns: Arc<Vec<crate::proxy::ai::AiTurn>>,
     ) {
-        self.ai_req.set((provider, session_id, request_turns)).ok();
+        self.ai_req.set((provider, session_id)).ok();
     }
 
-    /// 响应侧读取请求侧判定结果（浅克隆：turns 为 Arc，仅复制指针）。
+    /// 响应侧读取请求侧判定结果（浅克隆）。
     pub(crate) fn ai_req(
         &self,
     ) -> Option<(
         crate::proxy::ai::Provider,
         String,
-        Arc<Vec<crate::proxy::ai::AiTurn>>,
     )> {
         self.ai_req.get().cloned()
     }

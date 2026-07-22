@@ -7,10 +7,11 @@ pub(crate) mod gemini;
 pub(crate) mod normalize;
 pub(crate) mod openai;
 pub(crate) mod openai_responses;
+pub(crate) mod request;
+pub(crate) mod response;
 pub(crate) mod session;
-pub(crate) mod stream;
 
-pub(crate) use normalize::{AiContentBlock, AiConversation, AiTurn, AiUsage, JsonValueExt};
+pub(crate) use normalize::{AiConversation, AiTurn, AiUsage};
 
 /// AI 协议完整接口。新增协议只需实现此 trait + 在 Provider 加一个变体。
 pub(crate) trait AiProtocol {
@@ -22,7 +23,7 @@ pub(crate) trait AiProtocol {
     fn create_stream_state(&self) -> Box<dyn StreamState>;
 }
 
-/// 流式 SSE 状态机接口。各协议自行实现，`stream.rs` 只调 trait 方法。
+/// 流式 SSE 状态机接口。各协议自行实现，`SseFramer` 只做帧切分。
 pub(crate) trait StreamState: Send {
     /// 消纳一个已分帧的 SSE event。
     fn apply(&mut self, event: &str, root: &Value);

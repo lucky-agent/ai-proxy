@@ -25,9 +25,7 @@ export default function RawView({ content }: { content: string }) {
         </div>
         <div className="absolute inset-0 overflow-auto">
           {content ? (
-            <pre className="whitespace-pre-wrap break-all px-3 py-2 text-prose-md text-foreground/80 font-mono">
-              {content}
-            </pre>
+            <pre className="whitespace-pre-wrap break-all px-3 py-2 text-prose-md text-foreground/80 font-mono">{content}</pre>
           ) : null}
         </div>
       </div>

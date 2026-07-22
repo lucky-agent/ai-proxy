@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use rama::Layer;
@@ -6,6 +7,7 @@ use rama::http::layer::trace::TraceLayer;
 use rama::http::layer::upgrade::{DefaultHttpProxyConnectReplyService, UpgradeLayer};
 use rama::http::matcher::MethodMatcher;
 use rama::http::server::HttpServer;
+use rama::http::{Body, Response, StatusCode};
 use rama::layer::{AddInputExtensionLayer, ConsumeErrLayer};
 use rama::http::BodyLimitLayer;
 use rama::service::service_fn;
@@ -16,18 +18,21 @@ use tauri::Manager;
 use tokio::sync::oneshot;
 
 use crate::config::ProxyConfig;
-use crate::proxy::state::AppState;
+use crate::proxy::ai::session::SessionStore;
+use state::{AppState, State};
 
 use mitm::{http_connect_proxy, new_http_mitm_proxy};
-use state::State;
 
 pub(crate) mod ai;
 pub(crate) mod cert;
 pub(crate) mod client;
 pub(crate) mod ctx;
 pub(crate) mod events;
+pub(crate) mod ext;
+pub(crate) mod layer;
 pub(crate) mod mitm;
-pub(crate) mod parser;
+pub(crate) mod record;
+pub(crate) mod sse;
 pub(crate) mod state;
 
 pub struct ProxyServer {
@@ -80,13 +85,24 @@ impl ProxyServer {
         let settings = app_state.settings_arc();
         let event_channel = app_state.event_channel_arc();
 
+        // Share session store handle with AppState for backend memory stats.
+        // Build the store here (before spawn) so the Arc is held on the app side.
+        let max_sessions = settings
+            .read()
+            .map(|s| s.ai.session.max_sessions)
+            .unwrap_or(500);
+        let sessions: Arc<Mutex<SessionStore>> =
+            Arc::new(Mutex::new(SessionStore::new(max_sessions)));
+        app_state.set_sessions(sessions.clone());
+
         graceful.spawn_task_fn({
             move |_guard| async move {
-                let state = State::new(
+                let state = State::with_sessions(
                     mitm_tls_service_data,
                     settings,
                     event_channel,
                     db,
+                    sessions,
                 );
 
                 let http_service = HttpServer::auto(exec.clone()).service(
@@ -112,6 +128,10 @@ impl ProxyServer {
                             .into_layer(http_service),
                     )
                     .await;
+                // Proxy task finished — clear sessions handle.
+                if let Some(s) = app_handle.try_state::<AppState>() {
+                    s.clear_sessions();
+                }
             }
         });
 
@@ -121,4 +141,11 @@ impl ProxyServer {
             .context("graceful shutdown")?;
         Ok(())
     }
+}
+
+pub(crate) fn error_response(status: StatusCode, body: impl Into<Body>) -> Response {
+    Response::builder()
+        .status(status)
+        .body(body.into())
+        .expect("valid status code and body for error response")
 }

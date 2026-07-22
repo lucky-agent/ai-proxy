@@ -1,4 +1,4 @@
-import type { AiConversation, AiUsage, AiTurn } from '@/types/ai'
+import type { AiConversation, AiUsage, TimelineEntry } from '@/types/ai'
 
 export interface RequestEvent {
   id: number
@@ -63,9 +63,13 @@ export type ProxyEvent =
       id: number
       session_id: string
       provider: string
-      request_turns: AiTurn[]
       conversation: AiConversation
       streaming: boolean
+    }
+  | {
+      type: 'ai_timeline_delta'
+      session_id: string
+      entries: TimelineEntry[]
     }
   | {
       type: 'ai_session'
@@ -79,10 +83,6 @@ export type ProxyEvent =
       /** 来源归属：规则内 (来源, 合并头) 对的头命中时为对应来源名，无则缺省 */
       source?: string
     }
-
-export interface ChunkRecord {
-  data: string
-}
 
 /** 从 AI 视图跳转到代理视图时下发的指令。nonce 自增确保重复跳同一 id 也能重触发。 */
 export interface ProxyJumpTarget {
@@ -104,9 +104,26 @@ export interface TrafficEntry {
   responseTimestamp: number | null
   durationMs: number | null
   responseHeaders: Record<string, string> | null
-  responseBody: string | null
-  responseChunks: ChunkRecord[]
+  /** 响应体 chunks（字符串数组）。非流式为单元素数组。body = chunks.join('') */
+  responseChunks: string[]
   responseContentType?: string
   error: string | null
   decrypted?: boolean
+}
+
+/** 后端 SessionStore 内存统计（get_backend_memory_stats 返回） */
+export interface BackendMemoryStats {
+  sessionCount: number
+  maxSessions: number
+  /** 所有 session 的 timeline 条目总数 */
+  timelineEntryCount: number
+  /** timeline 中 AiTurn JSON 序列化字节估算 */
+  timelineContentBytes: number
+  /** id / scope / title / source / match_reason 字符串字节估算 */
+  metadataBytes: number
+  /** last_fingerprints + request_ids Vec<u64> 堆字节估算 */
+  fingerprintBytes: number
+  /** HashMap + Vec 堆 + SessionEntry 结构体开销 */
+  structBytes: number
+  totalEstBytes: number
 }

@@ -26,7 +26,7 @@ export default function DetailPanel({ entry, onClose, showRequest = true }: Prop
   useEffect(() => {
     if (!entry) { setHydratedEntry(null); return }
     // 已瘦身：body 清空但请求已完成（有 status），从 DB 回查
-    if (entry.responseBody === '' && entry.status != null) {
+    if (entry.responseChunks.length === 0 && entry.status != null) {
       invoke<TrafficEntry>('get_traffic_detail', { id: entry.id })
         .then(setHydratedEntry)
         .catch(() => setHydratedEntry(null))

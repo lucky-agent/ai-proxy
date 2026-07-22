@@ -213,7 +213,7 @@ pub(crate) struct AiConversation {
 
 impl AiConversation {
     /// 构造器：timing 字段（`first_chunk_ms` / `duration_ms`）恒为 `None`，
-    /// 由 parser 的 `BodyObserver` 注入——provider 解析器不感知时间。
+    /// 由响应侧（`response::AiState`）注入——provider 解析器不感知时间。
     pub(crate) fn new(
         provider: impl Into<String>,
         turns: Vec<AiTurn>,

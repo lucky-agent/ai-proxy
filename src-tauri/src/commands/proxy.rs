@@ -1,6 +1,7 @@
 use crate::AppState;
 use crate::bail;
 use crate::proxy::ProxyServer;
+use crate::proxy::ai::session::BackendMemoryStats;
 use crate::proxy::events::ProxyEvent;
 use tauri::ipc::Channel;
 use tokio::sync::oneshot;
@@ -65,4 +66,18 @@ pub fn get_status(state: tauri::State<'_, AppState>) -> String {
 #[tauri::command]
 pub fn subscribe_proxy_events(state: tauri::State<'_, AppState>, channel: Channel<ProxyEvent>) {
     state.set_event_channel(channel);
+}
+
+/// 返回后端 SessionStore 的内存统计快照。
+/// 代理未启动或 sessions 未注册时返回零值。
+#[tauri::command]
+pub fn get_backend_memory_stats(
+    state: tauri::State<'_, AppState>,
+) -> BackendMemoryStats {
+    let empty = BackendMemoryStats::default();
+    let Some(sessions) = state.sessions() else {
+        return empty;
+    };
+    let store = sessions.lock().expect("sessions lock");
+    store.memory_stats()
 }

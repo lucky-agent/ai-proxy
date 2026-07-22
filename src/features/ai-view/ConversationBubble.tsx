@@ -56,6 +56,11 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
   const [expanded, setExpanded] = useState(false)
   const [thinkingCopied, setThinkingCopied] = useState(false)
 
+  const thinkingIsMd = useMemo(() => {
+    if (block.type !== 'thinking') return false
+    return isLikelyMarkdown(block.text)
+  }, [block.type === 'thinking' ? block.text : '', block.type])
+
   const copyThinking = async (e: React.MouseEvent) => {
     e.stopPropagation()
     try { await navigator.clipboard.writeText(block.type === 'thinking' ? block.text : ''); setThinkingCopied(true); setTimeout(() => setThinkingCopied(false), 1200) } catch {}
@@ -85,8 +90,12 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
           {headerActions}
         </button>
         {expanded && (
-          <div className="max-h-48 overflow-y-auto border-t border-sky-500/15 px-3 py-2 text-prose-sm text-foreground/70 whitespace-pre-wrap break-words">
-            {block.text}
+          <div className="max-h-48 overflow-y-auto border-t border-sky-500/15 px-3 py-2 text-prose-sm text-foreground/70">
+            {showMd && thinkingIsMd ? (
+              <MarkdownContent text={block.text} variant="default" />
+            ) : (
+              <span className="whitespace-pre-wrap break-words">{block.text}</span>
+            )}
           </div>
         )}
       </div>
@@ -118,9 +127,7 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
           {headerActions}
         </button>
         {expanded && (
-          <pre className="max-h-48 overflow-y-auto border-t border-amber-500/15 px-3 py-2 text-prose-sm font-mono text-foreground/80 whitespace-pre-wrap break-all">
-            {JSON.stringify(block.input, null, 2)}
-          </pre>
+          <pre className="max-h-48 overflow-y-auto border-t border-amber-500/15 px-3 py-2 text-prose-sm font-mono text-foreground/80 whitespace-pre-wrap break-all">{JSON.stringify(block.input, null, 2)}</pre>
         )}
       </div>
     )
@@ -389,9 +396,7 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
                   )}
                   <details className="mt-1">
                     <summary className="text-ui-xs text-muted-foreground/60 cursor-pointer">查看原始 JSON</summary>
-                    <pre className="mt-1 text-prose-xs font-mono text-foreground/70 whitespace-pre-wrap break-all">
-                      {formatted}
-                    </pre>
+                    <pre className="mt-1 text-prose-xs font-mono text-foreground/70 whitespace-pre-wrap break-all">{formatted}</pre>
                   </details>
                 </div>
               )

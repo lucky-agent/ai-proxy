@@ -284,7 +284,7 @@
   font-size: var(--text-prose-md, 0.8125rem);
   line-height: 1.5;
 }
-.shiki-body .rs-root pre {
+.shiki-body pre {
   background: transparent !important;
   /* 切断对气泡文字色的继承：streamdown 只在 token span 上设 --sdm-c，pre 本身 fallback
      到 inherit。蓝色 user 气泡会继承 text-white，落在亮色 bg-background 白底上隐形。
@@ -296,19 +296,19 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
-.shiki-body .rs-root pre code {
+.shiki-body pre code {
   font-family: var(--font-mono, 'Geist Mono', 'Menlo', monospace);
   counter-reset: step;
   counter-increment: step 0;
 }
-.shiki-body .rs-root .line {
+.shiki-body .line {
   display: block;
   line-height: 1.5;
 }
-.shiki-body .rs-root .line:empty {
+.shiki-body .line:empty {
   display: none;
 }
-.shiki-body .rs-root .line::after {
+.shiki-body .line::after {
   content: none;
 }
 

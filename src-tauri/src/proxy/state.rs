@@ -1,6 +1,9 @@
 use crate::proxy::ai::session::SessionStore;
 use crate::proxy::events::ProxyEvent;
+use rama::error::BoxError;
 use rama::extensions::Extension;
+use rama::http::{Request, Response};
+use rama::service::BoxService;
 use rama::tls::server::TlsServerConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -39,21 +42,18 @@ pub(crate) struct ViaConnectTunnel;
 pub(crate) struct StartTime(pub i64);
 
 impl State {
-    pub(crate) fn new(
+    pub(crate) fn with_sessions(
         mitm_tls_service_data: TlsServerConfig,
         read_settings: Arc<RwLock<Settings>>,
         event_channel: Arc<RwLock<Option<Channel<ProxyEvent>>>>,
         db: Arc<Db>,
+        sessions: Arc<Mutex<SessionStore>>,
     ) -> Self {
-        let max_sessions = read_settings
-            .read()
-            .map(|s| s.ai.session.max_sessions)
-            .unwrap_or(500);
         Self {
             mitm_tls_service_data,
             read_settings,
             event_channel,
-            sessions: Arc::new(Mutex::new(SessionStore::new(max_sessions))),
+            sessions,
             db,
         }
     }
@@ -68,13 +68,26 @@ impl State {
         self.db.clone()
     }
 
+    /// 上游 HTTP 客户端（含超时/解压/流标准化；OnceLock 缓存，首次调用时构建）。
+    pub(crate) fn upstream_client(&self) -> BoxService<Request, Response, BoxError> {
+        crate::proxy::client::build_upstream_service(
+            self.settings().proxy.upstream_proxy,
+            true,
+        )
+    }
+
     pub(crate) fn mitm_tls_service_data(&self) -> &TlsServerConfig {
         &self.mitm_tls_service_data
     }
 
-    /// 按域名 + HTTP 方法匹配加载已启用脚本的内容
-    pub(crate) fn get_scripts(&self, host: &str, method: &str) -> Vec<String> {
-        let settings = self.settings();
+    /// 同 [`get_scripts`]，但从已有的 `&Settings` 读取，避免重复加锁。
+    /// 调用方负责持有 settings 读锁。
+    pub(crate) fn get_scripts_with(
+        &self,
+        settings: &crate::config::Settings,
+        host: &str,
+        method: &str,
+    ) -> Vec<String> {
         let config = &settings.script;
         let Some(ref dir) = config.scripts_dir else {
             return Vec::new();
@@ -121,6 +134,9 @@ pub(crate) struct AppState {
     shutdown_signal: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     proxy_event_channel: Arc<RwLock<Option<Channel<ProxyEvent>>>>,
     pending_open_settings: Arc<AtomicBool>,
+    /// AI session store handle — written once when proxy starts, cleared on stop.
+    /// The command layer reads this for backend memory stats.
+    sessions: Arc<RwLock<Option<Arc<Mutex<SessionStore>>>>>,
 }
 
 impl AppState {
@@ -132,6 +148,7 @@ impl AppState {
             shutdown_signal: Arc::new(Mutex::new(None)),
             proxy_event_channel: Arc::new(RwLock::new(None)),
             pending_open_settings: Arc::new(AtomicBool::new(false)),
+            sessions: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -188,5 +205,20 @@ impl AppState {
 
     pub(crate) fn settings(&self) -> Settings {
         self.settings.read().expect("lock").clone()
+    }
+
+    /// Proxy 启动时写入 session store 句柄，供命令层读取内存统计。
+    pub(crate) fn set_sessions(&self, sessions: Arc<Mutex<SessionStore>>) {
+        *self.sessions.write().expect("lock") = Some(sessions);
+    }
+
+    /// Proxy 停止时清空句柄。
+    pub(crate) fn clear_sessions(&self) {
+        *self.sessions.write().expect("lock") = None;
+    }
+
+    /// 读取 session store 句柄（用于 backend memory stats）。
+    pub(crate) fn sessions(&self) -> Option<Arc<Mutex<SessionStore>>> {
+        self.sessions.read().expect("lock").clone()
     }
 }

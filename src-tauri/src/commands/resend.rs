@@ -8,7 +8,7 @@ use crate::AppState;
 use crate::proxy::client;
 use crate::proxy::ctx::ProxyCtx;
 use crate::proxy::events::ProxyEvent;
-use crate::proxy::parser;
+use crate::proxy::record;
 
 #[tauri::command]
 pub async fn resend_request(
@@ -43,7 +43,7 @@ pub async fn resend_request(
         .unwrap_or_default();
 
     // 3. Log request event
-    parser::record_request(&ctx, &body_bytes);
+    record::record_request(&ctx, &body_bytes);
 
     // 4. Build Request and send upstream
     let req = Request::from_parts(parts, Body::from(body_bytes));
@@ -52,42 +52,8 @@ pub async fn resend_request(
     let svc = client::build_upstream_service(up, false);
     match svc.serve(req).await {
         Ok(resp) => {
-            let (parts, body) = resp.into_parts();
-
-            let resp_bytes = match crate::utils::buf_pool::collect_body(body).await {
-                crate::utils::buf_pool::CollectedBody::Full(bytes) => bytes,
-                // 超过收集上限：仅展示前缀，丢弃剩余流
-                crate::utils::buf_pool::CollectedBody::Capped { prefix, .. } => prefix,
-                crate::utils::buf_pool::CollectedBody::Error { error, .. } => {
-                    return Err(format!("resend failed: {error:?}"));
-                }
-            };
-
-            let resp_body = String::from_utf8_lossy(&resp_bytes);
-
-            ctx.send(ProxyEvent::ResponseChunk {
-                id: ctx.request_id(),
-                chunk: resp_body.to_string(),
-            });
-
-            ctx.send(ProxyEvent::Response {
-                id: ctx.request_id(),
-                status: parts.status.as_u16(),
-                timestamp: crate::utils::date::now_ms(),
-                duration_ms: ctx.duration_ms(),
-                headers: parts
-                    .headers
-                    .iter()
-                    .filter_map(|(k, v)| Some((k.to_string(), v.to_str().ok()?.to_string())))
-                    .collect(),
-                content_type: parts
-                    .headers
-                    .get("content-type")
-                    .and_then(|v| v.to_str().ok())
-                    .map(|s| s.to_string()),
-            });
-
-            Ok(ctx.request_id())
+            let request_id = record::record_and_drain_response(ctx, resp).await;
+            Ok(request_id)
         }
         Err(err) => {
             let msg = format!("{err}");

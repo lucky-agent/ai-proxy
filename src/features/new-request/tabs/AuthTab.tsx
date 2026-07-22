@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { useLocale } from '@/hooks/useLocale'
 import { Input } from '@/components/ui/input'
+import { Select, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select as SelectPrimitive } from '@base-ui/react/select'
 import type { KeyValuePair } from '@/types/collection'
 
 type AuthType = 'none' | 'basic' | 'bearer'
@@ -62,15 +64,25 @@ export default function AuthTab({ headers, onHeadersChange }: Props) {
         <label className="text-xs font-medium text-foreground/80 shrink-0">
           {t('requestEditor.authType')}
         </label>
-        <select
+        <Select
           value={auth.type}
-          onChange={e => handleTypeChange(e.target.value as AuthType)}
-          className="rounded border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary"
+          onValueChange={v => handleTypeChange(v as AuthType)}
         >
-          <option value="none">{t('requestEditor.authNone')}</option>
-          <option value="basic">{t('requestEditor.authBasic')}</option>
-          <option value="bearer">{t('requestEditor.authBearer')}</option>
-        </select>
+          <SelectTrigger size="sm" className="h-7 w-[100px] text-ui-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPrimitive.Portal>
+            <SelectPrimitive.Positioner side="bottom" sideOffset={4} align="start" alignItemWithTrigger={false} collisionAvoidance={{ side: 'none' }} className="isolate z-50">
+              <SelectPrimitive.Popup className="relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+                <SelectPrimitive.List>
+                  <SelectItem value="none">{t('requestEditor.authNone')}</SelectItem>
+                  <SelectItem value="basic">{t('requestEditor.authBasic')}</SelectItem>
+                  <SelectItem value="bearer">{t('requestEditor.authBearer')}</SelectItem>
+                </SelectPrimitive.List>
+              </SelectPrimitive.Popup>
+            </SelectPrimitive.Positioner>
+          </SelectPrimitive.Portal>
+        </Select>
       </div>
 
       {auth.type === 'none' && (

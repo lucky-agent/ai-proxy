@@ -13,6 +13,13 @@ export interface AiTurn {
   content: AiContentBlock[]
 }
 
+/** 后端 AiTimelineDelta 中的一条时间线条目 */
+export interface TimelineEntry {
+  fingerprint: number
+  turn: AiTurn
+  requestId: number
+}
+
 export interface AiUsage {
   promptTokens?: number
   completionTokens?: number
@@ -59,6 +66,8 @@ export interface AiSessionState {
   matchReason: string
   /** 来源归属（客户端名）：后端按命中的合并头确认，无则缺省 */
   source?: string
-  /** 每个请求 id → 该次归一化对话（流式期间被 AiNormalized 不断覆盖更新） */
+  /** 每个请求 id → 该次归一化对话（纯响应侧数据：assistant turns + 元信息） */
   conversations: Record<number, AiConversation>
+  /** 合并后的时间线：从 AiTimelineDelta 累积，前端直接渲染 */
+  timeline: TimelineEntry[]
 }

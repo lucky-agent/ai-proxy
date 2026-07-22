@@ -39,9 +39,7 @@ const SyntaxHighlightedBody = memo(function SyntaxHighlightedBody({
       <pre
         className={`px-3 py-2 text-prose-md text-foreground/80 font-mono overflow-y-auto ${
           wrapped ? 'whitespace-pre-wrap break-all' : 'whitespace-pre overflow-x-auto'
-        }`}>
-        {content}
-      </pre>
+        }`}>{content}</pre>
     )
   }
 
@@ -187,7 +185,7 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
             )}
           </button>
         </div>
-        <div className="absolute inset-0 overflow-auto bg-surface-base">
+        <div className="absolute inset-0 overflow-auto">
           {useTreeView && parsedJson ? (
             <JsonTreeView
               data={parsedJson}

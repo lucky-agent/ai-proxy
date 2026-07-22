@@ -122,6 +122,21 @@ pub fn set_script_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> R
     Ok(())
 }
 
+/// 仅切换 AI 检测总开关；URL 规则列表原样保留（供底部栏快捷开关使用）。
+#[tauri::command]
+pub fn set_ai_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    let data_dir = state.store().data_dir();
+    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    settings.ai.enabled = enabled;
+    settings
+        .save_to_path(&data_dir)
+        .map_err(|e| e.to_string())?;
+
+    state.set_settings(settings);
+
+    Ok(())
+}
+
 /// 读取指定脚本文件的内容。file_name 是 save_script_config 时生成的 hash 文件名。
 #[tauri::command]
 pub fn get_script_content(

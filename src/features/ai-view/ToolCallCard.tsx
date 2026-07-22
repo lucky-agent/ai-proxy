@@ -1,6 +1,8 @@
-import { useState, useCallback } from 'react'
-import { ChevronRight, ChevronDown, ExternalLinkIcon, WrenchIcon, CopyIcon, CheckIcon } from 'lucide-react'
+import { useState, useCallback, useMemo } from 'react'
+import { ChevronRight, ChevronDown, ExternalLinkIcon, WrenchIcon, CopyIcon, CheckIcon, CodeIcon, TextIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { isLikelyMarkdown } from '@/lib/markdown'
+import { MarkdownContent } from '@/components/markdown/MarkdownContent'
 
 /** 一条 tool_use + tool_result 配对 */
 export interface ToolCallEntry {
@@ -68,6 +70,12 @@ export function ToolCallCard({ entry, reqLabel, defaultExpanded, onJump }: ToolC
     ? entry.result!.split('\n').slice(0, TRUNCATE_LINES).join('\n')
     : entry.result
 
+  // 结果区域的 md 检测
+  const resultIsMd = useMemo(() => isLikelyMarkdown(entry.result ?? ''), [entry.result])
+  // 卡片级 md 覆盖：null = 自动（有 md 特征就用 md），raw = 强制纯文本
+  const [resultMdOverride, setResultMdOverride] = useState<'md' | 'raw' | null>(null)
+  const showResultMd = resultMdOverride === 'raw' ? false : (resultMdOverride === 'md' ? true : resultIsMd)
+
   // 步骤角标样式：同 turn 只有该工具一次 → 灰色；多次 → 橙色
   const stepOnly = entry.stepTotal === 1
   const stepBadgeClass = stepOnly
@@ -127,9 +135,7 @@ export function ToolCallCard({ entry, reqLabel, defaultExpanded, onJump }: ToolC
                 {inputCopied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
               </button>
             </div>
-            <pre className="text-prose-sm font-mono text-foreground/80 bg-amber-500/5 rounded p-2 whitespace-pre-wrap break-all m-0 max-h-36 overflow-y-auto">
-              {inputText}
-            </pre>
+            <pre className="text-prose-sm font-mono text-foreground/80 bg-amber-500/5 rounded p-2 whitespace-pre-wrap break-all m-0 max-h-36 overflow-y-auto">{inputText}</pre>
           </div>
 
           {/* 结果 */}
@@ -137,6 +143,16 @@ export function ToolCallCard({ entry, reqLabel, defaultExpanded, onJump }: ToolC
             <div className="px-2.5 py-1.5 bg-background/50 relative">
               <div className="flex items-center gap-1.5 text-ui-2xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">
                 <span>📤 {t('aiView.toolCallResult', '结果')} · {entry.resultLines} 行</span>
+                {resultIsMd && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setResultMdOverride(showResultMd ? 'raw' : 'md') }}
+                    className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
+                    title={showResultMd ? '查看原文' : '查看渲染'}
+                  >
+                    {showResultMd ? <CodeIcon className="size-3" /> : <TextIcon className="size-3" />}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={copyResult}
@@ -145,9 +161,13 @@ export function ToolCallCard({ entry, reqLabel, defaultExpanded, onJump }: ToolC
                   {resultCopied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
                 </button>
               </div>
-              <pre className="text-prose-sm font-mono text-foreground/80 bg-emerald-500/5 rounded p-2 whitespace-pre-wrap break-all m-0 max-h-48 overflow-y-auto">
-                {displayResult}
-              </pre>
+              {showResultMd ? (
+                <div className="rounded p-2 bg-emerald-500/5 max-h-[512px] overflow-y-auto">
+                  <MarkdownContent text={displayResult ?? ''} variant="default" />
+                </div>
+              ) : (
+                <pre className="text-prose-sm font-mono text-foreground/80 bg-emerald-500/5 rounded p-2 whitespace-pre-wrap break-all m-0 max-h-[512px] overflow-y-auto">{displayResult}</pre>
+              )}
               {/* 截断渐变 + 展开全部 */}
               {needsTruncate && (
                 <>

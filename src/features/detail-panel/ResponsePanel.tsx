@@ -37,8 +37,9 @@ function formatResponseRaw(entry: TrafficEntry): string {
   for (const [key, value] of Object.entries(entry.responseHeaders)) {
     lines.push(`${key}: ${value}`)
   }
-  if (entry.responseBody) {
-    lines.push('', entry.responseBody)
+  const body = entry.responseChunks.join('')
+  if (body) {
+    lines.push('', body)
   }
   return lines.join('\n')
 }
@@ -87,7 +88,7 @@ export default function ResponsePanel({ entry, onTitleClick }: Props) {
       tab={tab}
       onTabChange={setTab}
       tabs={tabs}
-      bodySize={entry?.responseBody?.length}
+      bodySize={entry?.responseChunks.reduce((s, c) => s + c.length, 0)}
       onTitleClick={onTitleClick}>
       <ResponsePanelContent tab={tab} entry={entry} t={t} onCloseStream={() => setTab('header')} />
     </SidePanel>
@@ -126,8 +127,9 @@ function ResponsePanelContent({
   }
 
   if (tab === 'body') {
-    return entry.responseBody ? (
-      <BodyView body={entry.responseBody} contentType={entry.responseContentType} />
+    const body = entry.responseChunks.join('')
+    return body ? (
+      <BodyView body={body} contentType={entry.responseContentType} />
     ) : (
       <Empty><EmptyTitle>{t('detail.noBody')}</EmptyTitle></Empty>
     )

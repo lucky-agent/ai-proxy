@@ -21,6 +21,9 @@ import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import type { ScriptTab, ViewId } from '@/types/view'
 import { TabBar } from './TabBar'
+import type { MemoryStats } from '@/lib/memoryStats'
+import { formatBytesMB } from '@/lib/memoryStats'
+import type { BackendMemoryStats } from '@/types/proxy'
 
 type TitleBarProps = {
   onOpenSettings: () => void
@@ -38,6 +41,9 @@ type TitleBarProps = {
   onCloseTab: (view: ViewId) => void
   toolbarExpanded: boolean
   onToolbarToggle: (expanded: boolean) => void
+  memoryStats: MemoryStats
+  memLabel: string
+  backendMemoryStats: BackendMemoryStats
   scriptTabs: ScriptTab[]
   activeTabId: string
   onSelectScriptTab: (fileKey: string) => void
@@ -162,7 +168,7 @@ function WindowButton({
     </button>
   )
 }
-export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig, onOpenAiConfig, running, onStartProxy, onStopProxy, onClearTraffic, activeView, mountedViews, onViewChange, onCloseTab, toolbarExpanded, onToolbarToggle, scriptTabs, activeTabId, onSelectScriptTab, onCloseScriptTab }: TitleBarProps) {
+export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenScriptConfig, onOpenAiConfig, running, onStartProxy, onStopProxy, onClearTraffic, activeView, mountedViews, onViewChange, onCloseTab, toolbarExpanded, onToolbarToggle, memoryStats, memLabel, backendMemoryStats, scriptTabs, activeTabId, onSelectScriptTab, onCloseScriptTab }: TitleBarProps) {
   const { t } = useLocale()
   const appWindow = getCurrentWindow()
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -298,6 +304,80 @@ export function TitleBar({ onOpenSettings, onOpenAbout, onOpenSslConfig, onOpenS
 
       {/* Spacer: pushes right-side buttons to the far right */}
       <div className="min-w-0 flex-1" data-tauri-drag-region />
+
+      {/* Memory stats badge */}
+      {!toolbarExpanded && (memoryStats.entryCount > 0 || memoryStats.sessionCount > 0 || backendMemoryStats.sessionCount > 0) && (
+        <Tooltip>
+          <TooltipTrigger
+            data-tauri-drag-region={false}
+            onMouseDown={stopTitleBarDrag}
+            onPointerDown={stopTitleBarDrag}
+            className="inline-flex items-center rounded-md px-2 py-0.5 text-ui-xs font-mono text-muted-foreground/60 bg-surface-base/40 border border-border/30 hover:text-muted-foreground hover:border-border/60 transition-colors cursor-default"
+          >
+            {memLabel}
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="end" className="bg-popover text-popover-foreground text-ui-sm font-mono max-w-[380px]">
+            <div className="space-y-1">
+              <div className="text-ui-xs font-semibold text-muted-foreground mb-0.5">Frontend</div>
+              <div className="flex justify-between gap-4">
+                <span>entries</span><span className="tabular-nums font-medium">{memoryStats.entryCount}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span>response chunks</span><span className="tabular-nums font-medium">{memoryStats.chunkCount}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span>AI sessions</span><span className="tabular-nums font-medium">{memoryStats.sessionCount}</span>
+              </div>
+              <div className="mt-1 pt-1 border-t border-border/30 space-y-1">
+                <div className="flex justify-between gap-4">
+                  <span>body/headers</span><span className="tabular-nums">{formatBytesMB(memoryStats.bodyBytes)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span>struct overhead</span><span className="tabular-nums">{formatBytesMB(memoryStats.structBytes)}</span>
+                </div>
+                {memoryStats.sessionEstBytes > 0 && (
+                  <div className="flex justify-between gap-4">
+                    <span>sessions</span><span className="tabular-nums">{formatBytesMB(memoryStats.sessionEstBytes)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-between gap-4 text-foreground font-semibold">
+                <span>frontend total</span><span className="tabular-nums">{formatBytesMB(memoryStats.totalEstBytes)}</span>
+              </div>
+              {backendMemoryStats.sessionCount > 0 && (
+                <>
+                  <div className="mt-2 pt-1 border-t border-border/50">
+                    <div className="text-ui-xs font-semibold text-muted-foreground mb-0.5">Backend</div>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span>sessions</span><span className="tabular-nums font-medium">{backendMemoryStats.sessionCount}<span className="text-muted-foreground/50">/</span>{backendMemoryStats.maxSessions}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span>timeline entries</span><span className="tabular-nums font-medium">{backendMemoryStats.timelineEntryCount}</span>
+                  </div>
+                  <div className="mt-1 pt-1 border-t border-border/30 space-y-1">
+                    <div className="flex justify-between gap-4">
+                      <span>timeline content</span><span className="tabular-nums">{formatBytesMB(backendMemoryStats.timelineContentBytes)}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span>metadata strings</span><span className="tabular-nums">{formatBytesMB(backendMemoryStats.metadataBytes)}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span>fingerprint vecs</span><span className="tabular-nums">{formatBytesMB(backendMemoryStats.fingerprintBytes)}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span>struct overhead</span><span className="tabular-nums">{formatBytesMB(backendMemoryStats.structBytes)}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between gap-4 text-foreground font-semibold">
+                    <span>backend total</span><span className="tabular-nums">{formatBytesMB(backendMemoryStats.totalEstBytes)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       {/* Far-right group: Delete, Start/Stop — order from left to right */}
       {!toolbarExpanded && (

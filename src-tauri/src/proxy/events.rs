@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::collections::HashMap;
 
+use crate::proxy::ai::session::TimelineEntry;
 use crate::proxy::ai::{AiConversation, AiUsage};
 
 /// Tagged union sent through the IPC Channel.
@@ -43,13 +44,15 @@ pub(crate) enum ProxyEvent {
         id: u64,
         session_id: String,
         provider: String,
-        /// 该次请求的 messages（system/user/assistant 历史），供前端渲染完整对话。
-        /// 仅请求侧首发与定稿快照携带；流式节流增量为空数组
-        /// （前端 useAiSessions 按 requestId 缓存首发值）。
-        request_turns: Vec<crate::proxy::ai::AiTurn>,
-        /// 该次响应归一化对话（assistant 回复）。
+        /// 该次响应归一化对话（assistant 回复 + 元信息）。
         conversation: AiConversation,
         streaming: bool,
+    },
+    /// 会话时间线增量。请求侧 assign 后发送请求体 delta，
+    /// 响应侧 finalize 后发送 assistant delta。前端直接 append 即可渲染。
+    AiTimelineDelta {
+        session_id: String,
+        entries: Vec<TimelineEntry>,
     },
     /// 会话元信息。会话新增请求或 usage 变化时推送。
     AiSession {

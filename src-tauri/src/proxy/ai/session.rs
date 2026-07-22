@@ -8,10 +8,20 @@
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::Provider;
 use super::normalize::{AiConversation, AiTurn, AiUsage};
+
+/// 会话时间线中的一条记录。fingerprint 供 LCP 快速比较，turn 为完整内容。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TimelineEntry {
+    pub fingerprint: u64,
+    pub turn: AiTurn,
+    pub request_id: u64,
+}
 
 /// 一个会话的内存状态。
 pub(crate) struct SessionEntry {
@@ -22,6 +32,8 @@ pub(crate) struct SessionEntry {
     /// 前缀匹配只需相等性判定，无需原文——每 turn 一个哈希，
     /// 内存 O(轮次) 而非 O(内容)，比较为 u64 切片比较。
     pub last_fingerprints: Vec<u64>,
+    /// 已合并的时间线：所有请求 deltas 的累积，前端直接 append 即可渲染。
+    pub timeline: Vec<TimelineEntry>,
     pub usage_total: AiUsage,
     /// 会话标题：来自首请求响应的 `{"title": "..."}`（见 normalize::extract_title）。
     pub title: Option<String>,
@@ -46,6 +58,43 @@ pub(crate) struct AssignResult {
     pub title: Option<String>,
     /// 会话来源归属（见 [`SessionEntry::source`]）。
     pub source: Option<String>,
+    /// 本次请求体 turns 超出会话时间线的增量（LCP 之后的新增 turns）。
+    /// 新会话时为全部请求 turns。
+    pub request_delta: Vec<TimelineEntry>,
+}
+
+/// 后端内存统计（仅 SessionStore 维度——唯一全局持久的运行时缓存）。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub(crate) struct BackendMemoryStats {
+    pub session_count: usize,
+    pub max_sessions: usize,
+    /// 所有 session 的 timeline 条目总数。
+    pub timeline_entry_count: usize,
+    /// timeline 中 AiTurn 内容的 JSON 序列化字节估算。
+    pub timeline_content_bytes: u64,
+    /// 字符串元数据：id / scope / title / source / match_reason 字节估算（UTF-8 len）。
+    pub metadata_bytes: u64,
+    /// last_fingerprints + request_ids 两个 Vec<u64> 的字节估算。
+    pub fingerprint_bytes: u64,
+    /// HashMap 条目 + Vec 堆分配 + SessionEntry 固定字段的结构开销。
+    pub struct_bytes: u64,
+    pub total_est_bytes: u64,
+}
+
+impl Default for BackendMemoryStats {
+    fn default() -> Self {
+        Self {
+            session_count: 0,
+            max_sessions: 0,
+            timeline_entry_count: 0,
+            timeline_content_bytes: 0,
+            metadata_bytes: 0,
+            fingerprint_bytes: 0,
+            struct_bytes: 0,
+            total_est_bytes: 0,
+        }
+    }
 }
 
 /// 会话状态表。挂在 `State` 上，`Arc<Mutex<..>>` 包裹以线程安全。
@@ -72,7 +121,7 @@ impl SessionStore {
     /// 判定请求归属并登记。返回会话 id、归组依据与会话快照。
     ///
     /// - `session_headers`：(header, 该头所属来源名) 尝试名单（规则来源对在前、
-    ///   全局名单在后，见 parser::session_header_list），按顺序取第一个命中；
+    ///   全局名单在后，见 request::session_header_list），按顺序取第一个命中；
     ///   命中带来源名的头即把会话归属该来源；
     /// - `headers`：本次请求头（键为小写，来自 rama `HeaderName`）；
     /// - `messages`：本次请求归一化后的 turns（用于前缀匹配与更新指纹链）；
@@ -96,17 +145,9 @@ impl SessionStore {
             if let Some(val) = headers.get(&name.to_ascii_lowercase()) {
                 let sid = session_key(&scope, val);
                 let reason = format!("header:{name}");
-                self.touch_or_create(
-                    &sid,
-                    &scope,
-                    fingerprints.clone(),
-                    request_id,
-                    tick,
-                    source.as_deref(),
-                    &reason,
-                    messages,
-                );
-                return self.result(sid, reason);
+                let request_delta =
+                    self.touch_or_create(&sid, &scope, &fingerprints, request_id, tick, source.as_deref(), &reason, messages);
+                return self.result_with_delta(sid, reason, request_delta);
             }
         }
 
@@ -125,37 +166,27 @@ impl SessionStore {
                 }
             }
             if let Some((sid, _)) = best {
-                self.touch_or_create(
-                    &sid,
-                    &scope,
-                    fingerprints,
-                    request_id,
-                    tick,
-                    None,
-                    "prefix",
-                    messages,
+                let request_delta = self.touch_or_create(
+                    &sid, &scope, &fingerprints, request_id, tick, None, "prefix", messages,
                 );
-                return self.result(sid, "prefix".to_string());
+                return self.result_with_delta(sid, "prefix".to_string(), request_delta);
             }
         }
 
         // ③ 新会话
         let sid = format!("sess-{}", Uuid::new_v4());
-        self.touch_or_create(
-            &sid,
-            &scope,
-            fingerprints,
-            request_id,
-            tick,
-            None,
-            "new",
-            messages,
-        );
-        self.result(sid, "new".to_string())
+        let request_delta =
+            self.touch_or_create(&sid, &scope, &fingerprints, request_id, tick, None, "new", messages);
+        self.result_with_delta(sid, "new".to_string(), request_delta)
     }
 
-    /// 分组落定后就地读快照。新会话 tick 最大不会被 LRU 淘汰，entry 必然存在。
-    fn result(&self, session_id: String, match_reason: String) -> AssignResult {
+    /// 分组落定后就地读快照（含 request_delta）。新会话 tick 最大不会被 LRU 淘汰，entry 必然存在。
+    fn result_with_delta(
+        &self,
+        session_id: String,
+        match_reason: String,
+        request_delta: Vec<TimelineEntry>,
+    ) -> AssignResult {
         let entry = &self.sessions[&session_id];
         AssignResult {
             request_ids: entry.request_ids.clone(),
@@ -164,34 +195,66 @@ impl SessionStore {
             source: entry.source.clone(),
             session_id,
             match_reason,
+            request_delta,
         }
     }
 
+    /// 更新/创建会话条目，返回本次请求体 turns 超出时间线的增量。
     fn touch_or_create(
         &mut self,
         sid: &str,
         scope: &(String, String),
-        fingerprints: Vec<u64>,
+        fingerprints: &[u64],
         request_id: u64,
         tick: u64,
         source: Option<&str>,
         match_reason: &str,
         messages: &[AiTurn],
-    ) {
+    ) -> Vec<TimelineEntry> {
         match self.sessions.get_mut(sid) {
             Some(entry) => {
                 if !entry.request_ids.iter().any(|&r| r == request_id) {
                     entry.request_ids.push(request_id);
                 }
-                entry.last_fingerprints = fingerprints;
+                // 计算增量：LCP(timeline_fingerprints, new_fingerprints)
+                let lcp = entry
+                    .timeline
+                    .iter()
+                    .map(|e| e.fingerprint)
+                    .zip(fingerprints.iter())
+                    .take_while(|(a, b)| a == *b)
+                    .count();
+                let delta: Vec<TimelineEntry> = fingerprints[lcp..]
+                    .iter()
+                    .zip(&messages[lcp..])
+                    .map(|(fp, turn)| TimelineEntry {
+                        fingerprint: *fp,
+                        turn: turn.clone(),
+                        request_id,
+                    })
+                    .collect();
+                // 追加到时间线
+                entry.timeline.extend(delta.clone());
+                entry.last_fingerprints = fingerprints.to_vec();
                 entry.last_touched = tick;
                 entry.match_reason = match_reason.to_string();
                 // 仅在本次确认了来源时覆写；前缀/全局命中（None）不清除已有归属
                 if let Some(src) = source {
                     entry.source = Some(src.to_string());
                 }
+                delta
             }
             None => {
+                // 新会话：全部 turns 都是增量
+                let delta: Vec<TimelineEntry> = messages
+                    .iter()
+                    .zip(fingerprints.iter())
+                    .map(|(turn, fp)| TimelineEntry {
+                        fingerprint: *fp,
+                        turn: turn.clone(),
+                        request_id,
+                    })
+                    .collect();
                 // 仅新会话时从第一条 user turn 提取标题（兜底），
                 // 后续由 refine_title 用响应 {"title": "..."} 覆盖
                 let title = super::normalize::extract_title_from_request(messages);
@@ -201,7 +264,8 @@ impl SessionStore {
                         id: sid.to_string(),
                         scope: scope.clone(),
                         request_ids: vec![request_id],
-                        last_fingerprints: fingerprints,
+                        last_fingerprints: fingerprints.to_vec(),
+                        timeline: delta.clone(),
                         usage_total: AiUsage::default(),
                         title,
                         source: source.map(str::to_string),
@@ -210,6 +274,7 @@ impl SessionStore {
                     },
                 );
                 self.evict_if_needed();
+                delta
             }
         }
     }
@@ -243,6 +308,29 @@ impl SessionStore {
         }
     }
 
+    /// 将 assistant turn 追加到会话时间线（响应定稿时调用）。
+    /// 返回新增的 timeline entries 供前端 AiTimelineDelta 事件。
+    pub(crate) fn append_assistant_turns(
+        &mut self,
+        session_id: &str,
+        request_id: u64,
+        turns: &[AiTurn],
+    ) -> Vec<TimelineEntry> {
+        let Some(entry) = self.sessions.get_mut(session_id) else {
+            return Vec::new();
+        };
+        let entries: Vec<TimelineEntry> = turns
+            .iter()
+            .map(|turn| TimelineEntry {
+                fingerprint: turn_fingerprint(turn),
+                turn: turn.clone(),
+                request_id,
+            })
+            .collect();
+        entry.timeline.extend(entries.clone());
+        entries
+    }
+
     /// 读取会话快照（供构造 AiSession 事件）。
     pub(crate) fn get(&self, session_id: &str) -> Option<&SessionEntry> {
         self.sessions.get(session_id)
@@ -263,6 +351,84 @@ impl SessionStore {
             log::info!("[ai-session] evicted LRU session {victim}");
         }
     }
+
+    /// Walk all sessions to produce a backend-memory snapshot.
+    /// This is the only globally-persistent runtime cache (per-request buffers are freed on drop).
+    pub(crate) fn memory_stats(&self) -> BackendMemoryStats {
+        let mut timeline_entry_count: usize = 0;
+        let mut timeline_content_bytes: u64 = 0;
+        let mut metadata_bytes: u64 = 0;
+
+        for entry in self.sessions.values() {
+            timeline_entry_count += entry.timeline.len();
+            // Timeline content: JSON-serialised AiTurn per entry.
+            for te in &entry.timeline {
+                if let Ok(json) = serde_json::to_string(&te.turn) {
+                    timeline_content_bytes += json.len() as u64;
+                }
+            }
+            // String metadata (UTF-8 length ≈ byte footprint of the allocation).
+            metadata_bytes += entry.id.len() as u64;
+            metadata_bytes += entry.scope.0.len() as u64;
+            metadata_bytes += entry.scope.1.len() as u64;
+            metadata_bytes += entry.title.as_deref().map_or(0, |s| s.len()) as u64;
+            metadata_bytes += entry.source.as_deref().map_or(0, |s| s.len()) as u64;
+            metadata_bytes += entry.match_reason.len() as u64;
+        }
+
+        let session_count = self.sessions.len();
+
+        // Fingerprint + request_ids: two Vec<u64> per session, count the heap storage.
+        let fingerprint_bytes: u64 = self
+            .sessions
+            .values()
+            .map(|e| {
+                ((e.last_fingerprints.len() + e.request_ids.len())
+                    * std::mem::size_of::<u64>()) as u64
+            })
+            .sum();
+
+        // Structural overhead (≈ Rust allocator overhead for the HashMap + Vecs + Strings).
+        const HASHMAP_BUCKET_COST: u64 = 32;
+        const ENTRY_BASE_COST: u64 = 128;
+        const VEC_HEAP_PER_SLOT: usize = 8;
+
+        let mut struct_bytes: u64 = 0;
+        struct_bytes += session_count as u64 * (HASHMAP_BUCKET_COST + ENTRY_BASE_COST);
+        for entry in self.sessions.values() {
+            // TimelineEntry structs (stack/arena size).
+            struct_bytes += (entry.timeline.len() * std::mem::size_of::<TimelineEntry>()) as u64;
+            // Vec<u64> ×2 actual element storage.
+            struct_bytes += (entry.request_ids.len() * std::mem::size_of::<u64>()) as u64;
+            struct_bytes += (entry.last_fingerprints.len() * std::mem::size_of::<u64>()) as u64;
+            // Vec heap overhead (capacity * pointer-width, the allocated region).
+            struct_bytes += (entry.timeline.capacity() * VEC_HEAP_PER_SLOT) as u64;
+            struct_bytes += (entry.request_ids.capacity() * VEC_HEAP_PER_SLOT) as u64;
+            struct_bytes += (entry.last_fingerprints.capacity() * VEC_HEAP_PER_SLOT) as u64;
+            // String structs on stack; actual buffer counted in metadata_bytes.
+            struct_bytes += std::mem::size_of::<String>() as u64 * 4; // id, scope.0, scope.1, match_reason
+            if entry.title.is_some() {
+                struct_bytes += std::mem::size_of::<String>() as u64;
+            }
+            if entry.source.is_some() {
+                struct_bytes += std::mem::size_of::<String>() as u64;
+            }
+        }
+
+        let total_est_bytes =
+            timeline_content_bytes + metadata_bytes + fingerprint_bytes + struct_bytes;
+
+        BackendMemoryStats {
+            session_count,
+            max_sessions: self.max_sessions,
+            timeline_entry_count,
+            timeline_content_bytes,
+            metadata_bytes,
+            fingerprint_bytes,
+            struct_bytes,
+            total_est_bytes,
+        }
+    }
 }
 
 fn session_key(scope: &(String, String), header_val: &str) -> String {
@@ -272,7 +438,7 @@ fn session_key(scope: &(String, String), header_val: &str) -> String {
 /// 单 turn 指纹：role + content 序列化文本的哈希。
 /// 同会话续轮时客户端原样重发历史，同一输入的序列化输出稳定，
 /// 指纹相等即可代表 turn 相等（碰撞概率可忽略；仅内存态，不持久化）。
-fn turn_fingerprint(turn: &AiTurn) -> u64 {
+pub(crate) fn turn_fingerprint(turn: &AiTurn) -> u64 {
     let mut h = DefaultHasher::new();
     turn.role.hash(&mut h);
     if let Ok(json) = serde_json::to_string(&turn.content) {

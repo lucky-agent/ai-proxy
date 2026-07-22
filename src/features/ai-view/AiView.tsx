@@ -10,7 +10,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { usePanelRef } from 'react-resizable-panels'
 import { formatDayTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { AiConversation, AiSessionState, AiTurn, AiContentBlock } from '@/types/ai'
+import type { AiConversation, AiSessionState, AiTurn, AiContentBlock, TimelineEntry } from '@/types/ai'
 
 // ─── 工具调用提取 / 配对 ───────────────────────────────────────────
 
@@ -234,7 +234,7 @@ function renderToolCards(
 
 interface AiViewProps {
   sessions: AiSessionState[]
-  mergedTimeline: (sessionId: string) => { turn: AiTurn; requestId: number }[]
+  mergedTimeline: (sessionId: string) => TimelineEntry[]
   conversationOf: (requestId: number) => AiConversation | undefined
   showSidebar: boolean
   /** 点击气泡的跳转钮 → 切到代理视图并定位该请求。 */
@@ -295,14 +295,16 @@ export function AiView({ sessions, mergedTimeline, conversationOf, showSidebar, 
     return m
   }, [selectedSession])
 
-  const rendered = useMemo<{ turn: AiTurn; requestId: number }[]>(() => {
+  const rendered = useMemo<TimelineEntry[]>(() => {
     if (!selection || !selectedSession) return []
+    const tl = mergedTimeline(selection.sessionId)
     if (selection.requestId) {
-      const conv = conversationOf(selection.requestId)
-      return conv ? conv.turns.map((turn) => ({ turn, requestId: selection.requestId! })) : []
+      // 单次请求视图：显示截至该请求完成时的累计时间线。
+      // 时间线按 requestId 单调递增排列，取 <= 目标值的所有条目。
+      return tl.filter((e) => e.requestId <= selection.requestId)
     }
-    return mergedTimeline(selection.sessionId)
-  }, [selection, selectedSession, mergedTimeline, conversationOf])
+    return tl
+  }, [selection, selectedSession, mergedTimeline])
 
   const toolItems = useMemo(() => collectToolItems(rendered), [rendered])
 

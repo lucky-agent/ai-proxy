@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { CopyIcon, CheckIcon, ChevronRight, ChevronDown, ListChecks } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Empty, EmptyTitle } from '@/components/ui/empty'
 import type { TrafficEntry } from '@/types/proxy'
 import { parseSse, isStreamingContentType, mergeSseMessages, estimateTokens, extractTokenUsage, type SseEvent, type MergeFormat, type MergeResult, type TokenUsage } from '@/lib/sse'
@@ -30,9 +29,10 @@ export default function StreamingViewer({ entry }: Props) {
   const chunks = entry.responseChunks ?? []
 
   const sseEvents = useMemo(() => {
-    if (!isSse || !entry.responseBody) return []
-    return parseSse(entry.responseBody)
-  }, [isSse, entry.responseBody])
+    const body = chunks.join('')
+    if (!isSse || !body) return []
+    return parseSse(body)
+  }, [isSse, chunks])
 
   const mergedResult = useMemo(() => {
     if (!isSse || sseEvents.length === 0) return null
@@ -46,7 +46,7 @@ export default function StreamingViewer({ entry }: Props) {
 
   const chunkStats = useMemo(() => {
     let totalBytes = 0
-    for (const c of chunks) totalBytes += c.data.length
+    for (const c of chunks) totalBytes += c.length
     return { count: chunks.length, totalBytes }
   }, [chunks])
 
@@ -55,8 +55,8 @@ export default function StreamingViewer({ entry }: Props) {
   const tabValue = view
 
   return (
-    <Tabs value={tabValue} onValueChange={(v) => setView(v as ViewMode)} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <TabsList variant="line" className="shrink-0 justify-start border-b border-surface-elevated bg-surface-elevated/20 px-0 rounded-none">
+    <Tabs value={tabValue} onValueChange={(v) => setView(v as ViewMode)} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <TabsList variant="line" className="sticky top-0 z-10 shrink-0 justify-start border-b border-surface-elevated bg-surface-base px-0 rounded-none">
         <Tooltip>
           <TooltipTrigger className="inline-flex">
             <TabsTrigger
@@ -124,36 +124,30 @@ export default function StreamingViewer({ entry }: Props) {
         )}
       </TabsList>
 
-      <TabsContent value="chunks" className="min-h-0 flex-1 overflow-hidden mt-0">
-        <ScrollArea className="h-full">
+      <TabsContent value="chunks" className="mt-0">
         {chunks.length === 0 ? (
           <Empty><EmptyTitle>{t('detail.noStreamData')}</EmptyTitle></Empty>
         ) : (
           chunks.map((chunk, idx) => (
-            <ChunkItem key={idx} index={idx} data={chunk.data} />
+            <ChunkItem key={idx} index={idx} data={chunk} />
           ))
         )}
-        </ScrollArea>
       </TabsContent>
 
-      <TabsContent value="events" className="min-h-0 flex-1 overflow-hidden mt-0">
-        <ScrollArea className="h-full">
+      <TabsContent value="events" className="mt-0">
         {sseEvents.length === 0 ? (
           <Empty><EmptyTitle>{t('detail.noSseEvents')}</EmptyTitle></Empty>
         ) : (
           sseEvents.map((evt, idx) => <SseEventItem key={idx} index={idx} event={evt} />)
         )}
-        </ScrollArea>
       </TabsContent>
 
-      <TabsContent value="merged" className="min-h-0 flex-1 overflow-hidden mt-0">
-        <ScrollArea className="h-full">
+      <TabsContent value="merged" className="mt-0">
         {mergedResult ? (
           <MergedView result={mergedResult} tokenUsage={tokenUsage} />
         ) : (
           <Empty><EmptyTitle>{t('detail.noSseEvents')}</EmptyTitle></Empty>
         )}
-        </ScrollArea>
       </TabsContent>
     </Tabs>
   )
@@ -202,9 +196,7 @@ function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: T
             </>
           )}
         </div>
-        <pre className="overflow-x-auto whitespace-pre-wrap break-all px-3 py-2 pb-7 font-mono text-prose-md leading-6 text-foreground/80">
-          {result.formatted}
-        </pre>
+        <pre className="overflow-x-auto whitespace-pre-wrap break-all px-3 py-2 pb-7 font-mono text-prose-md leading-6 text-foreground/80">{result.formatted}</pre>
       </div>
     </div>
   )
@@ -275,9 +267,7 @@ function ChunkContent({ data }: { data: string }) {
         className="absolute right-1 top-1 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-surface-elevated/50 transition-all group-hover:opacity-100">
         {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
       </button>
-      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-surface-elevated/20 px-3 py-2 font-mono text-prose-sm leading-5 text-foreground/80">
-        {data}
-      </pre>
+      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded px-3 py-2 font-mono text-prose-sm leading-5 text-foreground/80">{data}</pre>
     </div>
   )
 }
@@ -316,7 +306,7 @@ function SseEventItem({ index, event }: { index: number; event: SseEvent }) {
           <ChevronRight className="mt-0.5 size-3 shrink-0 text-muted-foreground/60" />
         )}
         <span className="shrink-0 font-medium text-foreground/80">#{index + 1}</span>
-        <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-ui-xs font-medium text-primary">
+        <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-ui-xs font-medium text-foreground">
           {event.event}
         </span>
         {event.id && (
@@ -346,9 +336,7 @@ function SseEventItem({ index, event }: { index: number; event: SseEvent }) {
               <CopyIcon className="size-3" />
             )}
           </button>
-          <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-surface-elevated/20 px-3 py-1 font-mono text-prose-sm leading-5 text-foreground/80">
-            {formattedData}
-          </pre>
+          <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded px-3 py-1 font-mono text-prose-sm leading-5 text-foreground/80">{formattedData}</pre>
         </div>
       )}
     </div>

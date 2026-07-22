@@ -1,4 +1,12 @@
+use bytes::Bytes;
 use rama::extensions::{Extension, ExtensionsRef};
+
+/// 请求 body 缓存：ScriptLayer 收集后写入 extensions，
+/// 下游（TrafficRecorderLayer / AiPipeline）直接读取，避免重复收集。
+///
+/// `Bytes` 为 Arc 引用计数，多读零拷贝。
+#[derive(Clone, Debug, Extension)]
+pub(crate) struct CachedRequestBody(pub Bytes);
 
 /// 扩展 trait：从 rama 请求扩展中快速提取常用上下文。
 pub(crate) trait RequestExt {
