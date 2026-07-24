@@ -16,6 +16,8 @@ export interface SslConfig {
 
 export interface ScriptItem {
   name: string
+  /** 脚本文件名（持久化后由后端生成）；新建未保存时为空串 */
+  file_name: string
   domain: string
   /** HTTP 方法匹配（大写，如 "GET"）；空串 = any，匹配所有方法 */
   method: string

@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { VList, type VListHandle } from 'virtua'
 import { useTranslation } from 'react-i18next'
-import { ArrowDownIcon, ArrowUpIcon, CopyIcon, CheckIcon, RefreshCwIcon, PencilIcon, LockKeyholeIcon, LockKeyholeOpenIcon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, RefreshCwIcon, PencilIcon, LockKeyholeIcon, LockKeyholeOpenIcon } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { CopyButton } from '@/components/core/CopyButton'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -15,13 +16,12 @@ import { Badge } from '@/components/ui/badge'
 import type { TrafficEntry } from '@/types/proxy'
 import { statusCategory, formatDuration, formatTime, formatCurl } from '@/lib/format'
 import { METHOD_BG_COLORS } from '@/lib/http-constants'
-import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import { cn } from '@/lib/utils'
 
 const METHOD_COLOR_VAR = (method: string) => {
   const v = (METHOD_BG_COLORS as Record<string, string>)[method.toUpperCase()]
   return v ?? 'var(--badge-get)'
 }
-import { cn } from '@/lib/utils'
 
 export type ListEntry = TrafficEntry
 export type SortOrder = 'desc' | 'asc'
@@ -136,7 +136,6 @@ export default function RequestList({
   scrollNonce,
 }: Props) {
   const { t } = useTranslation()
-  const { copied, copy } = useCopyToClipboard()
   const {
     gridRef,
     columnWidths,
@@ -322,9 +321,13 @@ export default function RequestList({
                   <RefreshCwIcon className="size-3.5" />
                   <span>{t('requestList.repeat')}</span>
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => copy(formatCurl({ method: entry.method, url: entry.uri, headers: entry.requestHeaders, body: entry.requestBody }))}>
-                  {copied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <CopyIcon className="size-3.5" />}
-                  <span>{t('requestList.copyCurl')}</span>
+                <ContextMenuItem>
+                  <CopyButton
+                    text={formatCurl({ method: entry.method, url: entry.uri, headers: entry.requestHeaders, body: entry.requestBody })}
+                    label={t('requestList.copyCurl')}
+                    size="xs"
+                    className="w-full"
+                  />
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>

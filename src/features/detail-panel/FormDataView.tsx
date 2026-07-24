@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import { CopyButton } from '@/components/core/CopyButton'
 import { useTheme } from '@/hooks/useTheme'
 import { useShiki } from '@/hooks/useShiki'
-import { CopyIcon, CheckIcon, ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
@@ -136,7 +136,6 @@ function UrlEncodedView({ parts }: { parts: FormField[] }) {
 }
 
 function UrlEncodedRow({ part }: { part: FormField }) {
-  const { copied, copy } = useCopyToClipboard()
 
   return (
     <TableRow className='border-b border-surface-elevated/30 hover:bg-surface-elevated/20 transition-colors group'>
@@ -150,12 +149,13 @@ function UrlEncodedRow({ part }: { part: FormField }) {
             <div className='max-h-[200px] overflow-auto whitespace-pre-wrap break-all font-mono text-ui-sm'>{part.value}</div>
           </TooltipContent>
         </Tooltip>
-        <button
-          onClick={() => copy(part.value)}
-          className={`absolute right-0 top-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-        >
-          {copied ? <CheckIcon className='size-3.5 text-emerald-500' /> : <CopyIcon className='size-3.5' />}
-        </button>
+        <span className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-all">
+          <CopyButton
+            text={part.value}
+            size="xs"
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50"
+          />
+        </span>
       </TableCell>
     </TableRow>
   )
@@ -171,10 +171,19 @@ function MultipartView({ parts }: { parts: FormField[] }) {
 
 function MultipartPartCard({ part }: { part: FormField }) {
   const [expanded, setExpanded] = useState(true)
-  const { copied, copy } = useCopyToClipboard()
   const { resolvedTheme } = useTheme()
   const shikiTheme = resolvedTheme === 'dark' ? 'github-dark' : 'github-light'
-  const lang = part.contentType?.toLowerCase().includes('json') ? 'json' : part.contentType?.toLowerCase().includes('html') ? 'html' : part.contentType?.toLowerCase().includes('xml') ? 'xml' : 'plaintext'
+  const lang = useMemo(() => {
+    if (!part.contentType) return 'plaintext'
+    const ct = part.contentType.toLowerCase()
+    if (ct.includes('json')) return 'json'
+    if (ct.includes('javascript') || ct.includes('text/js') || ct.includes('application/js')) return 'js'
+    if (ct.includes('typescript') || ct.includes('text/ts')) return 'ts'
+    if (ct.includes('css')) return 'css'
+    if (ct.includes('html')) return 'html'
+    if (ct.includes('xml')) return 'xml'
+    return 'plaintext'
+  }, [part.contentType])
   const highlightedBody = useShiki(part.value, lang, shikiTheme)
   const headerCount = Object.keys(part.headers).length
   const fileInfo = part.filename ? part.filename + (part.contentType ? ' (' + part.contentType + ')' : '') : null
@@ -199,15 +208,8 @@ function MultipartPartCard({ part }: { part: FormField }) {
             </div>
           )}
           <div className='relative group/mini'>
-            <div className={`absolute top-1 right-1 z-10 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover/mini:opacity-100'}`}>
-              <Tooltip>
-                <TooltipTrigger className="inline-flex">
-                  <button onClick={() => copy(part.value)} className='rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors'>{copied ? <CheckIcon className='size-3 text-emerald-500' /> : <CopyIcon className='size-3' />}</button>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="bg-popover text-popover-foreground text-ui-sm">
-                  {copied ? 'Copied' : 'Copy'}
-                </TooltipContent>
-              </Tooltip>
+            <div className="absolute top-1 right-1 z-10 transition-all opacity-0 group-hover/mini:opacity-100">
+              <CopyButton text={part.value} size="sm" className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors" />
             </div>
             {highlightedBody ? <div className='shiki-body whitespace-pre-wrap break-all overflow-x-auto px-2.5 py-1.5'>{highlightedBody}</div> : <pre className='whitespace-pre-wrap break-all px-2.5 py-1.5 text-foreground/80 font-mono'>{part.value}</pre>}
           </div>

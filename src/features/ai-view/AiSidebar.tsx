@@ -309,7 +309,6 @@ function SessionGroup({
 
 export function AiSidebar({ sessions, selection, onSelect, onDeleteSession, onDeleteRequest, onCopyCurl, onImportToEditor, mdSessions, onToggleMd }: AiSidebarProps) {
   const { t } = useTranslation()
-  const locale = i18n.language?.startsWith('zh') ? 'zh' : 'en'
   const grandTotal = sessions.reduce((sum, s) => sum + (s.usageTotal.totalTokens ?? 0), 0)
 
   return (

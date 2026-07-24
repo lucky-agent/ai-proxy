@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CopyIcon, CheckIcon, ChevronRight, ChevronDown, ListChecks } from 'lucide-react'
+import { ChevronRight, ChevronDown, ListChecks } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { CopyButton } from '@/components/core/CopyButton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Empty, EmptyTitle } from '@/components/ui/empty'
 import type { TrafficEntry } from '@/types/proxy'
 import { parseSse, isStreamingContentType, mergeSseMessages, estimateTokens, extractTokenUsage, type SseEvent, type MergeFormat, type MergeResult, type TokenUsage } from '@/lib/sse'
-import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+
 
 type ViewMode = 'chunks' | 'events' | 'merged'
 
@@ -158,7 +159,6 @@ export default function StreamingViewer({ entry }: Props) {
 // -------------------------------------------------------------------
 function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: TokenUsage | null }) {
   const { t } = useTranslation()
-  const { copied, copy } = useCopyToClipboard()
   const estTokens = useMemo(() => estimateTokens(result.content), [result.content])
 
   return (
@@ -166,15 +166,14 @@ function MergedView({ result, tokenUsage }: { result: MergeResult; tokenUsage: T
       <div className="relative min-h-0 flex-1 group">
         <Tooltip>
           <TooltipTrigger className="absolute right-1.5 top-1.5 z-10">
-            <button
-              onClick={() => copy(result.formatted)}
-              className={`rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-            >
-              {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
-            </button>
+            <CopyButton
+              text={result.formatted}
+              size="sm"
+              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all"
+            />
           </TooltipTrigger>
           <TooltipContent side="left" className="bg-popover text-popover-foreground text-ui-sm">
-            {copied ? t('detail.copied') : t('detail.copyUri')}
+            {t('detail.copyUri')}
           </TooltipContent>
         </Tooltip>
         {/* Token — 右下角固定 */}
@@ -258,15 +257,16 @@ function ChunkItem({
 // ChunkContent — 显示带复制功能的 chunk 内容
 // -------------------------------------------------------------------
 function ChunkContent({ data }: { data: string }) {
-  const { copied, copy } = useCopyToClipboard()
 
   return (
     <div className="group relative">
-      <button
-        onClick={() => copy(data)}
-        className="absolute right-1 top-1 z-10 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground hover:bg-surface-elevated/50 transition-all group-hover:opacity-100">
-        {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
-      </button>
+      <span className="absolute right-1 top-1 z-10 opacity-0 group-hover:opacity-100 transition-all">
+        <CopyButton
+          text={data}
+          size="xs"
+          className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50"
+        />
+      </span>
       <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded px-3 py-2 font-mono text-prose-sm leading-5 text-foreground/80">{data}</pre>
     </div>
   )
@@ -278,7 +278,6 @@ function ChunkContent({ data }: { data: string }) {
 function SseEventItem({ index, event }: { index: number; event: SseEvent }) {
 
   const [expanded, setExpanded] = useState(false)
-  const { copied, copy } = useCopyToClipboard()
   const formattedData = useMemo(() => {
     try {
       const parsed = JSON.parse(event.data)
@@ -327,15 +326,13 @@ function SseEventItem({ index, event }: { index: number; event: SseEvent }) {
       {/* Expanded content */}
       {expanded && !isDone && (
         <div className="group relative px-3 pb-2 pl-9">
-          <button
-            onClick={() => copy(event.data)}
-            className={`absolute right-1 top-1 z-10 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-            {copied ? (
-              <CheckIcon className="size-3 text-emerald-500" />
-            ) : (
-              <CopyIcon className="size-3" />
-            )}
-          </button>
+          <span className="absolute right-1 top-1 z-10 opacity-0 group-hover:opacity-100 transition-all">
+            <CopyButton
+              text={event.data}
+              size="xs"
+              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50"
+            />
+          </span>
           <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded px-3 py-1 font-mono text-prose-sm leading-5 text-foreground/80">{formattedData}</pre>
         </div>
       )}

@@ -1,7 +1,7 @@
-import { CheckIcon, CopyIcon, XIcon } from 'lucide-react'
+import { XIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import { CopyButton } from '@/components/core/CopyButton'
 import { statusCategory, formatDuration } from '@/lib/format'
 import { METHOD_BG_COLORS } from '@/lib/http-constants'
 import type { TrafficEntry } from '@/types/proxy'
@@ -14,7 +14,6 @@ const METHOD_COLOR_VAR = (method: string) => {
 
 export default function SummaryBar({ entry, onClose, showUriTooltip = true }: { entry: TrafficEntry; onClose?: () => void; showUriTooltip?: boolean }) {
   const { t } = useTranslation()
-  const { copied, copy } = useCopyToClipboard()
 
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-surface-elevated px-3 py-1.5 text-prose-md">
@@ -68,15 +67,14 @@ export default function SummaryBar({ entry, onClose, showUriTooltip = true }: { 
       )}
       <Tooltip>
         <TooltipTrigger className="inline-flex shrink-0">
-          <button
-            onClick={() => copy(entry.uri)}
+          <CopyButton
+            text={entry.uri}
+            size="sm"
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-colors"
-          >
-            {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
-          </button>
+          />
         </TooltipTrigger>
         <TooltipContent side="bottom" className="bg-popover text-popover-foreground text-ui-sm">
-          {copied ? t('detail.copied') : t('detail.copyUri')}
+          {t('detail.copyUri')}
         </TooltipContent>
       </Tooltip>
       {entry.durationMs != null && (

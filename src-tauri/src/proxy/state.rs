@@ -134,9 +134,6 @@ pub(crate) struct AppState {
     shutdown_signal: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     proxy_event_channel: Arc<RwLock<Option<Channel<ProxyEvent>>>>,
     pending_open_settings: Arc<AtomicBool>,
-    /// AI session store handle — written once when proxy starts, cleared on stop.
-    /// The command layer reads this for backend memory stats.
-    sessions: Arc<RwLock<Option<Arc<Mutex<SessionStore>>>>>,
 }
 
 impl AppState {
@@ -148,7 +145,6 @@ impl AppState {
             shutdown_signal: Arc::new(Mutex::new(None)),
             proxy_event_channel: Arc::new(RwLock::new(None)),
             pending_open_settings: Arc::new(AtomicBool::new(false)),
-            sessions: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -205,20 +201,5 @@ impl AppState {
 
     pub(crate) fn settings(&self) -> Settings {
         self.settings.read().expect("lock").clone()
-    }
-
-    /// Proxy 启动时写入 session store 句柄，供命令层读取内存统计。
-    pub(crate) fn set_sessions(&self, sessions: Arc<Mutex<SessionStore>>) {
-        *self.sessions.write().expect("lock") = Some(sessions);
-    }
-
-    /// Proxy 停止时清空句柄。
-    pub(crate) fn clear_sessions(&self) {
-        *self.sessions.write().expect("lock") = None;
-    }
-
-    /// 读取 session store 句柄（用于 backend memory stats）。
-    pub(crate) fn sessions(&self) -> Option<Arc<Mutex<SessionStore>>> {
-        self.sessions.read().expect("lock").clone()
     }
 }

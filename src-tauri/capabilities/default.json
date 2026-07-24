@@ -14,6 +14,8 @@
     "core:window:allow-set-theme",
     "window-state:default",
     "log:default",
+    "dialog:default",
+    "updater:default",
     {
       "identifier": "core:default",
       "allow": [
@@ -50,7 +52,10 @@
         { "command": "rename_node" },
         { "command": "move_node" },
         { "command": "save_request" },
-        { "command": "duplicate_request" }
+        { "command": "duplicate_request" },
+        { "command": "install_ca_cert" },
+        { "command": "read_ca_cert_pem" },
+        { "command": "export_ca_cert" }
       ]
     }
   ]

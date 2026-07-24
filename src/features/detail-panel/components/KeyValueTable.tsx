@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import { CheckIcon, CopyIcon } from 'lucide-react'
-import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import { CopyButton } from '@/components/core/CopyButton'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
 
@@ -93,7 +92,6 @@ export default function KeyValueTable({ data, emptyLabel }: { data: Record<strin
 }
 
 function KeyValueRow({ entryKey, value }: { entryKey: string; value: string }) {
-  const { copied, copy } = useCopyToClipboard(1200)
 
   return (
     <TableRow className="border-b border-surface-elevated/30 group hover:bg-surface-elevated/20 transition-colors">
@@ -111,12 +109,13 @@ function KeyValueRow({ entryKey, value }: { entryKey: string; value: string }) {
             <div className="max-h-[200px] overflow-auto whitespace-pre-wrap break-all font-mono text-ui-sm">{value}</div>
           </TooltipContent>
         </Tooltip>
-        <button
-          onClick={() => copy(value)}
-          className={`absolute right-0 top-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-        >
-          {copied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <CopyIcon className="size-3.5" />}
-        </button>
+        <span className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 transition-all">
+          <CopyButton
+            text={value}
+            size="xs"
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-surface-elevated/50"
+          />
+        </span>
       </TableCell>
     </TableRow>
   )

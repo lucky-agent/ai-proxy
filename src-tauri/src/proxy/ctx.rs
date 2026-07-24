@@ -12,6 +12,7 @@ use tauri::ipc::Channel;
 use crate::config::Settings;
 use crate::config::db::Db;
 use crate::proxy::ai::session::SessionStore;
+use crate::proxy::ai::AiTurn;
 use crate::proxy::events::ProxyEvent;
 use crate::storage::id;
 
@@ -36,6 +37,9 @@ pub(crate) struct ProxyCtx {
         crate::proxy::ai::Provider,
         String,
     )>,
+    /// 请求侧归一化：请求 turns 存入 ctx（OneShot），供响应侧构造
+    /// 自包含的 AiNormalized 事件（不再依赖 AiTimelineDelta 合并）。
+    request_turns: OnceLock<Vec<AiTurn>>,
     /// DB 连接（proxy 解密流量有；resend 等场景为 None）。
     db: Option<Arc<Db>>,
     /// 当前请求在 traffic_logs 表中的行 id（插入后由 DB 分配；写一次后只读）。
@@ -83,6 +87,7 @@ impl ProxyCtx {
             settings,
             sessions: None,
             ai_req: OnceLock::new(),
+            request_turns: OnceLock::new(),
             db: None,
             db_id: OnceLock::new(),
         }
@@ -197,6 +202,16 @@ impl ProxyCtx {
 
     pub(crate) fn settings(&self) -> &Settings {
         &self.settings
+    }
+
+    /// 请求侧登记归一化 turns。仅首次写入生效。
+    pub(crate) fn set_ai_request_turns(&self, turns: Vec<AiTurn>) {
+        self.request_turns.set(turns).ok();
+    }
+
+    /// 响应侧读取请求侧 turns（浅克隆）。
+    pub(crate) fn request_turns(&self) -> Vec<AiTurn> {
+        self.request_turns.get().cloned().unwrap_or_default()
     }
 
     pub(crate) fn start_ms(&self) -> i64 {

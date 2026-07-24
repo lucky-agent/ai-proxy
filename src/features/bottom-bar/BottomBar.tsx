@@ -8,7 +8,6 @@ import {
   LayoutRightOn,
   LayoutRightOff,
   ScriptIcon,
-  AiIcon,
 } from '@/components/icons'
 import { useLocale } from '@/hooks/useLocale'
 import { cn } from '@/lib/utils'

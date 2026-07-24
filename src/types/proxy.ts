@@ -1,4 +1,4 @@
-import type { AiConversation, AiUsage, TimelineEntry } from '@/types/ai'
+import type { AiConversation, AiTurn, AiUsage } from '@/types/ai'
 
 export interface RequestEvent {
   id: number
@@ -65,11 +65,8 @@ export type ProxyEvent =
       provider: string
       conversation: AiConversation
       streaming: boolean
-    }
-  | {
-      type: 'ai_timeline_delta'
-      session_id: string
-      entries: TimelineEntry[]
+      /** 请求侧归一化 turns（请求体 messages），前端与 assistant 回复拼接为完整对话。 */
+      request_turns?: AiTurn[]
     }
   | {
       type: 'ai_session'
@@ -109,21 +106,4 @@ export interface TrafficEntry {
   responseContentType?: string
   error: string | null
   decrypted?: boolean
-}
-
-/** 后端 SessionStore 内存统计（get_backend_memory_stats 返回） */
-export interface BackendMemoryStats {
-  sessionCount: number
-  maxSessions: number
-  /** 所有 session 的 timeline 条目总数 */
-  timelineEntryCount: number
-  /** timeline 中 AiTurn JSON 序列化字节估算 */
-  timelineContentBytes: number
-  /** id / scope / title / source / match_reason 字符串字节估算 */
-  metadataBytes: number
-  /** last_fingerprints + request_ids Vec<u64> 堆字节估算 */
-  fingerprintBytes: number
-  /** HashMap + Vec 堆 + SessionEntry 结构体开销 */
-  structBytes: number
-  totalEstBytes: number
 }

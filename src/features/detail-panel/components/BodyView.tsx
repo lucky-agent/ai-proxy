@@ -1,6 +1,6 @@
 import { useState, useMemo, memo } from 'react'
-import { CheckIcon, CopyIcon, ChevronDown, ChevronRight, ArrowLeftToLine, TextWrap } from 'lucide-react'
-import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
+import { ChevronDown, ChevronRight, ArrowLeftToLine, TextWrap } from 'lucide-react'
+import { CopyButton } from '@/components/core/CopyButton'
 import { useTheme } from '@/hooks/useTheme'
 import { useShiki } from '@/hooks/useShiki'
 import { JsonTreeView } from '@/components/json-tree'
@@ -84,7 +84,6 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
   const [wrapped, setWrapped] = useState(true)
   const [format, setFormat] = useState<'auto' | 'json' | 'xml' | 'html' | 'plaintext'>('auto')
   const [allExpanded, setAllExpanded] = useState(true)
-  const { copied, copy } = useCopyToClipboard()
 
   const formatOptions = ['Auto', 'JSON', 'XML', 'HTML', 'Text'] as const
   const formatValues = ['auto', 'json', 'xml', 'html', 'plaintext'] as const
@@ -104,6 +103,9 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
       if (!ct) return null
       const lower = ct.toLowerCase()
       if (lower.includes('json')) return { displayLang: 'json', useTreeView: false }
+      if (lower.includes('javascript') || lower.includes('text/js') || lower.includes('application/js')) return { displayLang: 'js', useTreeView: false }
+      if (lower.includes('typescript') || lower.includes('text/ts')) return { displayLang: 'ts', useTreeView: false }
+      if (lower.includes('css')) return { displayLang: 'css', useTreeView: false }
       if (lower.includes('xml') && !lower.includes('html')) return { displayLang: 'xml', useTreeView: false }
       if (lower.includes('html')) return { displayLang: 'html', useTreeView: false }
       return null
@@ -135,7 +137,7 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
   return (
     <div className="flex flex-col h-full">
       <div className="relative min-h-0 flex-1 group/mini">
-        <div className={`absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover/mini:opacity-100'}`}>
+        <div className={`absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 transition-all opacity-0 group-hover/mini:opacity-100`}>
           <Select
             value={format}
             onValueChange={(value) => setFormat(value as typeof format)}
@@ -174,16 +176,11 @@ const BodyView = memo(function BodyView({ body, contentType }: { body: string; c
               )}
             </button>
           )}
-          <button
-            onClick={() => copy(displayBody)}
+          <CopyButton
+            text={displayBody}
+            size="sm"
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-surface-elevated/30 transition-colors"
-          >
-            {copied ? (
-              <CheckIcon className="size-3 text-emerald-500" />
-            ) : (
-              <CopyIcon className="size-3" />
-            )}
-          </button>
+          />
         </div>
         <div className="absolute inset-0 overflow-auto">
           {useTreeView && parsedJson ? (

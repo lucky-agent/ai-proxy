@@ -1,6 +1,6 @@
 [package]
 name         = "ai-proxy"
-version      = "0.2.0"
+version      = "0.1.0"
 description  = "AI Proxy - Anthropic/OpenAI API MITM Proxy"
 authors      = ["lokistars"]
 edition      = "2024"
@@ -29,11 +29,14 @@ tokio = { version = "1", features = [
 log = "0.4"
 tauri-plugin-log = "2"
 tauri-plugin-window-state = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 time = { version = "0.3", features = ["formatting", "local-offset"] }
 rama = { git = "https://github.com/plabayo/rama", features = [
   "http-full",
   "rustls",
   "ring",
+  "dns",
 ] }
 bytes = "1"
 uuid = { version = "1", features = ["v4"] }
@@ -47,3 +50,11 @@ rustls = { version = "0.23", default-features = false, features = [
 rquickjs = { version = "0.12" }
 sqlite = "0.37.0"
 open = "5"
+windows-sys = { version = "0.59", features = ["Win32_Security_Cryptography"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = "s"
+panic = "unwind"
+strip = "symbols"

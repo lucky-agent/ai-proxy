@@ -18,7 +18,8 @@ use crate::commands::{
     move_node, save_request, duplicate_request, save_script_config, save_script_content, save_settings, save_ssl_config, set_locale,
     set_prose_font_size, set_script_enabled, set_ssl_enabled,
     set_theme, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
-    get_ai_config, save_ai_config, set_ai_enabled, test_rule_match, get_backend_memory_stats,
+    get_ai_config, save_ai_config, set_ai_enabled, test_rule_match,
+    install_ca_cert, read_ca_cert_pem, export_ca_cert,
 };
 use crate::config::{Settings, Store};
 
@@ -134,12 +135,16 @@ pub fn run() {
     let app = tauri::Builder::default()
         .setup(app_setup)
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
             start_proxy,
             stop_proxy,
             get_status,
-            get_backend_memory_stats,
+            install_ca_cert,
+            read_ca_cert_pem,
+            export_ca_cert,
             open_url,
             get_ssl_config,
             save_ssl_config,

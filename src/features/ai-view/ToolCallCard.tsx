@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo } from 'react'
-import { ChevronRight, ChevronDown, ExternalLinkIcon, WrenchIcon, CopyIcon, CheckIcon, CodeIcon, TextIcon } from 'lucide-react'
+import { ChevronRight, ChevronDown, ExternalLinkIcon, WrenchIcon, CodeIcon, TextIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { isLikelyMarkdown } from '@/lib/markdown'
 import { MarkdownContent } from '@/components/markdown/MarkdownContent'
+import { CopyButton } from '@/components/core/CopyButton'
 
 /** 一条 tool_use + tool_result 配对 */
 export interface ToolCallEntry {
@@ -38,31 +39,14 @@ export function ToolCallCard({ entry, reqLabel, defaultExpanded, onJump }: ToolC
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [resultExpanded, setResultExpanded] = useState(false)
-  const [inputCopied, setInputCopied] = useState(false)
-  const [resultCopied, setResultCopied] = useState(false)
-  const [cardCopied, setCardCopied] = useState(false)
 
   const toggleExpand = useCallback(() => setExpanded((v) => !v), [])
   const toggleResult = useCallback(() => setResultExpanded((v) => !v), [])
 
-  const copyInput = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    try { await navigator.clipboard.writeText(formatInput(entry.input)); setInputCopied(true); setTimeout(() => setInputCopied(false), 1200) } catch {}
-  }, [entry.input])
-
-  const copyResult = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    try { await navigator.clipboard.writeText(entry.result ?? ''); setResultCopied(true); setTimeout(() => setResultCopied(false), 1200) } catch {}
-  }, [entry.result])
-
-  const copyCard = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    const text = `[tool_use] ${entry.toolName}\n${formatInput(entry.input)}\n\n[tool_result]\n${entry.result ?? ''}`
-    try { await navigator.clipboard.writeText(text); setCardCopied(true); setTimeout(() => setCardCopied(false), 1200) } catch {}
-  }, [entry])
+  const inputText = formatInput(entry.input)
+  const cardText = `[tool_use] ${entry.toolName}\n${inputText}\n\n[tool_result]\n${entry.result ?? ''}`
 
   // 入参的可读字符串
-  const inputText = formatInput(entry.input)
 
   // 是否需要截断 + 是否已经展开全部
   const needsTruncate = entry.result != null && entry.resultLines > TRUNCATE_LINES && !resultExpanded
@@ -99,13 +83,11 @@ export function ToolCallCard({ entry, reqLabel, defaultExpanded, onJump }: ToolC
           {entry.toolName}
         </span>
         {/* 复制卡片 */}
-        <button
-          type="button"
-          onClick={copyCard}
-          className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
-        >
-          {cardCopied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
-        </button>
+        <CopyButton
+            text={cardText}
+            size="xs"
+            className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
+          />
         {/* 跳转代理 */}
         {onJump && (
           <span
@@ -127,13 +109,11 @@ export function ToolCallCard({ entry, reqLabel, defaultExpanded, onJump }: ToolC
           <div className="px-2.5 py-1.5 border-b border-border/30">
             <div className="flex items-center gap-1.5 text-ui-2xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">
               <span>📥 {t('aiView.toolCallInput', '入参')}</span>
-              <button
-                type="button"
-                onClick={copyInput}
+              <CopyButton
+                text={inputText}
+                size="xs"
                 className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
-              >
-                {inputCopied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
-              </button>
+              />
             </div>
             <pre className="text-prose-sm font-mono text-foreground/80 bg-amber-500/5 rounded p-2 whitespace-pre-wrap break-all m-0 max-h-36 overflow-y-auto">{inputText}</pre>
           </div>
@@ -153,13 +133,11 @@ export function ToolCallCard({ entry, reqLabel, defaultExpanded, onJump }: ToolC
                     {showResultMd ? <CodeIcon className="size-3" /> : <TextIcon className="size-3" />}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={copyResult}
+                <CopyButton
+                  text={entry.result ?? ''}
+                  size="xs"
                   className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
-                >
-                  {resultCopied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
-                </button>
+                />
               </div>
               {showResultMd ? (
                 <div className="rounded p-2 bg-emerald-500/5 max-h-[512px] overflow-y-auto">

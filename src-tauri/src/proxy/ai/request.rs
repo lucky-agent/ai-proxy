@@ -58,15 +58,9 @@ pub(crate) fn process_ai_request(ctx: &ProxyCtx, body_str: Option<String>) {
     // 登记 (provider, session_id) 供响应侧使用。
     ctx.set_ai_req(provider, result.session_id.clone());
 
-    // 请求侧时间线增量：LCP 之后的请求体 turns。
-    if !result.request_delta.is_empty() {
-        ctx.send(ProxyEvent::AiTimelineDelta {
-            session_id: result.session_id.clone(),
-            entries: result.request_delta,
-        });
-    }
+    // 请求侧 turns 存入 ctx，供响应侧构造自包含的 AiNormalized。
+    ctx.set_ai_request_turns(turns);
 
-    // 保持事件顺序：AiTimelineDelta 先于 AiSession。
     ctx.send(ProxyEvent::AiSession {
         session_id: result.session_id,
         scope_host: host,

@@ -210,6 +210,215 @@ pub fn save_ai_config(state: tauri::State<'_, AppState>, ai: AiConfig) -> Result
     Ok(())
 }
 
+/// 安装 CA 证书到操作系统信任库。
+/// Windows: CryptoAPI 静默安装到 CurrentUser\Root，不弹窗。
+/// macOS: 安装到 login keychain（钥匙串未锁时静默）。
+/// Linux: pkexec/sudo 复制到系统证书目录。
+#[tauri::command]
+pub fn install_ca_cert(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    let data_dir = state.store().data_dir();
+    let ca_cert_path = data_dir.join("ca-cert.pem");
+
+    if !ca_cert_path.exists() {
+        return Err(format!(
+            "CA certificate not found at {}",
+            ca_cert_path.display()
+        ));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    let cert_path_str = ca_cert_path.to_string_lossy().to_string();
+
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::Security::Cryptography::{
+            CertAddEncodedCertificateToStore, CertCloseStore, CertOpenStore,
+            X509_ASN_ENCODING, CERT_STORE_ADD_REPLACE_EXISTING,
+            sz_CERT_STORE_PROV_SYSTEM_W, CERT_SYSTEM_STORE_CURRENT_USER,
+        };
+        use windows_sys::Win32::Foundation::GetLastError;
+        use std::ptr::null_mut;
+
+        // 读取 PEM 并提取 DER 字节
+        let ca_pem = std::fs::read_to_string(&ca_cert_path)
+            .map_err(|e| format!("Failed to read CA cert: {e}"))?;
+        let der_bytes = pem_to_der(&ca_pem)
+            .map_err(|e| format!("Failed to decode CA cert PEM: {e}"))?;
+
+        // 通过 CryptoAPI 静默安装到 CurrentUser\Root，不弹任何窗口
+        unsafe {
+            let store = CertOpenStore(
+                sz_CERT_STORE_PROV_SYSTEM_W,
+                X509_ASN_ENCODING,
+                0,
+                CERT_SYSTEM_STORE_CURRENT_USER,
+                windows_sys::core::w!("Root") as *const _,
+            );
+            if store.is_null() {
+                return Err("Failed to open Windows certificate store".into());
+            }
+
+            let ok = CertAddEncodedCertificateToStore(
+                store,
+                X509_ASN_ENCODING,
+                der_bytes.as_ptr(),
+                der_bytes.len() as u32,
+                CERT_STORE_ADD_REPLACE_EXISTING,
+                null_mut(),
+            );
+
+            let err = GetLastError();
+            CertCloseStore(store, 0);
+
+            if ok == 0 {
+                return Err(format!(
+                    "Certificate install failed (error code: 0x{err:08X}).\n\
+                     You can also export and install the certificate manually.",
+                ));
+            }
+        }
+
+        log::info!("CA cert installed to CurrentUser\\Root via CryptoAPI");
+        Ok("Certificate installed to Windows Root store".into())
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // 安装到用户级钥匙串，不需要管理员权限。
+        let check = std::process::Command::new("security")
+            .args(["find-certificate", "-c", "ai-proxy"])
+            .output();
+        if let Ok(ref out) = check {
+            if out.status.success() {
+                log::info!("CA cert already in login keychain, skipping");
+                return Ok("Certificate is already installed in login keychain".into());
+            }
+        }
+
+        let output = std::process::Command::new("security")
+            .args([
+                "add-trusted-cert",
+                "-d",
+                "-r",
+                "trustRoot",
+                "-k",
+                &format!(
+                    "{}/Library/Keychains/login.keychain-db",
+                    std::env::var("HOME").unwrap_or_else(|_| "/Users/unknown".into())
+                ),
+                &cert_path_str,
+            ])
+            .output()
+            .map_err(|e| format!("Failed to run security: {e}"))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        if output.status.success() {
+            log::info!("CA cert installed to login keychain: {stdout}");
+            Ok("Certificate installed to login keychain".into())
+        } else {
+            let code = output.status.code().map(|c| c.to_string()).unwrap_or_else(|| "unknown".into());
+            Err(format!("security exit={code}\nstdout: {stdout}\nstderr: {stderr}"))
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let candidates = [
+            // Debian/Ubuntu 系
+            ("/usr/local/share/ca-certificates/ai-proxy.crt", "update-ca-certificates"),
+            // Fedora/RHEL 系
+            ("/etc/pki/ca-trust/source/anchors/ai-proxy.crt", "update-ca-trust"),
+        ];
+
+        for (dest_path, update_cmd) in &candidates {
+            // 尝试复制到目标目录
+            let copy_result = std::process::Command::new("pkexec")
+                .args(["cp", &cert_path_str, dest_path])
+                .output();
+
+            let copied = match &copy_result {
+                Ok(o) if o.status.success() => true,
+                _ => {
+                    // pkexec 需要 GUI 环境，fallback 到 sudo
+                    std::process::Command::new("sudo")
+                        .args(["cp", &cert_path_str, dest_path])
+                        .output()
+                        .map(|o| o.status.success())
+                        .unwrap_or(false)
+                }
+            };
+
+            if copied {
+                // 更新证书存储
+                let update = std::process::Command::new("pkexec")
+                    .arg(update_cmd)
+                    .output()
+                    .or_else(|_| {
+                        std::process::Command::new("sudo").arg(update_cmd).output()
+                    });
+
+                match update {
+                    Ok(o) if o.status.success() => {
+                        let msg = format!(
+                            "CA cert installed via {}",
+                            dest_path
+                        );
+                        log::info!("{msg}");
+                        return Ok(msg);
+                    }
+                    Ok(o) => {
+                        let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+                        let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+                        let code = o.status.code().map(|c| c.to_string()).unwrap_or_else(|| "unknown".into());
+                        return Err(format!("{update_cmd} exit={code}\nstdout: {stdout}\nstderr: {stderr}"));
+                    }
+                    Err(e) => return Err(format!("Failed to run {update_cmd}: {e}")),
+                }
+            }
+        }
+
+        Err("No supported Linux CA store found. Install manually: copy ca-cert.pem to /usr/local/share/ca-certificates/ and run update-ca-certificates".into())
+    }
+}
+
+/// 读取 CA 证书内容（PEM 格式），用于前端导出下载。
+#[tauri::command]
+pub fn read_ca_cert_pem(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    let src = state.store().data_dir().join("ca-cert.pem");
+    if !src.exists() {
+        return Err("CA certificate not found. Start the proxy once to generate it.".into());
+    }
+    std::fs::read_to_string(&src).map_err(|e| format!("Failed to read CA cert: {e}"))
+}
+
+/// 将 CA 证书导出到指定路径。
+#[tauri::command]
+pub fn export_ca_cert(state: tauri::State<'_, AppState>, dest_path: String) -> Result<(), String> {
+    let src = state.store().data_dir().join("ca-cert.pem");
+    if !src.exists() {
+        return Err("CA certificate not found. Start the proxy once to generate it.".into());
+    }
+    std::fs::copy(&src, &dest_path)
+        .map(|_| ())
+        .map_err(|e| format!("Failed to write certificate to {}: {}", dest_path, e))
+}
+
+/// 将 PEM 格式的证书转换为 DER 字节。
+/// 输入要求是合法 PEM（有头尾标记、base64 内容），否则返回 Err。
+#[cfg(target_os = "windows")]
+fn pem_to_der(pem: &str) -> Result<Vec<u8>, String> {
+    let b64: String = pem
+        .lines()
+        .filter(|line| !line.starts_with("-----"))
+        .collect();
+
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(&b64)
+        .map_err(|e| format!("Invalid base64 in PEM: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

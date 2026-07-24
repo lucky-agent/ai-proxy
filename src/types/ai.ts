@@ -68,6 +68,4 @@ export interface AiSessionState {
   source?: string
   /** 每个请求 id → 该次归一化对话（纯响应侧数据：assistant turns + 元信息） */
   conversations: Record<number, AiConversation>
-  /** 合并后的时间线：从 AiTimelineDelta 累积，前端直接渲染 */
-  timeline: TimelineEntry[]
 }

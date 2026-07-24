@@ -28,6 +28,9 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
   const [sortColumn, setSortColumn] = useState<SortColumn>(null)
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [editEntry, setEditEntry] = useState<TrafficEntry | null>(null)
+  /** 由 resend/edit-send 触发的内部跳转信号（独立于 AI 视图 jumpTarget） */
+  const [scrollTarget, setScrollTarget] = useState<ProxyJumpTarget | null>(null)
+  const scrollNonceRef = useRef(0)
   const [pinnedDomains, setPinnedDomains] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem('ai-proxy-pinned-domains')
@@ -140,6 +143,9 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
     return copy
   }, [filtered, sortColumn, sortOrder])
 
+  // 合并两个跳转源：resend/edit → scrollTarget，AI 视图 → jumpTarget
+  const effectiveTarget = scrollTarget ?? jumpTarget
+
   const selected = entries.find(e => e.id === selectedId)
 
   // 延迟 DetailPanel 的 entry 更新：选中高亮立即生效，DetailPanel 在下一空闲帧渲染
@@ -165,8 +171,11 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
   }, [])
 
   const handleSendSuccess = useCallback((entryId: number) => {
+    // EditRequestDialog 发送成功后选中并滚动到新条目。
+    // nonce 自增确保重复发同一条也能重触发滚动。
+    scrollNonceRef.current += 1
+    setScrollTarget({ id: entryId, nonce: scrollNonceRef.current })
     setSelectedId(entryId)
-    setEditEntry(null)
   }, [])
 
   const handleResendRequest = useCallback(async (entry: TrafficEntry) => {
@@ -184,6 +193,10 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
         headers,
         body: entry.requestBody,
       })
+      // 清域名过滤保证新条目在列表中可见，选中并滚动到目标行
+      setSelectedDomain(null)
+      scrollNonceRef.current += 1
+      setScrollTarget({ id: entryId, nonce: scrollNonceRef.current })
       setSelectedId(entryId)
     } catch (err) {
       console.error('resend invoke failed:', err)
@@ -205,8 +218,8 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
       onSortChange={handleSortChange}
       onResendRequest={handleResendRequest}
       onEditRequest={handleEditRequest}
-      scrollToId={jumpTarget?.id}
-      scrollNonce={jumpTarget?.nonce}
+      scrollToId={effectiveTarget?.id}
+      scrollNonce={effectiveTarget?.nonce}
     />
   )
 
@@ -261,7 +274,7 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
       <ResizablePanelGroup orientation="horizontal" id="trafficlog-outer" className="h-full">
         <ResizablePanel
           id="domain-sidebar"
-          defaultSize={showSidebar ? 18 : 0}
+          defaultSize={showSidebar ? "18%" : 0}
           minSize="8%"
           maxSize="100%"
           collapsible
@@ -288,6 +301,7 @@ export default function TrafficLog({ entries, showSidebar, detailPosition, onAut
         open={editEntry !== null}
         onOpenChange={(open) => { if (!open) setEditEntry(null) }}
         entry={editEntry}
+        entries={entries}
         onSendSuccess={handleSendSuccess}
       />
     </div>

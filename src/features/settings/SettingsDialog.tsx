@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { MonitorIcon, MoonIcon, SunIcon, GlobeIcon, ServerIcon } from 'lucide-react'
+import { MonitorIcon, MoonIcon, SunIcon, GlobeIcon, ServerIcon, ShieldCheckIcon, DownloadIcon } from 'lucide-react'
+import { save } from '@tauri-apps/plugin-dialog'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,7 +40,7 @@ interface Props {
   onProseFontSizeChange: (size: ProseFontSize) => void
 }
 
-type SettingsTab = 'general' | 'proxy'
+type SettingsTab = 'general' | 'proxy' | 'certificate'
 
 interface NavItem {
   value: SettingsTab
@@ -50,6 +51,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { value: 'general', icon: GlobeIcon, labelKey: 'settings.generalTab' },
   { value: 'proxy', icon: ServerIcon, labelKey: 'settings.proxyTab' },
+  { value: 'certificate', icon: ShieldCheckIcon, labelKey: 'settings.certificateTab' },
 ]
 
 const inputClass = 'h-auto w-full'
@@ -66,6 +68,10 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  // 证书安装/导出状态
+  const [certInstalling, setCertInstalling] = useState(false)
+  const [certMsg, setCertMsg] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -94,6 +100,34 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
       setError(String(err))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleInstallCert() {
+    setCertInstalling(true)
+    setCertMsg('')
+    try {
+      const msg = await invoke<string>('install_ca_cert')
+      setCertMsg(msg)
+    } catch (err) {
+      setCertMsg(String(err))
+    } finally {
+      setCertInstalling(false)
+    }
+  }
+
+  async function handleExportCert() {
+    setCertMsg('')
+    try {
+      const filePath = await save({
+        defaultPath: 'ai-proxy-ca-cert.pem',
+        filters: [{ name: 'Certificate', extensions: ['pem', 'crt'] }],
+      })
+      if (!filePath) return // 用户取消
+      await invoke('export_ca_cert', { destPath: filePath })
+      setCertMsg(`Certificate exported to ${filePath}`)
+    } catch (err) {
+      setCertMsg(String(err))
     }
   }
 
@@ -266,6 +300,65 @@ export default function SettingsDialog({ open, onOpenChange, theme, onThemeChang
                   />
                   <Label htmlFor="upstream-proxy">{t('settings.upstreamProxy')}</Label>
                 </label>
+              </TabsContent>
+
+              <TabsContent value="certificate" className="grid gap-4">
+                <p className="text-xs text-muted-foreground">
+                  {t('settings.certHint')}
+                </p>
+
+                {/* 安装证书 */}
+                <div className="rounded-lg border border-border bg-surface-deep p-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="grid gap-0.5">
+                      <span className="text-ui-md font-medium text-foreground">
+                        {t('settings.certInstallTitle')}
+                      </span>
+                      <span className="text-ui-sm text-muted-foreground">
+                        {t('settings.certInstallDesc')}
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={handleInstallCert}
+                      disabled={certInstalling}
+                    >
+                      <ShieldCheckIcon className="size-3.5" />
+                      {certInstalling ? t('settings.saving') : t('settings.installCert')}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 导出证书 */}
+                <div className="rounded-lg border border-border bg-surface-deep p-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="grid gap-0.5">
+                      <span className="text-ui-md font-medium text-foreground">
+                        {t('settings.certExportTitle')}
+                      </span>
+                      <span className="text-ui-sm text-muted-foreground">
+                        {t('settings.certExportDesc')}
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={handleExportCert}
+                    >
+                      <DownloadIcon className="size-3.5" />
+                      {t('settings.exportCert')}
+                    </Button>
+                  </div>
+                </div>
+
+                {certMsg && (
+                  <Alert variant={certMsg.includes('already') || certMsg.includes('installed') ? 'default' : 'destructive'}>
+                    <AlertDescription>{certMsg}</AlertDescription>
+                  </Alert>
+                )}
               </TabsContent>
             </div>
           </Tabs>

@@ -35,6 +35,8 @@ pub(crate) struct AiState {
     raw_keys: HashSet<String>,
     /// 流式节流计数器（累计 SSE data 长度）；非流式恒为 0。
     stream_acc: usize,
+    /// 请求侧归一化 turns，供 AiNormalized 事件自包含。
+    request_turns: Vec<AiTurn>,
 }
 
 impl AiState {
@@ -44,6 +46,7 @@ impl AiState {
         sessions: Option<Arc<Mutex<SessionStore>>>,
         start_ms: i64,
         is_sse: bool,
+        request_turns: Vec<AiTurn>,
     ) -> Self {
         let (stream_state, raw_keys, stream_acc) = if is_sse {
             (Some(provider.create_stream_state()), HashSet::new(), 0usize)
@@ -58,6 +61,7 @@ impl AiState {
             stream_state,
             raw_keys,
             stream_acc,
+            request_turns,
         }
     }
 
@@ -91,6 +95,7 @@ impl AiState {
                 request_id,
                 &self.session_id,
                 snap,
+                &self.request_turns,
             );
         }
     }
@@ -167,21 +172,12 @@ impl AiState {
                 }
             }
 
-            // 助理 turns 时间线增量：写入 SessionStore + 推送前端
+            // 助理 turns 写入后端 SessionStore（供 prefix 匹配），
+            // 不再通过 AiTimelineDelta 推前端——前端从 AiNormalized.conversation 自包含消费。
             let assistant_turns: Vec<AiTurn> = conv.turns.clone();
-            let delta_entries = if let Some(ref sessions) = self.sessions {
+            if let Some(ref sessions) = self.sessions {
                 let mut store = sessions.lock().expect("sessions lock");
-                store.append_assistant_turns(&self.session_id, request_id, &assistant_turns)
-            } else {
-                Vec::new()
-            };
-            if !delta_entries.is_empty() {
-                if let Some(ch) = sender {
-                    let _ = ch.send(ProxyEvent::AiTimelineDelta {
-                        session_id: self.session_id.clone(),
-                        entries: delta_entries,
-                    });
-                }
+                store.append_assistant_turns(&self.session_id, request_id, &assistant_turns);
             }
 
             emit_ai_normalized(
@@ -189,6 +185,7 @@ impl AiState {
                 request_id,
                 &self.session_id,
                 conv.clone(),
+                &self.request_turns,
             );
             commit_ai_final(sender, &self.sessions, request_id, &self.session_id, &conv);
         }
@@ -204,6 +201,7 @@ pub(crate) fn emit_ai_normalized(
     request_id: u64,
     session_id: &str,
     conv: AiConversation,
+    request_turns: &[AiTurn],
 ) {
     if let Some(ch) = sender {
         let _ = ch.send(ProxyEvent::AiNormalized {
@@ -212,6 +210,7 @@ pub(crate) fn emit_ai_normalized(
             provider: conv.provider.clone(),
             streaming: conv.streaming,
             conversation: conv,
+            request_turns: request_turns.to_vec(),
         });
     }
 }

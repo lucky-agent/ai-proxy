@@ -151,6 +151,9 @@ async fn tunnel_connect_proxy<P>(
     let executor = Executor::default();
     let tunnel_svc = (TimeoutLayer::new(std::time::Duration::from_secs(30)),).into_layer(
         IoToProxyBridgeIoLayer::extension_connector_target()
+            .with_connector(rama::dns::client::DnsConnector::new(
+                rama::tcp::client::service::TcpConnector::new(),
+            ))
             .into_layer(IoForwardService::new(executor)),
     );
 

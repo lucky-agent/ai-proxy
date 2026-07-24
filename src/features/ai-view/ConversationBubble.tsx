@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, ChevronDown, WrenchIcon, FileTextIcon, ExternalLinkIcon, CopyIcon, CheckIcon, CodeIcon, TextIcon, BrainIcon } from 'lucide-react'
+import { ChevronRight, ChevronDown, WrenchIcon, FileTextIcon, ExternalLinkIcon, CodeIcon, TextIcon, BrainIcon } from 'lucide-react'
 import { type AiTurn, type AiContentBlock } from '@/types/ai'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { isLikelyMarkdown } from '@/lib/markdown'
 import { MarkdownContent } from '@/components/markdown/MarkdownContent'
+import { CopyButton } from '@/components/core/CopyButton'
 
 /** 把单个 content block 拼成可复制的纯文本 */
 function blockToText(block: AiContentBlock): string {
@@ -54,17 +55,11 @@ function TextBlock({ text, showMd, inverted }: { text: string; showMd: boolean; 
 function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock; showMd: boolean; headerActions?: React.ReactNode }) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
-  const [thinkingCopied, setThinkingCopied] = useState(false)
 
   const thinkingIsMd = useMemo(() => {
     if (block.type !== 'thinking') return false
     return isLikelyMarkdown(block.text)
   }, [block.type === 'thinking' ? block.text : '', block.type])
-
-  const copyThinking = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    try { await navigator.clipboard.writeText(block.type === 'thinking' ? block.text : ''); setThinkingCopied(true); setTimeout(() => setThinkingCopied(false), 1200) } catch {}
-  }
 
   if (block.type === 'text') {
     return <TextBlock text={block.text} showMd={showMd} inverted={false} />
@@ -80,13 +75,11 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
           {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
           <BrainIcon className="size-3 flex-shrink-0" />
           <span className="truncate flex-1">{t('aiView.thinking', '思考过程')}</span>
-          <button
-            type="button"
-            onClick={copyThinking}
+          <CopyButton
+            text={block.type === 'thinking' ? block.text : ''}
+            size="xs"
             className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
-          >
-            {thinkingCopied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
-          </button>
+          />
           {headerActions}
         </button>
         {expanded && (
@@ -103,11 +96,7 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
   }
 
   if (block.type === 'tool_use') {
-    const copyToolUse = async (e: React.MouseEvent) => {
-      e.stopPropagation()
-      const text = `[tool_use] ${block.name}\n${JSON.stringify(block.input, null, 2)}`
-      try { await navigator.clipboard.writeText(text) } catch {}
-    }
+    const toolUseText = `[tool_use] ${block.name}\n${JSON.stringify(block.input, null, 2)}`
     return (
       <div className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 overflow-hidden">
         <button
@@ -117,13 +106,11 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
           {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
           <WrenchIcon className="size-3 flex-shrink-0" />
           <span className="truncate flex-1">{block.name}</span>
-          <button
-            type="button"
-            onClick={copyToolUse}
+          <CopyButton
+            text={toolUseText}
+            size="xs"
             className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
-          >
-            <CopyIcon className="size-3" />
-          </button>
+          />
           {headerActions}
         </button>
         {expanded && (
@@ -134,11 +121,7 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
   }
 
   if (block.type === 'tool_result') {
-    const copyToolResult = async (e: React.MouseEvent) => {
-      e.stopPropagation()
-      const text = `[tool_result]\n${block.content.map(blockToText).join('\n')}`
-      try { await navigator.clipboard.writeText(text) } catch {}
-    }
+    const toolResultText = `[tool_result]\n${block.content.map(blockToText).join('\n')}`
     return (
       <div className="mt-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
         <button
@@ -148,13 +131,11 @@ function ContentBlock({ block, showMd, headerActions }: { block: AiContentBlock;
           {expanded ? <ChevronDown className="size-3 flex-shrink-0" /> : <ChevronRight className="size-3 flex-shrink-0" />}
           <FileTextIcon className="size-3 flex-shrink-0" />
           <span className="truncate flex-1">tool result</span>
-          <button
-            type="button"
-            onClick={copyToolResult}
+          <CopyButton
+            text={toolResultText}
+            size="xs"
             className="inline-flex items-center p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
-          >
-            <CopyIcon className="size-3" />
-          </button>
+          />
           {headerActions}
         </button>
         {expanded && (
@@ -200,7 +181,6 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
   const { t } = useTranslation()
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const [systemExpanded, setSystemExpanded] = useState(false)
-  const [copied, setCopied] = useState(false)
 
   // md 能力：递归检测所有 text block（包括 tool_result 内部的）
   const mdCapable = useMemo(() => {
@@ -221,25 +201,16 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
   const showMd = mdCapable && view === 'md'
   const contentRef = useRef<HTMLDivElement>(null)
 
-  const handleCopy = async () => {
-    try {
-      let text: string
-      if (showMd && contentRef.current) {
-        // 临时隐藏代码块头部（语言标签），innerText 排除 visibility:hidden 的节点
-        const headers = Array.from(contentRef.current.querySelectorAll<HTMLElement>('[data-streamdown="code-block-header"]'))
-        headers.forEach((h) => (h.style.visibility = 'hidden'))
-        text = contentRef.current.innerText.replace(/▌\s*$/, '')
-        headers.forEach((h) => (h.style.visibility = ''))
-      } else {
-        text = turnToText(turn)
-      }
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
-    } catch {
-      /* 剪贴板不可用时静默忽略 */
+  const copyText = useMemo(() => {
+    if (showMd && contentRef.current) {
+      const headers = Array.from(contentRef.current.querySelectorAll<HTMLElement>('[data-streamdown="code-block-header"]'))
+      headers.forEach((h) => (h.style.visibility = 'hidden'))
+      const text = contentRef.current.innerText.replace(/▌\s*$/, '')
+      headers.forEach((h) => (h.style.visibility = ''))
+      return text
     }
-  }
+    return turnToText(turn)
+  }, [showMd, turn])
 
   // 检测是否「纯工具」气泡：只有 tool_use / tool_result，没有 text block
   const toolsOnly = useMemo(() => {
@@ -268,16 +239,14 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
             </TooltipContent>
           </Tooltip>
         )}
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); handleCopy() }}
+        <CopyButton
+          text={copyText}
+          size="xs"
           className="inline-flex items-center p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity cursor-pointer hover:bg-foreground/5"
-        >
-          {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
-        </button>
+        />
       </span>
     )
-  }, [toolsOnly, onJump, copied, handleCopy, t])
+  }, [toolsOnly, onJump, copyText, t])
   const isUser = turn.role === 'user'
   const isSystem = turn.role === 'system'
   const isToolsDef = turn.role === 'tools_def'
@@ -309,7 +278,17 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
   return (
     <div className={`group flex ${alignClass}`}>
       <div className={`relative max-w-[80%] rounded-xl px-4 py-2.5 text-prose-xl ${bubbleClass}`}>
-        <CopyButton copied={copied} onCopy={handleCopy} isUser={isUser} show={!toolsOnly} />
+        {!toolsOnly && (
+          <CopyButton
+            text={copyText}
+            size="sm"
+            className={`absolute top-1.5 right-1.5 z-10 rounded-md p-1 opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity cursor-pointer ${
+              isUser
+                ? 'text-white/80 hover:bg-white/15'
+                : 'text-muted-foreground bg-surface-base/40 hover:bg-surface-base/80'
+            }`}
+          />
+        )}
         {mdCapable && !toolsOnly && (
           <button
             type="button"
@@ -424,22 +403,3 @@ export function ConversationBubble({ turn, isStreaming, reqLabel, onJump, defaul
   )
 }
 
-/** 气泡内右上角的复制按钮：默认淡出，hover 气泡时显示，复制后短暂变对勾 */
-function CopyButton({ copied, onCopy, isUser, show = true }: { copied: boolean; onCopy: () => void; isUser?: boolean; show?: boolean }) {
-  if (!show) return null
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onCopy() }}
-      className={`absolute top-1.5 right-1.5 z-10 rounded-md p-1 transition-opacity cursor-pointer ${
-        copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-70 hover:!opacity-100'
-      } ${
-        isUser
-          ? 'text-white/80 hover:bg-white/15'
-          : 'text-muted-foreground bg-surface-base/40 hover:bg-surface-base/80'
-      }`}
-    >
-      {copied ? <CheckIcon className="size-3.5 text-emerald-500" /> : <CopyIcon className="size-3.5" />}
-    </button>
-  )
-}

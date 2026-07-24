@@ -154,6 +154,8 @@ impl ResponseObserver {
             chunk_bytes: 0,
         };
 
+        let request_turns = ctx.request_turns();
+
         let ai = ai_req.map(|(provider, session_id)| {
             AiState::new(
                 provider,
@@ -161,6 +163,7 @@ impl ResponseObserver {
                 ctx.sessions().cloned(),
                 ctx.start_ms(),
                 is_sse,
+                request_turns,
             )
         });
 

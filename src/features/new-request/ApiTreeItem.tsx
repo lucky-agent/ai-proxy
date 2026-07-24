@@ -1,10 +1,10 @@
 // src/features/new-request/ApiTreeItem.tsx
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { ChevronRightIcon, FolderIcon, Trash2Icon, CopyIcon, CheckIcon, PencilIcon, FileIcon, ImportIcon } from 'lucide-react'
+import { ChevronRightIcon, FolderIcon, Trash2Icon, CopyIcon, PencilIcon, FileIcon, ImportIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatCurl } from '@/lib/curl'
+import { CopyButton } from '@/components/core/CopyButton'
 import { Input } from '@/components/ui/input'
-import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -50,7 +50,6 @@ export function ApiTreeItem({
   onToggleExpand,
 }: ApiTreeItemProps) {
   const { t } = useLocale()
-  const { copied, copy } = useCopyToClipboard()
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(node.name)
   const [contextMenuOpen, setContextMenuOpen] = useState(false)
@@ -91,7 +90,7 @@ export function ApiTreeItem({
     for (const h of req.headers) {
       if (h.key.trim()) headerMap[h.key.trim()] = h.value
     }
-    const curlStr = formatCurl({
+    return formatCurl({
       method: req.method,
       url: req.url,
       headers: headerMap,
@@ -99,8 +98,7 @@ export function ApiTreeItem({
       params: req.params,
       cookies: req.cookies,
     })
-    copy(curlStr)
-  }, [node, copy])
+  }, [node])
 
   // 点击事件
   const handleClick = useCallback(() => {
@@ -205,9 +203,13 @@ export function ApiTreeItem({
               <CopyIcon className="size-3" />
               <span>{t('collection.duplicate')}</span>
             </ContextMenuItem>
-            <ContextMenuItem onClick={handleCopyCurl}>
-              {copied ? <CheckIcon className="size-3 text-emerald-500" /> : <CopyIcon className="size-3" />}
-              <span>{t('collection.copyCurl')}</span>
+            <ContextMenuItem>
+              <CopyButton
+                text={handleCopyCurl()}
+                label={t('collection.copyCurl')}
+                size="xs"
+                className="w-full"
+              />
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem variant="destructive" onClick={() => onRemoveNode(node.id)}>

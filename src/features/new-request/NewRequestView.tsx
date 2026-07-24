@@ -4,17 +4,12 @@ import { invoke } from '@tauri-apps/api/core'
 import { SendIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useLocale } from '@/hooks/useLocale'
-import { cn } from '@/lib/utils'
-import { METHOD_COLORS } from '@/lib/http-constants'
 import { useCollections } from '@/hooks/useCollections'
 import { ApiCollectionPanel } from './ApiCollectionPanel'
-import { DetailPanel } from '@/features/detail-panel'
-import RequestEditor from './RequestEditor'
 import RequestTabBar from './RequestTabBar'
 import type { EnvItem } from './RequestTabBar'
+import RequestSendPanel from './RequestSendPanel'
 import { useRequestTabs } from './useRequestTabs'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { usePanelRef } from 'react-resizable-panels'
@@ -366,22 +361,8 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
     }
   }, [showSidebar])
 
-  // 控制 response panel collapse/expand
+  // response panel 通过条件渲染按需挂载，defaultSize="60%" 在 mount 时直接生效
   const responsePanelRef = usePanelRef()
-  const prevHadEntryRef = useRef(!!activeEntry)
-  useEffect(() => {
-    const hadEntry = prevHadEntryRef.current
-    const hasEntry = !!activeEntry
-    prevHadEntryRef.current = hasEntry
-
-    // 出现响应时展开到 60%；无响应时保持折叠
-    // （expand() 在面板未折叠时是 no-op，且只恢复上次尺寸，因此用 resize 强制 60%）
-    if (!hasEntry) {
-      responsePanelRef.current?.collapse()
-    } else if (!hadEntry) {
-      responsePanelRef.current?.resize('60%')
-    }
-  }, [activeEntry, detailPosition, responsePanelRef])
 
   // Abort controller for cancelling in-flight request
   const cancelRef = useRef<AbortController | null>(null)
@@ -492,45 +473,16 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
 
             {/* 活跃 tab 内容（仅挂载 active tab） */}
             {activeTab && (
-              <div className="flex flex-col min-h-0 h-full overflow-hidden">
-                <div className="relative flex shrink-0 items-center gap-2 px-4 py-2 border-b border-border bg-surface-base/50">
-                  <InputGroup className="flex-1">
-                    <InputGroupAddon align="inline-start" className="py-0 pl-0">
-                      <Select
-                        value={activeTab.method}
-                        onValueChange={v => updateActiveTab({ method: v as typeof METHODS[number] })}
-                        disabled={activeTab.sending}
-                      >
-                        <SelectTrigger className={cn(
-                          'h-8 py-0 border-0 shadow-none rounded-none rounded-l-lg bg-transparent',
-                          'focus-visible:ring-0 focus-visible:ring-offset-0',
-                          'min-w-0 w-auto px-2 text-xs font-semibold',
-                          'data-[size=sm]:h-8',
-                          METHOD_COLORS[activeTab.method] ? `text-${METHOD_COLORS[activeTab.method]}` : '',
-                        )}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent align="start" alignItemWithTrigger={false} className="min-w-[120px] max-h-36 overflow-y-auto [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-xs">
-                          {METHODS.map(m => (
-                            <SelectItem key={m} value={m}>{m}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </InputGroupAddon>
-                    <InputGroupInput
-                      value={activeTab.url}
-                      onChange={e => updateActiveTab({ url: e.target.value })}
-                      className="text-prose-md font-mono"
-                      placeholder="https://api.example.com/v1/endpoint"
-                      disabled={activeTab.sending}
-                    />
-                  </InputGroup>
-                  <Button
-                    onClick={handleSave}
-                    variant="outline"
-                    size="sm"
-                    disabled={activeTab.sending}
-                  >
+              <RequestSendPanel
+                panelGroupId={`new-request-${activeTab.id}-${detailPosition}`}
+                method={activeTab.method as typeof METHODS[number]}
+                onMethodChange={v => updateActiveTab({ method: v })}
+                url={activeTab.url}
+                onUrlChange={v => updateActiveTab({ url: v })}
+                sending={activeTab.sending}
+                onSend={handleSend}
+                urlBarChildren={
+                  <Button onClick={handleSave} variant="outline" size="sm" disabled={activeTab.sending}>
                     {t('settings.save')}
                     {saveFeedback && (
                       <svg className="size-3 animate-spin ml-1" viewBox="0 0 24 24" fill="none">
@@ -538,111 +490,24 @@ export function NewRequestView({ onSendSuccess, entries, showSidebar, detailPosi
                       </svg>
                     )}
                   </Button>
-                  <Button onClick={handleSend} disabled={activeTab.sending || !activeTab.url.trim()} size="sm">
-                    <SendIcon className="size-3.5" />
-                    {activeTab.sending ? '...' : t('sendRequest.send')}
-                  </Button>
-                </div>
-
-                {/* Render the editor/response split based on detailPosition */}
-                <div className="relative flex flex-col min-h-0 h-full overflow-hidden">
-                  {detailPosition === 'hidden' ? (
-                    <div className="flex flex-col min-h-0 h-full overflow-hidden">
-                      <RequestEditor
-                        params={activeTab.params}
-                        headers={activeTab.headers}
-                        cookies={activeTab.cookies}
-                        body={activeTab.body}
-                        bodyType={activeTab.bodyType}
-                        onParamsChange={v => updateActiveTab({ params: v })}
-                        onHeadersChange={v => updateActiveTab({ headers: v })}
-                        onCookiesChange={v => updateActiveTab({ cookies: v })}
-                        onBodyChange={v => updateActiveTab({ body: v })}
-                        onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
-                      />
-                    </div>
-                  ) : detailPosition === 'bottom' ? (
-                    <ResizablePanelGroup orientation="vertical" id="new-request-vertical" className="flex-1 min-h-0">
-                      <ResizablePanel id="editor" defaultSize={activeEntry ? "40%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
-                        <div className="flex flex-col min-h-0 h-full overflow-hidden">
-                          <RequestEditor
-                            params={activeTab.params}
-                            headers={activeTab.headers}
-                            cookies={activeTab.cookies}
-                            body={activeTab.body}
-                            bodyType={activeTab.bodyType}
-                            onParamsChange={v => updateActiveTab({ params: v })}
-                            onHeadersChange={v => updateActiveTab({ headers: v })}
-                            onCookiesChange={v => updateActiveTab({ cookies: v })}
-                            onBodyChange={v => updateActiveTab({ body: v })}
-                            onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
-                          />
-                        </div>
-                      </ResizablePanel>
-                      <ResizableHandle withHandle disabled={!activeEntry} className={cn(!activeEntry && 'hidden')} />
-                      <ResizablePanel
-                        id="response"
-                        defaultSize="60%"
-                        minSize="10%"
-                        collapsible
-                        collapsedSize="0%"
-                        panelRef={responsePanelRef}
-                      >
-                        <div className="h-full min-h-0">
-                          {activeEntry && <DetailPanel entry={activeEntry} showRequest={false} />}
-                        </div>
-                      </ResizablePanel>
-                    </ResizablePanelGroup>
-                  ) : (
-                    <ResizablePanelGroup orientation="horizontal" id="new-request-horizontal" className="flex-1 min-h-0">
-                      <ResizablePanel id="editor" defaultSize={activeEntry ? "40%" : "100%"} minSize="15%" maxSize={activeEntry ? "80%" : "100%"}>
-                        <div className="flex flex-col min-h-0 h-full overflow-hidden">
-                          <RequestEditor
-                            params={activeTab.params}
-                            headers={activeTab.headers}
-                            cookies={activeTab.cookies}
-                            body={activeTab.body}
-                            bodyType={activeTab.bodyType}
-                            onParamsChange={v => updateActiveTab({ params: v })}
-                            onHeadersChange={v => updateActiveTab({ headers: v })}
-                            onCookiesChange={v => updateActiveTab({ cookies: v })}
-                            onBodyChange={v => updateActiveTab({ body: v })}
-                            onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
-                          />
-                        </div>
-                      </ResizablePanel>
-                      <ResizableHandle withHandle disabled={!activeEntry} className={cn(!activeEntry && 'hidden')} />
-                      <ResizablePanel
-                        id="response"
-                        defaultSize="60%"
-                        minSize="10%"
-                        collapsible
-                        collapsedSize="0%"
-                        panelRef={responsePanelRef}
-                      >
-                        <div className="h-full min-h-0 min-w-0">
-                          {activeEntry && <DetailPanel entry={activeEntry} showRequest={false} />}
-                        </div>
-                      </ResizablePanel>
-                    </ResizablePanelGroup>
-                  )}
-
-                  {/* 发送中遮罩层 */}
-                  {activeTab.sending && (
-                    <div className="absolute inset-0 z-50">
-                      <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px]" />
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                        <svg className="size-7 animate-spin text-foreground/40" viewBox="0 0 24 24" fill="none">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="52" strokeDashoffset="16" strokeLinecap="round" />
-                        </svg>
-                        <Button variant="ghost" size="sm" onClick={handleCancel} className="text-xs text-destructive">
-                          {t('sendRequest.cancel')}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+                }
+                params={activeTab.params}
+                headers={activeTab.headers}
+                cookies={activeTab.cookies}
+                body={activeTab.body}
+                bodyType={activeTab.bodyType}
+                onParamsChange={v => updateActiveTab({ params: v })}
+                onHeadersChange={v => updateActiveTab({ headers: v })}
+                onCookiesChange={v => updateActiveTab({ cookies: v })}
+                onBodyChange={v => updateActiveTab({ body: v })}
+                onBodyTypeChange={v => updateActiveTab({ bodyType: v })}
+                responseEntry={activeEntry}
+                showRequestInResponse={false}
+                detailPosition={detailPosition}
+                responsePanelRef={responsePanelRef}
+                error={activeTab.error}
+                onCancel={handleCancel}
+              />
             )}
           </div>
         )}

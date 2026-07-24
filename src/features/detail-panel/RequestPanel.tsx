@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TrafficEntry } from '@/types/proxy'
 import SidePanel, { type PanelTab, type TabDef } from './components/SidePanel'
@@ -57,7 +57,12 @@ export default function RequestPanel({ entry, onTitleClick }: Props) {
   const { t } = useTranslation()
   const hasQuery = entry ? !!entry.requestQuery && Object.keys(entry.requestQuery).length > 0 : false
   const tabs = buildTabs(hasQuery)
-  const [tab, setTab] = useState<PanelTab>('header')
+  const [tab, setTab] = useState<PanelTab>('body')
+
+  // 切换条目时回退到 body
+  useEffect(() => {
+    setTab('body')
+  }, [entry?.id])
 
   return (
     <SidePanel

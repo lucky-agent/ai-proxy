@@ -1,61 +1,51 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { PlusIcon, Trash2Icon, SendIcon } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useLocale } from '@/hooks/useLocale'
-import { cn } from '@/lib/utils'
-import { buildFullUrl, METHOD_COLORS } from '@/lib/http-constants'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { buildFullUrl } from '@/lib/http-constants'
+import RequestSendPanel from '@/features/new-request/RequestSendPanel'
+import { usePanelRef } from 'react-resizable-panels'
 import type { TrafficEntry } from '@/types/proxy'
-import type { HttpMethod } from '@/types/collection'
-
-interface HeaderPair {
-  key: string
-  value: string
-}
+import type { HttpMethod, KeyValuePair, BodyType } from '@/types/collection'
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   entry: TrafficEntry | null
-  /** 编辑模式下发送后自动选中并打开详情 */
+  entries: TrafficEntry[]
   onSendSuccess?: (entryId: number) => void
 }
 
-const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
-
-export default function RequestEditorDialog({ open, onOpenChange, entry, onSendSuccess }: Props) {
-  const { t } = useLocale()
-  const isNew = entry === null
-
+export default function EditRequestDialog({
+  open,
+  onOpenChange,
+  entry,
+  entries,
+  onSendSuccess,
+}: Props) {
   const [method, setMethod] = useState<HttpMethod>('GET')
   const [url, setUrl] = useState('')
-  const [headers, setHeaders] = useState<HeaderPair[]>([])
+  const [params, setParams] = useState<KeyValuePair[]>([])
+  const [headers, setHeaders] = useState<KeyValuePair[]>([])
+  const [cookies, setCookies] = useState<KeyValuePair[]>([])
   const [body, setBody] = useState('')
+  const [bodyType, setBodyType] = useState<BodyType>('text')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [responseEntryId, setResponseEntryId] = useState<number | null>(null)
 
-  // 打开时：有 entry 则填充，无 entry 则重置为空白
+  const cancelRef = useRef<AbortController | null>(null)
+
+  // 打开弹窗时从 entry 填充表单，关闭时重置
   useEffect(() => {
     if (!open) return
     setError('')
     setSending(false)
+    setResponseEntryId(null)
 
     if (entry) {
       setMethod(entry.method as HttpMethod)
       setUrl(buildFullUrl(entry))
+      setParams([])
       setHeaders(
         Object.entries(entry.requestHeaders)
           .filter(([k]) => {
@@ -64,24 +54,30 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
           })
           .map(([key, value]) => ({ key, value }))
       )
+      setCookies([])
       setBody(entry.requestBody ?? '')
+      setBodyType('text')
     } else {
       setMethod('GET')
       setUrl('')
+      setParams([])
       setHeaders([])
+      setCookies([])
       setBody('')
+      setBodyType('text')
     }
   }, [open, entry])
 
-  const handleAddHeader = useCallback(() => setHeaders(h => [...h, { key: '', value: '' }]), [])
-  const handleRemoveHeader = useCallback((i: number) => setHeaders(h => h.filter((_, idx) => idx !== i)), [])
-  const handleHeaderChange = useCallback((i: number, field: 'key' | 'value', val: string) => {
-    setHeaders(h => h.map((pair, idx) => idx === i ? { ...pair, [field]: val } : pair))
-  }, [])
+  // 从 entries 中查找 send 后的响应条目
+  const responseEntry = useMemo(() => {
+    if (responseEntryId == null) return undefined
+    return entries.find(e => e.id === responseEntryId)
+  }, [entries, responseEntryId])
+
+  const responsePanelRef = usePanelRef()
 
   const handleSend = useCallback(async () => {
-    if (sending) return
-    if (!url.trim()) return
+    if (sending || !url.trim()) return
 
     setSending(true)
     setError('')
@@ -91,6 +87,9 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
       if (key.trim()) headerMap[key.trim()] = value
     }
 
+    const controller = new AbortController()
+    cancelRef.current = controller
+
     try {
       const entryId = await invoke<number>('resend_request', {
         method,
@@ -98,120 +97,57 @@ export default function RequestEditorDialog({ open, onOpenChange, entry, onSendS
         headers: headerMap,
         body: body || null,
       })
+      if (controller.signal.aborted) return
+      setResponseEntryId(entryId)
       onSendSuccess?.(entryId)
-      onOpenChange(false)
     } catch (err) {
+      if (controller.signal.aborted) return
       setError(String(err))
     } finally {
+      if (cancelRef.current === controller) {
+        cancelRef.current = null
+      }
       setSending(false)
     }
-  }, [sending, url, method, headers, body, onOpenChange, onSendSuccess])
+  }, [sending, url, method, headers, body, onSendSuccess])
 
-  const handleOpenChange = useCallback((nextOpen: boolean) => {
-    onOpenChange(nextOpen)
-  }, [onOpenChange])
+  const handleCancel = useCallback(() => {
+    cancelRef.current?.abort()
+    cancelRef.current = null
+    setSending(false)
+  }, [])
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="text-sm">
-            {isNew ? t('sendRequest.title') : t('requestList.edit')}
-          </DialogTitle>
-          {isNew && (
-            <DialogDescription className="text-xs">{t('sendRequest.description')}</DialogDescription>
-          )}
-        </DialogHeader>
-
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="space-y-3 p-0.5">
-          {/* Method + URL */}
-          <div className="flex gap-2">
-            <Select value={method} onValueChange={(v) => setMethod(v as HttpMethod)}>
-              <SelectTrigger size="sm" className={cn('shrink-0 text-xs font-semibold', METHOD_COLORS[method] ? `text-${METHOD_COLORS[method]}` : '')}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {METHODS.map(m => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              value={url}
-              onChange={e => setUrl(e.target.value)}
-              className="flex-1 h-auto py-1 text-prose-md font-mono"
-              placeholder="https://api.example.com/v1/endpoint"
-            />
-          </div>
-
-          {/* Headers */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-foreground/80">{t('detail.headers')}</span>
-              <button
-                onClick={handleAddHeader}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <PlusIcon className="size-3" />
-                {t('sendRequest.addHeader')}
-              </button>
-            </div>
-            <div className="space-y-1">
-              {headers.map((pair, i) => (
-                <div key={i} className="flex gap-1 items-center">
-                  <Input
-                    value={pair.key}
-                    onChange={e => handleHeaderChange(i, 'key', e.target.value)}
-                    className="flex-1 h-auto py-1 text-prose-sm font-mono"
-                    placeholder="Key"
-                  />
-                  <Input
-                    value={pair.value}
-                    onChange={e => handleHeaderChange(i, 'value', e.target.value)}
-                    className="flex-[2] h-auto py-1 text-prose-sm font-mono"
-                    placeholder="Value"
-                  />
-                  <button
-                    onClick={() => handleRemoveHeader(i)}
-                    className="shrink-0 rounded p-1 text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    <Trash2Icon className="size-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Body */}
-          <div>
-            <span className="text-xs font-medium text-foreground/80 block mb-1">{t('detail.body')}</span>
-            <Textarea
-              value={body}
-              onChange={e => setBody(e.target.value)}
-              className="w-full min-h-[120px] h-auto py-1.5 text-prose-md font-mono resize-y"
-              placeholder="{ &quot;key&quot;: &quot;value&quot; }"
-            />
-          </div>
-
-          {/* Error */}
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-        </div>
-        </ScrollArea>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            {t('settings.cancel')}
-          </Button>
-          <Button onClick={handleSend} disabled={sending || !url.trim()}>
-            <SendIcon className="size-3.5" />
-            {sending ? '...' : t('sendRequest.send')}
-          </Button>
-        </DialogFooter>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="flex flex-col p-0 gap-0"
+        style={{ width: '75vw', maxWidth: '70vw', height: 'calc(80vh - 2rem)' }}
+        showCloseButton={false}>
+        <RequestSendPanel
+          panelGroupId="edit-request-dialog"
+          method={method}
+          onMethodChange={setMethod}
+          url={url}
+          onUrlChange={setUrl}
+          sending={sending}
+          onSend={handleSend}
+          params={params}
+          headers={headers}
+          cookies={cookies}
+          body={body}
+          bodyType={bodyType}
+          onParamsChange={setParams}
+          onHeadersChange={setHeaders}
+          onCookiesChange={setCookies}
+          onBodyChange={setBody}
+          onBodyTypeChange={setBodyType}
+          responseEntry={responseEntry}
+          showRequestInResponse={false}
+          detailPosition="bottom"
+          responsePanelRef={responsePanelRef}
+          error={error}
+          onCancel={handleCancel}
+        />
       </DialogContent>
     </Dialog>
   )

@@ -118,7 +118,7 @@ export default function BodyTab({ body, bodyType, onBodyChange, onBodyTypeChange
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent align="end" side="bottom" className="!min-w-0 [&_[data-slot=select-item]]:py-1 [&_[data-slot=select-item]]:text-xs">
+            <SelectContent align="start" side="bottom" alignItemWithTrigger={false} sideOffset={4} className="min-w-[80px] [&_[data-slot=select-item]]:py-1.5 [&_[data-slot=select-item]]:pr-9 [&_[data-slot=select-item]]:text-xs">
               {BODY_FORMATS.map(fmt => (
                 <SelectItem key={fmt.value} value={fmt.value}>{t(fmt.labelKey)}</SelectItem>
               ))}

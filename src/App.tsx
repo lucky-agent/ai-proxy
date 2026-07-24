@@ -21,10 +21,9 @@ import { useProxyEvents } from '@/hooks/useProxyEvents'
 import { useAiSessions } from '@/hooks/useAiSessions'
 import { useTheme } from '@/hooks/useTheme'
 import { useProseFontSize } from '@/hooks/useProseFontSize'
-import { useBackendMemoryStats } from '@/hooks/useBackendMemoryStats'
+import { copyToClipboard } from '@/lib/clipboard'
 import { classifyEntry, type TypeFilter } from '@/lib/format'
 import { formatCurl } from '@/lib/curl'
-import { formatMemoryStats, type MemoryStats } from '@/lib/memoryStats'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import ScriptEditor from '@/features/script-config/ScriptEditor'
 import type { ScriptItem } from '@/types/settings'
@@ -54,7 +53,6 @@ function App() {
   const [sslEnabled, setSslEnabled] = useState(false)
   const [aiEnabled, setAiEnabled] = useState(false)
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
-  const [activeView, setActiveView] = useState<ViewId>('proxy')
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   // 从 AI 视图跳转到代理视图并定位某条流量的指令（含自增 nonce）。
   const [proxyJump, setProxyJump] = useState<ProxyJumpTarget | null>(null)
@@ -195,7 +193,7 @@ function App() {
   const handleNewRequestSuccess = useCallback((_entryId: number) => {
     // 不跳转，保持在 new-request 视图查看响应
   }, [])
-  const { entries, clear, accum } = useProxyEvents()
+  const { entries, clear } = useProxyEvents()
   const { sessions: aiSessions, mergedTimeline, conversationOf, removeSession, removeRequest, clearAll: clearAiSessions } = useAiSessions()
 
   const handleCloseTab = useCallback((view: ViewId) => {
@@ -226,7 +224,7 @@ function App() {
       headers,
       body: entry.requestBody,
     })
-    navigator.clipboard.writeText(curl).catch(() => {})
+    copyToClipboard(curl)
   }, [entries])
 
   // AI 气泡右键 → 导入编辑器：切视图并下发导入指令
@@ -247,29 +245,6 @@ function App() {
     counts.set('all', entries.length)
     return counts
   }, [entries])
-
-  // entries/chunks 走增量累加器（零遍历），sessions 用轻量全量计算（≤50 条）。
-  // MemoryStats 结构开销（structBytes）来自 MemAccum，这里只替换 session 部分后重算 total。
-  const memoryStats: MemoryStats = useMemo(() => {
-    const base = accum.snapshot
-    let sessionEstBytes = 0
-    for (const s of aiSessions) {
-      if (s.timeline?.length) sessionEstBytes += JSON.stringify(s.timeline).length * 2
-      if (s.conversations) sessionEstBytes += JSON.stringify(s.conversations).length * 2
-    }
-    // sessions 结构开销：AiSessionState 对象 ~200B + Map 节点 ~80B per session
-    const sessionStruct = aiSessions.length * 280
-    return {
-      ...base,
-      sessionCount: aiSessions.length,
-      sessionEstBytes: sessionEstBytes + sessionStruct,
-      totalEstBytes: base.totalEstBytes - base.sessionEstBytes + sessionEstBytes + sessionStruct,
-    }
-  }, [entries, aiSessions, accum])
-  const memLabel = useMemo(() => formatMemoryStats(memoryStats), [memoryStats])
-
-  // 后端 SessionStore 内存统计（30s 轮询，proxy 未启动时返回零值）
-  const [backendMemStats] = useBackendMemoryStats()
 
   useEffect(() => {
     checkStatus()
@@ -380,15 +355,11 @@ function App() {
         onStartProxy={startProxy}
         onStopProxy={stopProxy}
         onClearTraffic={() => { clear(); clearAiSessions() }}
-        activeView={activeView}
         mountedViews={mountedViews}
         onViewChange={handleViewChange}
         onCloseTab={handleCloseTab}
         toolbarExpanded={toolbarExpanded}
         onToolbarToggle={setToolbarExpanded}
-        memoryStats={memoryStats}
-        memLabel={memLabel}
-        backendMemoryStats={backendMemStats}
         scriptTabs={scriptTabs}
         activeTabId={activeTabId}
         onSelectScriptTab={handleSelectScriptTab}
@@ -518,6 +489,7 @@ function App() {
         open={sendRequestOpen}
         onOpenChange={setSendRequestOpen}
         entry={null}
+        entries={entries}
       />
       <SettingsDialog
         open={settingsOpen}

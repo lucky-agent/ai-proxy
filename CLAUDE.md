@@ -44,6 +44,7 @@ ai-proxy/
 │   └── index.css                 # 全局样式（Tailwind 主题变量 + 自定义组件样式）
 │   │
 │   ├── components/               # 公共组件（跨 feature 共享，无业务含义）
+│   │   ├── core/                  # 核心通用组件（CopyButton 等）
 │   │   ├── ui/                   # shadcn/ui 原子组件（button、dialog 等）
 │   │   ├── icons/                # 自定义图标组件（GripDots、ScriptIcon 等）
 │   │   └── json-tree/            # JSON 树形展示组件

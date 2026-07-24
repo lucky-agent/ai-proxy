@@ -19,7 +19,7 @@ interface Props {
   /** 'floating' = overlay mode; 'tab' = embedded in TitleBar tab */
   mode: 'floating' | 'tab'
   onUpdateDraft: (content: string) => void
-  onSaved: (fileKey: string, savedTab: { fileKey: string; label: string; content: string; dirty: false; saved: true }) => void
+  onSaved: (fileKey: string, savedTab: ScriptTab) => void
   /** Floating mode: close (← arrow) */
   onClose?: () => void
   /** Floating mode: maximize into tab */
@@ -36,7 +36,7 @@ interface Props {
 const METHOD_ANY = 'ANY'
 const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 
-export default function ScriptEditor({ tab, mode, onUpdateDraft, onSaved, onClose, onMaximize, onRestore, onMethodChange, onDomainChange, onNameChange }: Props) {
+export default function ScriptEditor({ tab, mode, onUpdateDraft, onSaved, onClose, onMaximize, onRestore, onMethodChange, onDomainChange }: Props) {
   const { t } = useLocale()
   const [content, setContent] = useState(tab.content)
   const [saving, setSaving] = useState(false)

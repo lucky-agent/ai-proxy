@@ -75,7 +75,10 @@
     "mergeFormatAnthropic": "Anthropic",
     "errorStatus": "错误",
     "console": "控制台",
-    "noConsole": "控制台无输出"
+    "noConsole": "控制台无输出",
+    "decryptPrompt": "此请求未解密，无法查看响应内容。",
+    "decryptAction": "启用 SSL 解密",
+    "decryptSuccess": "已为 {domain} 启用 SSL 解密，新请求将自动解密。"
   },
   "settings": {
     "title": "设置",
@@ -98,7 +101,15 @@
     "languageSystem": "跟随系统",
     "cancel": "取消",
     "save": "保存",
-    "saving": "保存中..."
+    "saving": "保存中...",
+    "certificateTab": "证书",
+    "certHint": "管理代理 CA 根证书。安装到系统信任库后，HTTPS 流量可被解密查看。",
+    "certInstallTitle": "安装到系统",
+    "certInstallDesc": "将 CA 证书添加到当前用户的受信任根证书颁发机构。",
+    "installCert": "安装证书",
+    "certExportTitle": "导出证书文件",
+    "certExportDesc": "将 CA 证书保存为文件，可发给其他设备手动导入。",
+    "exportCert": "导出证书"
   },
   "menu": {
     "settings": "设置",
@@ -153,7 +164,11 @@
     "saving": "保存中...",
     "duplicateDomain": "域名已存在",
     "emptyWhitelist": "暂无域名，添加后将出现在这里。",
-    "toolbarToggle": "SSL 解密"
+    "toolbarToggle": "SSL 解密",
+    "installCert": "安装 CA 证书",
+    "installCertHint": "将代理的根证书导入系统受信任证书库，使浏览器和工具信任解密后的 HTTPS 流量。系统将提示授予管理员权限。",
+    "installCertSuccess": "CA 证书安装成功。",
+    "installCertError": "安装失败"
   },
   "scriptConfig": {
     "title": "脚本配置",

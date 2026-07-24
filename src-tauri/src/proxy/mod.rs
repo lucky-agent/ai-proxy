@@ -85,15 +85,12 @@ impl ProxyServer {
         let settings = app_state.settings_arc();
         let event_channel = app_state.event_channel_arc();
 
-        // Share session store handle with AppState for backend memory stats.
-        // Build the store here (before spawn) so the Arc is held on the app side.
         let max_sessions = settings
             .read()
             .map(|s| s.ai.session.max_sessions)
             .unwrap_or(500);
         let sessions: Arc<Mutex<SessionStore>> =
             Arc::new(Mutex::new(SessionStore::new(max_sessions)));
-        app_state.set_sessions(sessions.clone());
 
         graceful.spawn_task_fn({
             move |_guard| async move {
@@ -128,10 +125,6 @@ impl ProxyServer {
                             .into_layer(http_service),
                     )
                     .await;
-                // Proxy task finished — clear sessions handle.
-                if let Some(s) = app_handle.try_state::<AppState>() {
-                    s.clear_sessions();
-                }
             }
         });
 

@@ -61,10 +61,6 @@ const ROW_INPUT =
 const ROW_SELECT =
   'h-6 w-full gap-1 rounded-sm border-transparent px-1.5 py-0 text-xs font-medium transition-colors data-[size=default]:h-6 hover:border-input/60 focus-visible:ring-1 dark:bg-transparent dark:hover:bg-transparent'
 
-const INITIAL_SCRIPT: ScriptItem = { name: '', domain: '', method: '', enabled: true }
-
-let _scriptCounter = 0
-
 export default function ScriptConfigDialog({ open, onOpenChange, onEditScript }: Props) {
   const { t } = useLocale()
   const [enabled, setEnabled] = useState(false)
@@ -133,7 +129,7 @@ export default function ScriptConfigDialog({ open, onOpenChange, onEditScript }:
   }
 
   function addRow() {
-    onEditScript({ name: '', domain: '', method: '', enabled: true })
+    onEditScript({ name: '', domain: '', method: '', enabled: true, file_name: '' })
   }
 
   /** 双击行进入编辑模式 */

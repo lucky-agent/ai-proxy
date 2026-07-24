@@ -1,8 +1,7 @@
 use serde::Serialize;
 use std::collections::HashMap;
 
-use crate::proxy::ai::session::TimelineEntry;
-use crate::proxy::ai::{AiConversation, AiUsage};
+use crate::proxy::ai::{AiConversation, AiTurn, AiUsage};
 
 /// Tagged union sent through the IPC Channel.
 /// Frontend dispatches on `type` (serialized as snake_case).
@@ -39,7 +38,8 @@ pub(crate) enum ProxyEvent {
         id: u64,
         error: String,
     },
-    /// 增量归一化快照。AI 流量在各节流窗口推送，末次 `streaming=false` 定稿。
+    /// 归一化快照（流式节流快照或定稿快照）。每事件自包含：conversation 中
+    /// assistant 回复由响应侧填充，request_turns 由请求侧解析后转入，前端直接拼接。
     AiNormalized {
         id: u64,
         session_id: String,
@@ -47,12 +47,9 @@ pub(crate) enum ProxyEvent {
         /// 该次响应归一化对话（assistant 回复 + 元信息）。
         conversation: AiConversation,
         streaming: bool,
-    },
-    /// 会话时间线增量。请求侧 assign 后发送请求体 delta，
-    /// 响应侧 finalize 后发送 assistant delta。前端直接 append 即可渲染。
-    AiTimelineDelta {
-        session_id: String,
-        entries: Vec<TimelineEntry>,
+        /// 本次请求归一化后的 turns（请求体 messages），按序。
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        request_turns: Vec<AiTurn>,
     },
     /// 会话元信息。会话新增请求或 usage 变化时推送。
     AiSession {

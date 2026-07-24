@@ -75,7 +75,10 @@
     "mergeFormatAnthropic": "Anthropic",
     "errorStatus": "Error",
     "console": "Console",
-    "noConsole": "No console output"
+    "noConsole": "No console output",
+    "decryptPrompt": "Response was not decrypted — content cannot be viewed.",
+    "decryptAction": "Enable SSL",
+    "decryptSuccess": "SSL decryption enabled for {domain} – new requests will be decrypted."
   },
   "settings": {
     "title": "Settings",
@@ -98,7 +101,15 @@
     "languageSystem": "Follow system",
     "cancel": "Cancel",
     "save": "Save",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "certificateTab": "Certificate",
+    "certHint": "Manage the proxy CA root certificate. Once installed in the system trust store, HTTPS traffic can be decrypted and inspected.",
+    "certInstallTitle": "Install to system",
+    "certInstallDesc": "Add the CA certificate to the current user's trusted root certification authorities.",
+    "installCert": "Install Certificate",
+    "certExportTitle": "Export certificate",
+    "certExportDesc": "Save the CA certificate as a PEM file for manual import on other devices.",
+    "exportCert": "Export Certificate"
   },
   "menu": {
     "settings": "Settings",
@@ -153,7 +164,11 @@
     "saving": "Saving...",
     "duplicateDomain": "Domain already exists",
     "emptyWhitelist": "No domains yet. Add a domain to see it here.",
-    "toolbarToggle": "SSL Decrypt"
+    "toolbarToggle": "SSL Decrypt",
+    "installCert": "Install CA Certificate",
+    "installCertHint": "Import the proxy's root CA into the system trust store so browsers and tools trust decrypted HTTPS traffic. The system will prompt for administrator permission.",
+    "installCertSuccess": "CA certificate installed successfully.",
+    "installCertError": "Install failed"
   },
   "scriptConfig": {
     "title": "Script Config",
