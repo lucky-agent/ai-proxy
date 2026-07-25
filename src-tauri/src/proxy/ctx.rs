@@ -141,6 +141,7 @@ impl ProxyCtx {
         &self.parts.uri
     }
 
+    #[allow(dead_code)]
     pub(crate) fn headers(&self) -> &HeaderMap {
         &self.parts.headers
     }
@@ -206,6 +207,7 @@ impl ProxyCtx {
         self.start_ms
     }
 
+    #[allow(dead_code)]
     pub(crate) fn duration_ms(&self) -> u64 {
         // max(0)：时钟回拨时避免负数被 as u64 变成天文数字
         (crate::utils::date::now_ms() - self.start_ms).max(0) as u64
@@ -233,11 +235,11 @@ fn url_decode(input: &str) -> String {
     while let Some(ch) = chars.next() {
         if ch == '%' {
             let hex: String = chars.by_ref().take(2).collect();
-            if hex.len() == 2 {
-                if let Ok(byte) = u8::from_str_radix(&hex, 16) {
-                    bytes.push(byte);
-                    continue;
-                }
+            if hex.len() == 2
+                && let Ok(byte) = u8::from_str_radix(&hex, 16)
+            {
+                bytes.push(byte);
+                continue;
             }
             // 无效的百分号编码，保留原样
             bytes.push(b'%');

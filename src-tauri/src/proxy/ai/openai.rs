@@ -36,14 +36,13 @@ impl AiProtocol for OpenAiChatProtocol {
 
         for (i, m) in messages.iter().enumerate() {
             // 在第一条非 system 消息前插入 tools[] 定义
-            if i == tools_split {
-                if let Some(t) = p
+            if i == tools_split
+                && let Some(t) = p
                     .get("tools")
                     .and_then(Value::as_array)
                     .and_then(|ts| AiTurn::tools_def(ts))
-                {
-                    turns.push(t);
-                }
+            {
+                turns.push(t);
             }
 
             let role_raw = m.get("role").and_then(Value::as_str).unwrap_or("user");
@@ -112,30 +111,30 @@ impl AiProtocol for OpenAiChatProtocol {
             };
 
             // assistant 消息中的 tool_calls → tool_use blocks
-            if role == "assistant" {
-                if let Some(tcs) = m.get("tool_calls").and_then(Value::as_array) {
-                    for tc in tcs {
-                        let id = tc
-                            .get("id")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string();
-                        let func = tc.get("function");
-                        let name = func
-                            .and_then(|f| f.get("name"))
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string();
-                        let args = func
-                            .and_then(|f| f.get("arguments"))
-                            .and_then(Value::as_str)
-                            .unwrap_or("");
-                        blocks.push(AiContentBlock::ToolUse {
-                            id,
-                            name,
-                            input: parse_tool_input(args),
-                        });
-                    }
+            if role == "assistant"
+                && let Some(tcs) = m.get("tool_calls").and_then(Value::as_array)
+            {
+                for tc in tcs {
+                    let id = tc
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    let func = tc.get("function");
+                    let name = func
+                        .and_then(|f| f.get("name"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    let args = func
+                        .and_then(|f| f.get("arguments"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+                    blocks.push(AiContentBlock::ToolUse {
+                        id,
+                        name,
+                        input: parse_tool_input(args),
+                    });
                 }
             }
 
@@ -156,10 +155,9 @@ impl AiProtocol for OpenAiChatProtocol {
         if let Some(r) = msg
             .and_then(|m| m.get("reasoning_content").or_else(|| m.get("reasoning")))
             .and_then(Value::as_str)
+            && !r.is_empty()
         {
-            if !r.is_empty() {
-                blocks.push(AiContentBlock::thinking(r));
-            }
+            blocks.push(AiContentBlock::thinking(r));
         }
         // 文本 content
         let text = match msg.and_then(|m| m.get("content")) {
@@ -252,11 +250,11 @@ struct OpenAiStreamState {
 
 impl StreamState for OpenAiStreamState {
     fn apply(&mut self, _event: &str, data: &Value) {
-        if let Some(s) = data.as_str() {
-            if s.trim() == "[DONE]" {
-                self.done = true;
-                return;
-            }
+        if let Some(s) = data.as_str()
+            && s.trim() == "[DONE]"
+        {
+            self.done = true;
+            return;
         }
         let p = data;
         let choice0 = p
@@ -287,10 +285,10 @@ impl StreamState for OpenAiStreamState {
         {
             self.finish_reason = Some(fr.to_string());
         }
-        if self.model.is_none() {
-            if let Some(m) = p.get("model").and_then(Value::as_str) {
-                self.model = Some(m.to_string());
-            }
+        if self.model.is_none()
+            && let Some(m) = p.get("model").and_then(Value::as_str)
+        {
+            self.model = Some(m.to_string());
         }
         if let Some(tcs) = delta
             .and_then(|d| d.get("tool_calls"))
@@ -299,16 +297,16 @@ impl StreamState for OpenAiStreamState {
             for tc in tcs {
                 let idx = tc.get("index").and_then(Value::as_i64).unwrap_or(0);
                 let entry = self.tool_calls.entry(idx).or_default();
-                if let Some(id) = tc.get("id").and_then(Value::as_str) {
-                    if entry.id.is_empty() {
-                        entry.id = id.to_string();
-                    }
+                if let Some(id) = tc.get("id").and_then(Value::as_str)
+                    && entry.id.is_empty()
+                {
+                    entry.id = id.to_string();
                 }
                 let func = tc.get("function");
-                if let Some(name) = func.and_then(|f| f.get("name")).and_then(Value::as_str) {
-                    if entry.name.is_empty() {
-                        entry.name = name.to_string();
-                    }
+                if let Some(name) = func.and_then(|f| f.get("name")).and_then(Value::as_str)
+                    && entry.name.is_empty()
+                {
+                    entry.name = name.to_string();
                 }
                 if let Some(args) = func
                     .and_then(|f| f.get("arguments"))

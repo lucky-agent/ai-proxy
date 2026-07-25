@@ -21,11 +21,9 @@ pub fn set_locale(
     }
 
     let data_dir = state.store().data_dir();
-    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
     settings.ui.language = language.clone();
-    settings
-        .save_to_path(&data_dir)
-        .map_err(|e| e.to_string())?;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 

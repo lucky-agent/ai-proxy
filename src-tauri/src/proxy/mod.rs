@@ -62,7 +62,7 @@ impl ProxyServer {
             cert::MitmCertProvider::try_new(&self.data_dir).context("MITM cert provider")?;
         let mitm_tls_service_data = provider.into_tls_server_config();
 
-        let listen_addr = format!("{}:{}", &self.config.listen_host, &self.config.listen_port);
+        let listen_addr = format!("{}:{}", self.config.listen_host, self.config.listen_port);
 
         let app_handle = self.app_handle.clone();
         let shutdown_rx = self.shutdown_rx;

@@ -20,6 +20,10 @@ bun run build
 
 # 仅构建前端
 bun run build:vite
+
+# Rust 代码检查（CI 强制执行）
+cargo fmt --check --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 ```
 
 本项目当前没有测试。Rust 版本要求：1.96.0+，edition 2024。包管理使用 bun。

@@ -21,11 +21,9 @@ pub fn set_theme(
     }
 
     let data_dir = state.store().data_dir();
-    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
     settings.ui.theme = theme.clone();
-    settings
-        .save_to_path(&data_dir)
-        .map_err(|e| e.to_string())?;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 
@@ -67,11 +65,9 @@ pub fn set_prose_font_size(
     }
 
     let data_dir = state.store().data_dir();
-    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
     settings.ui.prose_font_size = size.clone();
-    settings
-        .save_to_path(&data_dir)
-        .map_err(|e| e.to_string())?;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 

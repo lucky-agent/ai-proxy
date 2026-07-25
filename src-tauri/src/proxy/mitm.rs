@@ -194,10 +194,10 @@ async fn tunnel_connect_proxy<P>(
 fn is_timeout_err(err: &rama::error::BoxError) -> bool {
     let mut cur: Option<&(dyn std::error::Error + 'static)> = err.source();
     while let Some(e) = cur {
-        if let Some(http_err) = e.downcast_ref::<rama::http::core::Error>() {
-            if http_err.is_timeout() {
-                return true;
-            }
+        if let Some(http_err) = e.downcast_ref::<rama::http::core::Error>()
+            && http_err.is_timeout()
+        {
+            return true;
         }
         cur = e.source();
     }

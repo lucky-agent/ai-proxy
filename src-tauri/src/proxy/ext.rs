@@ -27,6 +27,7 @@ pub(crate) trait RequestExt {
     fn try_ext<T: Extension + Clone>(&self) -> Option<T>;
 
     /// 检查扩展中是否存在 `T` 类型。
+    #[allow(dead_code)]
     fn has_ext<T: Extension>(&self) -> bool;
 }
 

@@ -228,7 +228,8 @@ impl SessionStore {
             }
             None => {
                 // 新会话：全部 turns 都是增量
-                let delta: Vec<TimelineEntry> = p.messages
+                let delta: Vec<TimelineEntry> = p
+                    .messages
                     .iter()
                     .zip(p.fingerprints.iter())
                     .map(|(turn, fp)| TimelineEntry {

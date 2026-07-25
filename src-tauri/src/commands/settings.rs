@@ -11,11 +11,9 @@ pub fn get_settings(state: tauri::State<'_, AppState>) -> Result<Settings, Strin
 #[tauri::command]
 pub fn save_settings(state: tauri::State<'_, AppState>, proxy: ProxyConfig) -> Result<(), String> {
     let data_dir = state.store().data_dir();
-    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
     settings.proxy = proxy;
-    settings
-        .save_to_path(&data_dir)
-        .map_err(|e| e.to_string())?;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 
@@ -34,7 +32,7 @@ pub fn save_script_config(
     script: ScriptConfig,
 ) -> Result<(), String> {
     let data_dir = state.store().data_dir();
-    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
 
     // validate and generate file_name for each enabled script
     for item in &script.scripts {
@@ -68,9 +66,7 @@ pub fn save_script_config(
     }
 
     settings.script = validated;
-    settings
-        .save_to_path(&data_dir)
-        .map_err(|e| e.to_string())?;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
     state.set_settings(settings);
     Ok(())
 }
@@ -84,11 +80,9 @@ pub fn get_ssl_config(state: tauri::State<'_, AppState>) -> Result<SslConfig, St
 #[tauri::command]
 pub fn save_ssl_config(state: tauri::State<'_, AppState>, ssl: SslConfig) -> Result<(), String> {
     let data_dir = state.store().data_dir();
-    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
     settings.ssl = ssl;
-    settings
-        .save_to_path(&data_dir)
-        .map_err(|e| e.to_string())?;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 
@@ -99,11 +93,9 @@ pub fn save_ssl_config(state: tauri::State<'_, AppState>, ssl: SslConfig) -> Res
 #[tauri::command]
 pub fn set_ssl_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
     let data_dir = state.store().data_dir();
-    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
     settings.ssl.enabled = enabled;
-    settings
-        .save_to_path(&data_dir)
-        .map_err(|e| e.to_string())?;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 
@@ -114,11 +106,9 @@ pub fn set_ssl_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> Resu
 #[tauri::command]
 pub fn set_script_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
     let data_dir = state.store().data_dir();
-    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
     settings.script.enabled = enabled;
-    settings
-        .save_to_path(&data_dir)
-        .map_err(|e| e.to_string())?;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 
@@ -129,11 +119,9 @@ pub fn set_script_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> R
 #[tauri::command]
 pub fn set_ai_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> Result<(), String> {
     let data_dir = state.store().data_dir();
-    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
     settings.ai.enabled = enabled;
-    settings
-        .save_to_path(&data_dir)
-        .map_err(|e| e.to_string())?;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 
@@ -192,7 +180,7 @@ pub fn get_ai_config(state: tauri::State<'_, AppState>) -> Result<AiConfig, Stri
 #[tauri::command]
 pub fn save_ai_config(state: tauri::State<'_, AppState>, ai: AiConfig) -> Result<(), String> {
     let data_dir = state.store().data_dir();
-    let mut settings = Settings::load_from_path(&data_dir).map_err(|e| e.to_string())?;
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
 
     // 防御性剔除空 url 规则；其余（含启用状态）以前端为准整体覆盖
     let mut ai = ai;
@@ -204,9 +192,7 @@ pub fn save_ai_config(state: tauri::State<'_, AppState>, ai: AiConfig) -> Result
     crate::config::sync_ssl_for_ai(&mut settings.ssl, &ai);
 
     settings.ai = ai;
-    settings
-        .save_to_path(&data_dir)
-        .map_err(|e| e.to_string())?;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 

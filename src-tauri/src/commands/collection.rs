@@ -117,19 +117,21 @@ pub fn save_request(
     let headers_json = serde_json::to_string(&headers.unwrap_or_default()).unwrap_or_default();
     let params_json = serde_json::to_string(&params.unwrap_or_default()).unwrap_or_default();
     let cookies_json = serde_json::to_string(&cookies.unwrap_or_default()).unwrap_or_default();
-    db.update_collection_request(crate::storage::collection_requests::UpdateCollectionRequestParams {
-        id,
-        method: &method,
-        uri: &url,
-        headers: &headers_json,
-        query: &params_json,
-        body: body.as_deref(),
-        body_type: body_type.as_deref().unwrap_or(""),
-        cookies: &cookies_json,
-        auth_type: auth_type.as_deref().unwrap_or(""),
-        auth_data: auth_data.as_deref().unwrap_or(""),
-        timestamp: ts,
-    })
+    db.update_collection_request(
+        crate::storage::collection_requests::UpdateCollectionRequestParams {
+            id,
+            method: &method,
+            uri: &url,
+            headers: &headers_json,
+            query: &params_json,
+            body: body.as_deref(),
+            body_type: body_type.as_deref().unwrap_or(""),
+            cookies: &cookies_json,
+            auth_type: auth_type.as_deref().unwrap_or(""),
+            auth_data: auth_data.as_deref().unwrap_or(""),
+            timestamp: ts,
+        },
+    )
     .map_err(|e| e.to_string())
 }
 

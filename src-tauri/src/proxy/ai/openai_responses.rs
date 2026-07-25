@@ -30,13 +30,13 @@ impl AiProtocol for OpenAiResponsesProtocol {
 
         let mut turns: Vec<AiTurn> = Vec::new();
 
-        if let Some(instructions) = p.get("instructions").and_then(Value::as_str) {
-            if !instructions.is_empty() {
-                turns.push(AiTurn::new(
-                    "system",
-                    vec![AiContentBlock::text(instructions)],
-                ));
-            }
+        if let Some(instructions) = p.get("instructions").and_then(Value::as_str)
+            && !instructions.is_empty()
+        {
+            turns.push(AiTurn::new(
+                "system",
+                vec![AiContentBlock::text(instructions)],
+            ));
         }
 
         if let Some(t) = p
@@ -121,30 +121,30 @@ impl AiProtocol for OpenAiResponsesProtocol {
                 _ => vec![AiContentBlock::text("")],
             };
 
-            if role == "assistant" {
-                if let Some(tcs) = m.get("tool_calls").and_then(Value::as_array) {
-                    for tc in tcs {
-                        let id = tc
-                            .get("id")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string();
-                        let func = tc.get("function");
-                        let name = func
-                            .and_then(|f| f.get("name"))
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string();
-                        let args = func
-                            .and_then(|f| f.get("arguments"))
-                            .and_then(Value::as_str)
-                            .unwrap_or("");
-                        blocks.push(AiContentBlock::ToolUse {
-                            id,
-                            name,
-                            input: parse_tool_input(args),
-                        });
-                    }
+            if role == "assistant"
+                && let Some(tcs) = m.get("tool_calls").and_then(Value::as_array)
+            {
+                for tc in tcs {
+                    let id = tc
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    let func = tc.get("function");
+                    let name = func
+                        .and_then(|f| f.get("name"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    let args = func
+                        .and_then(|f| f.get("arguments"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+                    blocks.push(AiContentBlock::ToolUse {
+                        id,
+                        name,
+                        input: parse_tool_input(args),
+                    });
                 }
             }
 
@@ -171,10 +171,9 @@ impl AiProtocol for OpenAiResponsesProtocol {
                             if matches!(
                                 c.get("type").and_then(Value::as_str),
                                 Some("output_text" | "input_text")
-                            ) {
-                                if let Some(t) = c.get("text").and_then(Value::as_str) {
-                                    blocks.push(AiContentBlock::text(t));
-                                }
+                            ) && let Some(t) = c.get("text").and_then(Value::as_str)
+                            {
+                                blocks.push(AiContentBlock::text(t));
                             }
                         }
                     }
@@ -308,20 +307,20 @@ impl StreamState for OpenAiResponsesStreamState {
                 let idx = p.get("output_index").and_then(Value::as_i64).unwrap_or(0);
                 if let Some(item) = p.get("item") {
                     let entry = self.output_items.entry(idx).or_default();
-                    if entry.text.is_empty() {
-                        if let Some(content) = item.get("content").and_then(Value::as_array) {
-                            entry.text = content
-                                .iter()
-                                .filter(|c| {
-                                    matches!(
-                                        c.get("type").and_then(Value::as_str),
-                                        Some("output_text" | "input_text")
-                                    )
-                                })
-                                .filter_map(|c| c.get("text").and_then(Value::as_str))
-                                .collect::<Vec<_>>()
-                                .join("");
-                        }
+                    if entry.text.is_empty()
+                        && let Some(content) = item.get("content").and_then(Value::as_array)
+                    {
+                        entry.text = content
+                            .iter()
+                            .filter(|c| {
+                                matches!(
+                                    c.get("type").and_then(Value::as_str),
+                                    Some("output_text" | "input_text")
+                                )
+                            })
+                            .filter_map(|c| c.get("text").and_then(Value::as_str))
+                            .collect::<Vec<_>>()
+                            .join("");
                     }
                     if let Some(t) = item.get("type").and_then(Value::as_str) {
                         entry.item_type = t.to_string();
@@ -361,20 +360,20 @@ impl StreamState for OpenAiResponsesStreamState {
                     if let Some(u) = r.get("usage") {
                         self.usage = Some(normalize_usage(u));
                     }
-                    if let Some(output) = r.get("output").and_then(Value::as_array) {
-                        if !output.is_empty() {
-                            for (i, o) in output.iter().enumerate() {
-                                let idx = i as i64;
-                                let entry = self.output_items.entry(idx).or_default();
-                                merge_terminal_output_item(entry, o);
-                            }
+                    if let Some(output) = r.get("output").and_then(Value::as_array)
+                        && !output.is_empty()
+                    {
+                        for (i, o) in output.iter().enumerate() {
+                            let idx = i as i64;
+                            let entry = self.output_items.entry(idx).or_default();
+                            merge_terminal_output_item(entry, o);
                         }
                     }
                 }
-                if self.usage.is_none() {
-                    if let Some(u) = p.get("usage") {
-                        self.usage = Some(normalize_usage(u));
-                    }
+                if self.usage.is_none()
+                    && let Some(u) = p.get("usage")
+                {
+                    self.usage = Some(normalize_usage(u));
                 }
                 self.done = true;
             }
@@ -438,20 +437,20 @@ fn merge_terminal_output_item(entry: &mut OpenAiOutputItem, item: &Value) {
     if let Some(t) = item.get("type").and_then(Value::as_str) {
         entry.item_type = t.to_string();
     }
-    if entry.item_type == "message" {
-        if let Some(content) = item.get("content").and_then(Value::as_array) {
-            entry.text = content
-                .iter()
-                .filter(|c| {
-                    matches!(
-                        c.get("type").and_then(Value::as_str),
-                        Some("output_text" | "input_text")
-                    )
-                })
-                .filter_map(|c| c.get("text").and_then(Value::as_str))
-                .collect::<Vec<_>>()
-                .join("");
-        }
+    if entry.item_type == "message"
+        && let Some(content) = item.get("content").and_then(Value::as_array)
+    {
+        entry.text = content
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c.get("type").and_then(Value::as_str),
+                    Some("output_text" | "input_text")
+                )
+            })
+            .filter_map(|c| c.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("");
     }
     if entry.item_type == "reasoning" {
         entry.text = reasoning_summary_text(item);

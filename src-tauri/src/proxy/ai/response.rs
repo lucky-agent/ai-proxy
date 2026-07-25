@@ -77,11 +77,11 @@ impl AiState {
             return;
         };
         for ev in events {
-            if let Some(ref data) = ev.data {
-                if let Ok(value) = serde_json::from_str::<Value>(data) {
-                    self.raw_keys.extend(value.leaf_keys());
-                    state.apply(&ev.event, &value);
-                }
+            if let Some(ref data) = ev.data
+                && let Ok(value) = serde_json::from_str::<Value>(data)
+            {
+                self.raw_keys.extend(value.leaf_keys());
+                state.apply(&ev.event, &value);
             }
         }
         self.stream_acc += sse_data_len(events);
@@ -234,18 +234,18 @@ fn commit_ai_final(
     if let Some(usage) = conv.usage.as_ref() {
         store.add_usage(session_id, usage);
     }
-    if let Some(entry) = store.get(session_id) {
-        if let Some(ch) = sender {
-            let _ = ch.send(ProxyEvent::AiSession {
-                session_id: session_id.to_string(),
-                scope_host: entry.scope.1.clone(),
-                request_ids: entry.request_ids.clone(),
-                usage_total: entry.usage_total.clone(),
-                match_reason: entry.match_reason.clone(),
-                title: entry.title.clone(),
-                source: entry.source.clone(),
-            });
-        }
+    if let Some(entry) = store.get(session_id)
+        && let Some(ch) = sender
+    {
+        let _ = ch.send(ProxyEvent::AiSession {
+            session_id: session_id.to_string(),
+            scope_host: entry.scope.1.clone(),
+            request_ids: entry.request_ids.clone(),
+            usage_total: entry.usage_total.clone(),
+            match_reason: entry.match_reason.clone(),
+            title: entry.title.clone(),
+            source: entry.source.clone(),
+        });
     }
 }
 

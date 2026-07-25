@@ -16,7 +16,7 @@ pub struct SslWhitelistItem {
 }
 
 /// SSL 解密配置
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct SslConfig {
     /// 全局 SSL 解密开关
     #[serde(default)]
@@ -24,15 +24,6 @@ pub struct SslConfig {
     /// 域名白名单，每项可单独开关
     #[serde(default)]
     pub whitelist: Vec<SslWhitelistItem>,
-}
-
-impl Default for SslConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            whitelist: Vec::new(),
-        }
-    }
 }
 
 impl SslConfig {
@@ -77,7 +68,7 @@ impl ScriptItem {
 }
 
 /// 脚本配置
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ScriptConfig {
     /// 全局脚本开关
     #[serde(default)]
@@ -88,16 +79,6 @@ pub struct ScriptConfig {
     /// 脚本文件目录，不序列化（后端运行时注入）
     #[serde(skip)]
     pub scripts_dir: Option<std::path::PathBuf>,
-}
-
-impl Default for ScriptConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            scripts: Vec::new(),
-            scripts_dir: None,
-        }
-    }
 }
 
 /// AI 厂商标识。用于 URL 规则匹配和前端展示。
@@ -176,7 +157,7 @@ pub struct AiUrlRule {
 }
 
 /// AI 配置根
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct AiConfig {
     /// AI 检测总开关。关闭时后端完全不做 AI 检测/归一化/推送事件。
     #[serde(default)]
@@ -185,16 +166,6 @@ pub struct AiConfig {
     pub detection: AiDetectionConfig,
     #[serde(default)]
     pub session: AiSessionConfig,
-}
-
-impl Default for AiConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            detection: AiDetectionConfig::default(),
-            session: AiSessionConfig::default(),
-        }
-    }
 }
 
 /// AI 会话分组配置

@@ -38,13 +38,13 @@ pub(crate) fn open_settings_from_tray(app: &tauri::AppHandle) {
 
     show_main_window(app);
 
-    if let Some(window) = app.get_webview_window("main") {
-        if window.is_focused().unwrap_or(false) {
-            if let Some(state) = app.try_state::<AppState>() {
-                state.set_pending_open_settings(false);
-            }
-            let _ = window.emit("open-settings", ());
+    if let Some(window) = app.get_webview_window("main")
+        && window.is_focused().unwrap_or(false)
+    {
+        if let Some(state) = app.try_state::<AppState>() {
+            state.set_pending_open_settings(false);
         }
+        let _ = window.emit("open-settings", ());
     }
 }
 
@@ -65,7 +65,7 @@ fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut settings =
-        Settings::load_from_path(&store.data_dir()).expect("Failed to load configuration");
+        Settings::load_from_path(store.data_dir()).expect("Failed to load configuration");
     settings.script.scripts_dir = Some(store.scripts_dir().clone());
     let ui = settings.ui.clone();
     let _ = app
@@ -189,17 +189,17 @@ pub fn run() {
     log::info!("Configuration loaded, proxy ready");
 
     app.run(|app_handle, event| {
-        if let RunEvent::ExitRequested { .. } = &event {
-            if let Some(state) = app_handle.try_state::<AppState>() {
-                if state.running() {
-                    state.set_running(false);
-                    log::info!("Proxy stopped (app exiting)");
-                }
-                if let Some(tx) = state.take_shutdown_signal() {
-                    tx.send(()).ok();
-                }
-                state.db().shutdown();
+        if let RunEvent::ExitRequested { .. } = &event
+            && let Some(state) = app_handle.try_state::<AppState>()
+        {
+            if state.running() {
+                state.set_running(false);
+                log::info!("Proxy stopped (app exiting)");
             }
+            if let Some(tx) = state.take_shutdown_signal() {
+                tx.send(()).ok();
+            }
+            state.db().shutdown();
         }
     });
 }

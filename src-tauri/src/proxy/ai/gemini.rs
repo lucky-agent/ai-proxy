@@ -30,12 +30,12 @@ impl AiProtocol for GeminiProtocol {
         let mut turns: Vec<AiTurn> = Vec::new();
 
         // systemInstruction → system turn
-        if let Some(si) = p.get("systemInstruction") {
-            if let Some(parts) = si.get("parts").and_then(Value::as_array) {
-                let blocks = parts_to_blocks(parts);
-                if !blocks.is_empty() {
-                    turns.push(AiTurn::new("system", blocks));
-                }
+        if let Some(si) = p.get("systemInstruction")
+            && let Some(parts) = si.get("parts").and_then(Value::as_array)
+        {
+            let blocks = parts_to_blocks(parts);
+            if !blocks.is_empty() {
+                turns.push(AiTurn::new("system", blocks));
             }
         }
 
@@ -93,10 +93,10 @@ impl AiProtocol for GeminiProtocol {
                     .and_then(Value::as_str)
                     .map(String::from);
             }
-            if let Some(content) = candidate.get("content") {
-                if let Some(parts) = content.get("parts").and_then(Value::as_array) {
-                    blocks.extend(parts_to_blocks(parts));
-                }
+            if let Some(content) = candidate.get("content")
+                && let Some(parts) = content.get("parts").and_then(Value::as_array)
+            {
+                blocks.extend(parts_to_blocks(parts));
             }
         }
 
@@ -254,14 +254,13 @@ impl StreamState for GeminiStreamState {
             .filter(|r| r.get("candidates").is_some() || r.get("usageMetadata").is_some())
             .unwrap_or(data);
 
-        if self.model.is_none() {
-            if let Some(m) = chunk
+        if self.model.is_none()
+            && let Some(m) = chunk
                 .get("modelVersion")
                 .or_else(|| chunk.get("model"))
                 .and_then(Value::as_str)
-            {
-                self.model = Some(m.to_string());
-            }
+        {
+            self.model = Some(m.to_string());
         }
 
         if let Some(candidates) = chunk.get("candidates").and_then(Value::as_array) {
@@ -271,34 +270,34 @@ impl StreamState for GeminiStreamState {
                     .and_then(Value::as_i64)
                     .unwrap_or(pos as i64);
                 let entry = self.candidates.entry(idx).or_default();
-                if let Some(content) = candidate.get("content") {
-                    if let Some(parts) = content.get("parts").and_then(Value::as_array) {
-                        for part in parts {
-                            if let Some(text) = part.get("text").and_then(Value::as_str) {
-                                // 思考摘要（thought: true）与正文分开累积
-                                let is_thought = part
-                                    .get("thought")
-                                    .and_then(Value::as_bool)
-                                    .unwrap_or(false);
-                                if is_thought {
-                                    entry.thinking.push_str(text);
-                                } else {
-                                    entry.text.push_str(text);
-                                }
+                if let Some(content) = candidate.get("content")
+                    && let Some(parts) = content.get("parts").and_then(Value::as_array)
+                {
+                    for part in parts {
+                        if let Some(text) = part.get("text").and_then(Value::as_str) {
+                            // 思考摘要（thought: true）与正文分开累积
+                            let is_thought = part
+                                .get("thought")
+                                .and_then(Value::as_bool)
+                                .unwrap_or(false);
+                            if is_thought {
+                                entry.thinking.push_str(text);
+                            } else {
+                                entry.text.push_str(text);
                             }
-                            if let Some(call) = part.get("functionCall") {
-                                entry.tool_calls.push(GeminiToolCall {
-                                    name: call
-                                        .get("name")
-                                        .and_then(Value::as_str)
-                                        .unwrap_or("tool_use")
-                                        .to_string(),
-                                    args: call
-                                        .get("args")
-                                        .cloned()
-                                        .unwrap_or(Value::Object(Default::default())),
-                                });
-                            }
+                        }
+                        if let Some(call) = part.get("functionCall") {
+                            entry.tool_calls.push(GeminiToolCall {
+                                name: call
+                                    .get("name")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("tool_use")
+                                    .to_string(),
+                                args: call
+                                    .get("args")
+                                    .cloned()
+                                    .unwrap_or(Value::Object(Default::default())),
+                            });
                         }
                     }
                 }
