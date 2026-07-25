@@ -36,15 +36,15 @@ pub(crate) fn record_request(ctx: &ProxyCtx, body: &[u8]) {
     let body_str = (!body.is_empty()).then(|| String::from_utf8_lossy(body).into_owned());
 
     if let Some(db) = ctx.db_ref() {
-        match db.upsert_traffic_log(
-            ctx.request_id() as i64,
-            ctx.method().as_str(),
-            &ctx.uri().to_string(),
-            crate::utils::date::now_ms(),
-            &ctx.headers_json(),
-            &ctx.query_json(),
-            body_str.as_deref(),
-        ) {
+        match db.upsert_traffic_log(crate::storage::traffic::UpsertTrafficLogParams {
+            id: ctx.request_id() as i64,
+            method: ctx.method().as_str(),
+            uri: &ctx.uri().to_string(),
+            timestamp: crate::utils::date::now_ms(),
+            headers_json: &ctx.headers_json(),
+            query_json: &ctx.query_json(),
+            body: body_str.as_deref(),
+        }) {
             Ok(()) => ctx.set_db_id(ctx.request_id() as i64),
             Err(e) => log::warn!("[db] upsert_traffic_log: {e:?}"),
         }
@@ -250,15 +250,15 @@ impl Recording {
         for evt in events {
             let text = format_sse_event(evt);
 
-            if self.store_chunks {
-                if let (Some(ref db), Some(db_id)) = (self.db.as_ref(), self.db_id) {
-                    db.insert_chunk(db_id, &text, self.chunk_seq, now).ok();
-                    self.chunk_seq += 1;
-                    self.chunk_bytes += text.len();
-                    if self.chunk_bytes >= buf_pool::BODY_CAPTURE_LIMIT {
-                        self.store_chunks = false;
-                        log::warn!("[db] response_chunks capped for request {request_id}");
-                    }
+            if self.store_chunks
+                && let (Some(db), Some(db_id)) = (self.db.as_ref(), self.db_id)
+            {
+                db.insert_chunk(db_id, &text, self.chunk_seq, now).ok();
+                self.chunk_seq += 1;
+                self.chunk_bytes += text.len();
+                if self.chunk_bytes >= buf_pool::BODY_CAPTURE_LIMIT {
+                    self.store_chunks = false;
+                    log::warn!("[db] response_chunks capped for request {request_id}");
                 }
             }
 
@@ -279,18 +279,18 @@ impl Recording {
         request_id: u64,
         sender: &Option<Channel<ProxyEvent>>,
     ) -> Option<String> {
-        if let Some(ref mut framer) = self.framer {
-            if let Some(ev) = framer.finalize() {
-                self.record_sse_events(request_id, sender, &[ev]);
-            }
+        if let Some(ref mut framer) = self.framer
+            && let Some(ev) = framer.finalize()
+        {
+            self.record_sse_events(request_id, sender, &[ev]);
         }
 
         let body = self.body_buf.take().filter(|b| !b.is_empty());
 
-        if let Some(ref body_text) = body {
-            if let (Some(ref db), Some(db_id)) = (self.db.as_ref(), self.db_id) {
-                db.update_traffic_response_body(db_id, body_text).ok();
-            }
+        if let Some(ref body_text) = body
+            && let (Some(db), Some(db_id)) = (self.db.as_ref(), self.db_id)
+        {
+            db.update_traffic_response_body(db_id, body_text).ok();
         }
 
         body

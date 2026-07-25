@@ -60,6 +60,27 @@ pub(crate) struct AssignResult {
     pub source: Option<String>,
 }
 
+pub(crate) struct AssignParams<'a> {
+    pub provider: Provider,
+    pub host: &'a str,
+    pub session_headers: &'a [(String, Option<String>)],
+    pub headers: &'a HashMap<String, String>,
+    pub messages: &'a [AiTurn],
+    pub prefix_fallback: bool,
+    pub request_id: u64,
+}
+
+struct TouchParams<'a> {
+    sid: &'a str,
+    scope: &'a (String, String),
+    fingerprints: &'a [u64],
+    request_id: u64,
+    tick: u64,
+    source: Option<&'a str>,
+    match_reason: &'a str,
+    messages: &'a [AiTurn],
+}
+
 /// 会话状态表。挂在 `State` 上，`Arc<Mutex<..>>` 包裹以线程安全。
 pub(crate) struct SessionStore {
     sessions: HashMap<String, SessionEntry>,
@@ -89,41 +110,32 @@ impl SessionStore {
     /// - `headers`：本次请求头（键为小写，来自 rama `HeaderName`）；
     /// - `messages`：本次请求归一化后的 turns（用于前缀匹配与更新指纹链）；
     /// - `prefix_fallback`：无 header 时是否启用前缀匹配。
-    pub(crate) fn assign(
-        &mut self,
-        provider: Provider,
-        host: &str,
-        session_headers: &[(String, Option<String>)],
-        headers: &HashMap<String, String>,
-        messages: &[AiTurn],
-        prefix_fallback: bool,
-        request_id: u64,
-    ) -> AssignResult {
-        let scope = (provider.as_str().to_string(), host.to_string());
+    pub(crate) fn assign(&mut self, p: AssignParams<'_>) -> AssignResult {
+        let scope = (p.provider.as_str().to_string(), p.host.to_string());
         let tick = self.next_tick();
-        let fingerprints: Vec<u64> = messages.iter().map(turn_fingerprint).collect();
+        let fingerprints: Vec<u64> = p.messages.iter().map(turn_fingerprint).collect();
 
         // ① header 优先：按名单顺序取第一个命中，会话 id = scope + header 值
-        for (name, source) in session_headers {
-            if let Some(val) = headers.get(&name.to_ascii_lowercase()) {
+        for (name, source) in p.session_headers {
+            if let Some(val) = p.headers.get(&name.to_ascii_lowercase()) {
                 let sid = session_key(&scope, val);
                 let reason = format!("header:{name}");
-                self.touch_or_create(
-                    &sid,
-                    &scope,
-                    &fingerprints,
-                    request_id,
+                self.touch_or_create(TouchParams {
+                    sid: &sid,
+                    scope: &scope,
+                    fingerprints: &fingerprints,
+                    request_id: p.request_id,
                     tick,
-                    source.as_deref(),
-                    &reason,
-                    messages,
-                );
+                    source: source.as_deref(),
+                    match_reason: &reason,
+                    messages: p.messages,
+                });
                 return self.result_snapshot(sid, reason);
             }
         }
 
         // ② 前缀匹配兜底：同 scope 会话里找指纹链是本次前缀者，取最长
-        if prefix_fallback {
+        if p.prefix_fallback {
             let mut best: Option<(String, usize)> = None;
             for entry in self.sessions.values() {
                 if entry.scope != scope {
@@ -137,32 +149,32 @@ impl SessionStore {
                 }
             }
             if let Some((sid, _)) = best {
-                self.touch_or_create(
-                    &sid,
-                    &scope,
-                    &fingerprints,
-                    request_id,
+                self.touch_or_create(TouchParams {
+                    sid: &sid,
+                    scope: &scope,
+                    fingerprints: &fingerprints,
+                    request_id: p.request_id,
                     tick,
-                    None,
-                    "prefix",
-                    messages,
-                );
+                    source: None,
+                    match_reason: "prefix",
+                    messages: p.messages,
+                });
                 return self.result_snapshot(sid, "prefix".to_string());
             }
         }
 
         // ③ 新会话
         let sid = format!("sess-{}", Uuid::new_v4());
-        self.touch_or_create(
-            &sid,
-            &scope,
-            &fingerprints,
-            request_id,
+        self.touch_or_create(TouchParams {
+            sid: &sid,
+            scope: &scope,
+            fingerprints: &fingerprints,
+            request_id: p.request_id,
             tick,
-            None,
-            "new",
-            messages,
-        );
+            source: None,
+            match_reason: "new",
+            messages: p.messages,
+        });
         self.result_snapshot(sid, "new".to_string())
     }
 
@@ -181,76 +193,66 @@ impl SessionStore {
 
     /// 更新/创建会话条目。timeline 保留 LCP 增量更新供 prefix 匹配，
     /// 前端从 AiNormalized.conversation 自包含消费。
-    fn touch_or_create(
-        &mut self,
-        sid: &str,
-        scope: &(String, String),
-        fingerprints: &[u64],
-        request_id: u64,
-        tick: u64,
-        source: Option<&str>,
-        match_reason: &str,
-        messages: &[AiTurn],
-    ) {
-        match self.sessions.get_mut(sid) {
+    fn touch_or_create(&mut self, p: TouchParams<'_>) {
+        match self.sessions.get_mut(p.sid) {
             Some(entry) => {
-                if !entry.request_ids.iter().any(|&r| r == request_id) {
-                    entry.request_ids.push(request_id);
+                if !entry.request_ids.contains(&p.request_id) {
+                    entry.request_ids.push(p.request_id);
                 }
                 // 计算增量：LCP(timeline_fingerprints, new_fingerprints)
                 let lcp = entry
                     .timeline
                     .iter()
                     .map(|e| e.fingerprint)
-                    .zip(fingerprints.iter())
+                    .zip(p.fingerprints.iter())
                     .take_while(|(a, b)| a == *b)
                     .count();
-                let delta: Vec<TimelineEntry> = fingerprints[lcp..]
+                let delta: Vec<TimelineEntry> = p.fingerprints[lcp..]
                     .iter()
-                    .zip(&messages[lcp..])
+                    .zip(&p.messages[lcp..])
                     .map(|(fp, turn)| TimelineEntry {
                         fingerprint: *fp,
                         turn: turn.clone(),
-                        request_id,
+                        request_id: p.request_id,
                     })
                     .collect();
                 // 追加到时间线
                 entry.timeline.extend(delta);
-                entry.last_fingerprints = fingerprints.to_vec();
-                entry.last_touched = tick;
-                entry.match_reason = match_reason.to_string();
+                entry.last_fingerprints = p.fingerprints.to_vec();
+                entry.last_touched = p.tick;
+                entry.match_reason = p.match_reason.to_string();
                 // 仅在本次确认了来源时覆写；前缀/全局命中（None）不清除已有归属
-                if let Some(src) = source {
+                if let Some(src) = p.source {
                     entry.source = Some(src.to_string());
                 }
             }
             None => {
                 // 新会话：全部 turns 都是增量
-                let delta: Vec<TimelineEntry> = messages
+                let delta: Vec<TimelineEntry> = p.messages
                     .iter()
-                    .zip(fingerprints.iter())
+                    .zip(p.fingerprints.iter())
                     .map(|(turn, fp)| TimelineEntry {
                         fingerprint: *fp,
                         turn: turn.clone(),
-                        request_id,
+                        request_id: p.request_id,
                     })
                     .collect();
                 // 仅新会话时从第一条 user turn 提取标题（兜底），
                 // 后续由 refine_title 用响应 {"title": "..."} 覆盖
-                let title = super::normalize::extract_title_from_request(messages);
+                let title = super::normalize::extract_title_from_request(p.messages);
                 self.sessions.insert(
-                    sid.to_string(),
+                    p.sid.to_string(),
                     SessionEntry {
-                        id: sid.to_string(),
-                        scope: scope.clone(),
-                        request_ids: vec![request_id],
-                        last_fingerprints: fingerprints.to_vec(),
+                        id: p.sid.to_string(),
+                        scope: p.scope.clone(),
+                        request_ids: vec![p.request_id],
+                        last_fingerprints: p.fingerprints.to_vec(),
                         timeline: delta.clone(),
                         usage_total: AiUsage::default(),
                         title,
-                        source: source.map(str::to_string),
-                        match_reason: match_reason.to_string(),
-                        last_touched: tick,
+                        source: p.source.map(str::to_string),
+                        match_reason: p.match_reason.to_string(),
+                        last_touched: p.tick,
                     },
                 );
                 self.evict_if_needed();

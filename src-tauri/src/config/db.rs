@@ -214,13 +214,15 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
             } => {
                 let result = traffic::do_upsert_traffic_log(
                     &conn,
-                    id,
-                    &method,
-                    &uri,
-                    timestamp,
-                    &headers_json,
-                    &query_json,
-                    body.as_deref(),
+                    traffic::UpsertTrafficLogParams {
+                        id,
+                        method: &method,
+                        uri: &uri,
+                        timestamp,
+                        headers_json: &headers_json,
+                        query_json: &query_json,
+                        body: body.as_deref(),
+                    },
                 );
                 if let Some(reply) = reply {
                     reply.send(result).ok();
@@ -290,7 +292,7 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
                 let result = (|| {
                     let mut stmt = conn.prepare("SELECT COALESCE(MAX(id), 0) FROM traffic_logs")?;
                     stmt.next()?;
-                    Ok(stmt.read::<i64, _>(0)?)
+                    stmt.read::<i64, _>(0)
                 })();
                 reply.send(result).ok();
             }
@@ -331,17 +333,19 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
             } => {
                 collection_requests::do_update_collection_request(
                     &conn,
-                    id,
-                    &method,
-                    &uri,
-                    &headers,
-                    &query,
-                    body.as_deref(),
-                    &body_type,
-                    &cookies,
-                    &auth_type,
-                    &auth_data,
-                    timestamp,
+                    collection_requests::UpdateCollectionRequestParams {
+                        id,
+                        method: &method,
+                        uri: &uri,
+                        headers: &headers,
+                        query: &query,
+                        body: body.as_deref(),
+                        body_type: &body_type,
+                        cookies: &cookies,
+                        auth_type: &auth_type,
+                        auth_data: &auth_data,
+                        timestamp,
+                    },
                 )
                 .unwrap_or_else(|e| log::warn!("update_collection_request: {e}"));
             }

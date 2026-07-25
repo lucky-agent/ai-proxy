@@ -44,15 +44,15 @@ pub(crate) fn process_ai_request(ctx: &ProxyCtx, body_str: Option<String>) {
     let session_headers = session_header_list(&sources, &cfg.session_headers);
     let result = {
         let mut store = sessions.lock().expect("sessions lock");
-        store.assign(
+        store.assign(super::session::AssignParams {
             provider,
-            &host,
-            &session_headers,
-            ctx.header_map(),
-            &turns,
-            cfg.prefix_match_fallback,
-            ctx.request_id(),
-        )
+            host: &host,
+            session_headers: &session_headers,
+            headers: ctx.header_map(),
+            messages: &turns,
+            prefix_fallback: cfg.prefix_match_fallback,
+            request_id: ctx.request_id(),
+        })
     };
 
     // 登记 (provider, session_id) 供响应侧使用。

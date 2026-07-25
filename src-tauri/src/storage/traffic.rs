@@ -46,26 +46,30 @@ pub(crate) struct ChunkRecord {
 use crate::config::db::Db;
 use crate::config::db::DbCmd;
 
+pub(crate) struct UpsertTrafficLogParams<'a> {
+    pub id: i64,
+    pub method: &'a str,
+    pub uri: &'a str,
+    pub timestamp: i64,
+    pub headers_json: &'a str,
+    pub query_json: &'a str,
+    pub body: Option<&'a str>,
+}
+
 impl Db {
     pub(crate) fn upsert_traffic_log(
         &self,
-        id: i64,
-        method: &str,
-        uri: &str,
-        timestamp: i64,
-        headers_json: &str,
-        query_json: &str,
-        body: Option<&str>,
+        p: UpsertTrafficLogParams<'_>,
     ) -> Result<(), sqlite::Error> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send(DbCmd::UpsertTrafficLog {
-            id,
-            method: method.to_string(),
-            uri: uri.to_string(),
-            timestamp,
-            headers_json: headers_json.to_string(),
-            query_json: query_json.to_string(),
-            body: body.map(String::from),
+            id: p.id,
+            method: p.method.to_string(),
+            uri: p.uri.to_string(),
+            timestamp: p.timestamp,
+            headers_json: p.headers_json.to_string(),
+            query_json: p.query_json.to_string(),
+            body: p.body.map(String::from),
             reply: Some(reply_tx),
         })?;
         reply_rx.recv().map_err(|_| sqlite::Error {
@@ -184,24 +188,18 @@ impl Db {
 
 pub(crate) fn do_upsert_traffic_log(
     conn: &sqlite::Connection,
-    id: i64,
-    method: &str,
-    uri: &str,
-    timestamp: i64,
-    headers_json: &str,
-    query_json: &str,
-    body: Option<&str>,
+    p: UpsertTrafficLogParams<'_>,
 ) -> Result<(), sqlite::Error> {
     let mut stmt = conn.prepare(
         "INSERT INTO traffic_logs (id, method, uri, request_timestamp, request_headers, request_query, request_body) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )?;
-    stmt.bind((1_usize, id as i64))?;
-    stmt.bind((2_usize, method))?;
-    stmt.bind((3_usize, uri))?;
-    stmt.bind((4_usize, timestamp as i64))?;
-    stmt.bind((5_usize, headers_json))?;
-    stmt.bind((6_usize, query_json))?;
-    match body {
+    stmt.bind((1_usize, p.id))?;
+    stmt.bind((2_usize, p.method))?;
+    stmt.bind((3_usize, p.uri))?;
+    stmt.bind((4_usize, p.timestamp))?;
+    stmt.bind((5_usize, p.headers_json))?;
+    stmt.bind((6_usize, p.query_json))?;
+    match p.body {
         Some(b) => stmt.bind((7_usize, b))?,
         None => stmt.bind((7_usize, sqlite::Value::Null))?,
     }
@@ -221,10 +219,10 @@ pub(crate) fn do_update_traffic_response(
         "UPDATE traffic_logs SET status = ?, response_timestamp = ?, duration_ms = ?, response_headers = ? WHERE id = ?",
     )?;
     stmt.bind((1_usize, status as i64))?;
-    stmt.bind((2_usize, timestamp as i64))?;
+    stmt.bind((2_usize, timestamp))?;
     stmt.bind((3_usize, duration_ms as i64))?;
     stmt.bind((4_usize, headers_json))?;
-    stmt.bind((5_usize, id as i64))?;
+    stmt.bind((5_usize, id))?;
     stmt.next()?;
     Ok(())
 }
@@ -236,7 +234,7 @@ pub(crate) fn do_update_traffic_response_body(
 ) -> Result<(), sqlite::Error> {
     let mut stmt = conn.prepare("UPDATE traffic_logs SET response_body = ? WHERE id = ?")?;
     stmt.bind((1_usize, body))?;
-    stmt.bind((2_usize, id as i64))?;
+    stmt.bind((2_usize, id))?;
     stmt.next()?;
     Ok(())
 }
@@ -248,7 +246,7 @@ pub(crate) fn do_set_traffic_error(
 ) -> Result<(), sqlite::Error> {
     let mut stmt = conn.prepare("UPDATE traffic_logs SET error = ? WHERE id = ?")?;
     stmt.bind((1_usize, error))?;
-    stmt.bind((2_usize, id as i64))?;
+    stmt.bind((2_usize, id))?;
     stmt.next()?;
     Ok(())
 }
@@ -263,7 +261,7 @@ pub(crate) fn do_insert_chunk(
     let mut stmt = conn.prepare(
         "INSERT INTO response_chunks (request_id, chunk, seq, created_at) VALUES (?, ?, ?, ?)",
     )?;
-    stmt.bind((1_usize, request_id as i64))?;
+    stmt.bind((1_usize, request_id))?;
     stmt.bind((2_usize, chunk))?;
     stmt.bind((3_usize, seq))?;
     stmt.bind((4_usize, created_at))?;
@@ -336,7 +334,7 @@ pub(crate) fn do_load_chunks(
 ) -> Result<Vec<ChunkRecord>, sqlite::Error> {
     let mut stmt =
         conn.prepare("SELECT chunk FROM response_chunks WHERE request_id = ? ORDER BY seq")?;
-    stmt.bind((1_usize, request_id as i64))?;
+    stmt.bind((1_usize, request_id))?;
     let mut chunks = Vec::new();
     while let sqlite::State::Row = stmt.next()? {
         chunks.push(ChunkRecord {
@@ -353,7 +351,7 @@ pub(crate) fn do_load_traffic_detail(
     let mut stmt = conn.prepare(
         "SELECT id, method, uri, request_timestamp, request_headers, request_body, request_query, status, response_timestamp, duration_ms, response_headers, response_body, error FROM traffic_logs WHERE id = ?",
     )?;
-    stmt.bind((1_usize, id as i64))?;
+    stmt.bind((1_usize, id))?;
     if let sqlite::State::Row = stmt.next()? {
         let headers_str: String = stmt.read::<String, _>(4)?;
         let headers: HashMap<String, String> = parse_kv_json(&headers_str);
@@ -382,7 +380,7 @@ pub(crate) fn do_load_traffic_detail(
     } else {
         Err(sqlite::Error {
             code: None,
-            message: Some(format!("traffic log id={id} not found").into()),
+            message: Some(format!("traffic log id={id} not found")),
         })
     }
 }

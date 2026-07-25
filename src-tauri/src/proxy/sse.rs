@@ -135,13 +135,9 @@ fn parse_sse_block(raw: &str) -> SseEvent {
             continue;
         }
         // 注释行（以 `:` 开头）
-        if line.starts_with(':') {
+        if let Some(stripped) = line.strip_prefix(':') {
             // 去掉 `:` 及后面紧跟的单个空格（如有），保留注释内容。
-            let comment = if line.as_bytes().get(1) == Some(&b' ') {
-                &line[2..]
-            } else {
-                &line[1..]
-            };
+            let comment = stripped.strip_prefix(' ').unwrap_or(stripped);
             comments.push(comment.to_string());
             continue;
         }
@@ -186,10 +182,11 @@ fn parse_sse_block(raw: &str) -> SseEvent {
             "retry" => {
                 // WHATWG: retry 值必须为纯 ASCII 数字。
                 // `u64::parse` 默认接受 `+` 前缀，不符合规范，故手写校验。
-                if !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()) {
-                    if let Ok(ms) = value.parse() {
-                        retry = Some(ms);
-                    }
+                if !value.is_empty()
+                    && value.bytes().all(|b| b.is_ascii_digit())
+                    && let Ok(ms) = value.parse()
+                {
+                    retry = Some(ms);
                 }
             }
             // 未知字段 / comment（已在上面跳过）/ 空字段 → 忽略

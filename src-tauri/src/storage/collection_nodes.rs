@@ -208,6 +208,7 @@ struct RequestData {
     body_type: String,
     auth_type: String,
     auth_data: String,
+    #[allow(dead_code)]
     name: String,
 }
 
@@ -303,7 +304,7 @@ pub(crate) fn do_create_collection(
     stmt.next()?;
     let mut id_stmt = conn.prepare("SELECT last_insert_rowid()")?;
     id_stmt.next()?;
-    Ok(id_stmt.read::<i64, _>(0)?)
+    id_stmt.read::<i64, _>(0)
 }
 
 pub(crate) fn do_create_folder(
@@ -322,7 +323,7 @@ pub(crate) fn do_create_folder(
     stmt.next()?;
     let mut id_stmt = conn.prepare("SELECT last_insert_rowid()")?;
     id_stmt.next()?;
-    Ok(id_stmt.read::<i64, _>(0)?)
+    id_stmt.read::<i64, _>(0)
 }
 
 pub(crate) fn do_create_request_node(
@@ -343,7 +344,7 @@ pub(crate) fn do_create_request_node(
     stmt.next()?;
     let mut id_stmt = conn.prepare("SELECT last_insert_rowid()")?;
     id_stmt.next()?;
-    Ok(id_stmt.read::<i64, _>(0)?)
+    id_stmt.read::<i64, _>(0)
 }
 
 pub(crate) fn do_rename_node(
@@ -413,7 +414,7 @@ pub(crate) fn do_delete_node_subtree(
     );
     let mut stmt = conn.prepare(sql)?;
     for (i, node_id) in to_delete.iter().enumerate() {
-        stmt.bind(((i + 1) as usize, *node_id))?;
+        stmt.bind(((i + 1), *node_id))?;
     }
     let mut request_ids: Vec<i64> = Vec::new();
     while let sqlite::State::Row = stmt.next()? {
@@ -432,7 +433,7 @@ pub(crate) fn do_delete_node_subtree(
         );
         let mut req_stmt = conn.prepare(req_sql)?;
         for (i, req_id) in request_ids.iter().enumerate() {
-            req_stmt.bind(((i + 1) as usize, *req_id))?;
+            req_stmt.bind(((i + 1), *req_id))?;
         }
         req_stmt.next()?;
     }
@@ -443,7 +444,7 @@ pub(crate) fn do_delete_node_subtree(
     );
     let mut del_stmt = conn.prepare(del_sql)?;
     for (i, node_id) in to_delete.iter().enumerate() {
-        del_stmt.bind(((i + 1) as usize, *node_id))?;
+        del_stmt.bind(((i + 1), *node_id))?;
     }
     del_stmt.next()?;
 

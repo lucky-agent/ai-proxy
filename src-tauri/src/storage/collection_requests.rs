@@ -18,7 +18,9 @@ pub(crate) struct CollectionRequestRow {
     pub body_type: String,
     pub auth_type: String,
     pub auth_data: String,
+    #[allow(dead_code)]
     pub created_at: i64,
+    #[allow(dead_code)]
     pub updated_at: i64,
 }
 
@@ -27,6 +29,20 @@ pub(crate) struct CollectionRequestRow {
 pub(crate) struct CollectionRequestsTable;
 
 // ── Repository trait ───────────────────────────────────────────────────────────
+
+pub(crate) struct UpdateCollectionRequestParams<'a> {
+    pub id: i64,
+    pub method: &'a str,
+    pub uri: &'a str,
+    pub headers: &'a str,
+    pub query: &'a str,
+    pub body: Option<&'a str>,
+    pub body_type: &'a str,
+    pub cookies: &'a str,
+    pub auth_type: &'a str,
+    pub auth_data: &'a str,
+    pub timestamp: i64,
+}
 
 pub(crate) trait CollectionRequestsRepository {
     fn insert_collection_request(
@@ -39,17 +55,7 @@ pub(crate) trait CollectionRequestsRepository {
 
     fn update_collection_request(
         &self,
-        id: i64,
-        method: &str,
-        uri: &str,
-        headers: &str,
-        query: &str,
-        body: Option<&str>,
-        body_type: &str,
-        cookies: &str,
-        auth_type: &str,
-        auth_data: &str,
-        timestamp: i64,
+        p: UpdateCollectionRequestParams<'_>,
     ) -> Result<(), sqlite::Error>;
 
     fn duplicate_collection_request(&self, id: i64, timestamp: i64) -> Result<i64, sqlite::Error>;
@@ -89,30 +95,20 @@ impl CollectionRequestsRepository for Db {
 
     fn update_collection_request(
         &self,
-        id: i64,
-        method: &str,
-        uri: &str,
-        headers: &str,
-        query: &str,
-        body: Option<&str>,
-        body_type: &str,
-        cookies: &str,
-        auth_type: &str,
-        auth_data: &str,
-        timestamp: i64,
+        p: UpdateCollectionRequestParams<'_>,
     ) -> Result<(), sqlite::Error> {
         self.send(DbCmd::UpdateCollectionRequest {
-            id,
-            method: method.to_string(),
-            uri: uri.to_string(),
-            headers: headers.to_string(),
-            query: query.to_string(),
-            body: body.map(String::from),
-            body_type: body_type.to_string(),
-            cookies: cookies.to_string(),
-            auth_type: auth_type.to_string(),
-            auth_data: auth_data.to_string(),
-            timestamp,
+            id: p.id,
+            method: p.method.to_string(),
+            uri: p.uri.to_string(),
+            headers: p.headers.to_string(),
+            query: p.query.to_string(),
+            body: p.body.map(String::from),
+            body_type: p.body_type.to_string(),
+            cookies: p.cookies.to_string(),
+            auth_type: p.auth_type.to_string(),
+            auth_data: p.auth_data.to_string(),
+            timestamp: p.timestamp,
         })
     }
 
@@ -163,45 +159,35 @@ pub(crate) fn do_insert_collection_request(
     stmt.bind((1_usize, name))?;
     stmt.bind((2_usize, method))?;
     stmt.bind((3_usize, uri))?;
-    stmt.bind((4_usize, timestamp as i64))?;
-    stmt.bind((5_usize, timestamp as i64))?;
+    stmt.bind((4_usize, timestamp))?;
+    stmt.bind((5_usize, timestamp))?;
     stmt.next()?;
     let mut id_stmt = conn.prepare("SELECT last_insert_rowid()")?;
     id_stmt.next()?;
-    Ok(id_stmt.read::<i64, _>(0)?)
+    id_stmt.read::<i64, _>(0)
 }
 
 pub(crate) fn do_update_collection_request(
     conn: &sqlite::Connection,
-    id: i64,
-    method: &str,
-    uri: &str,
-    headers: &str,
-    query: &str,
-    body: Option<&str>,
-    body_type: &str,
-    cookies: &str,
-    auth_type: &str,
-    auth_data: &str,
-    timestamp: i64,
+    p: UpdateCollectionRequestParams<'_>,
 ) -> Result<(), sqlite::Error> {
     let mut stmt = conn.prepare(
         "UPDATE collection_requests SET method = ?, uri = ?, request_headers = ?, request_query = ?, request_body = ?, body_type = ?, cookies = ?, auth_type = ?, auth_data = ?, updated_at = ? WHERE id = ?",
     )?;
-    stmt.bind((1_usize, method))?;
-    stmt.bind((2_usize, uri))?;
-    stmt.bind((3_usize, headers))?;
-    stmt.bind((4_usize, query))?;
-    match body {
+    stmt.bind((1_usize, p.method))?;
+    stmt.bind((2_usize, p.uri))?;
+    stmt.bind((3_usize, p.headers))?;
+    stmt.bind((4_usize, p.query))?;
+    match p.body {
         Some(b) => stmt.bind((5_usize, b))?,
         None => stmt.bind((5_usize, sqlite::Value::Null))?,
     }
-    stmt.bind((6_usize, body_type))?;
-    stmt.bind((7_usize, cookies))?;
-    stmt.bind((8_usize, auth_type))?;
-    stmt.bind((9_usize, auth_data))?;
-    stmt.bind((10_usize, timestamp as i64))?;
-    stmt.bind((11_usize, id as i64))?;
+    stmt.bind((6_usize, p.body_type))?;
+    stmt.bind((7_usize, p.cookies))?;
+    stmt.bind((8_usize, p.auth_type))?;
+    stmt.bind((9_usize, p.auth_data))?;
+    stmt.bind((10_usize, p.timestamp))?;
+    stmt.bind((11_usize, p.id))?;
     stmt.next()?;
     Ok(())
 }
@@ -216,13 +202,13 @@ pub(crate) fn do_duplicate_collection_request(
          SELECT name, method, uri, request_headers, request_body, request_query, cookies, body_type, auth_type, auth_data, ?, ?
          FROM collection_requests WHERE id = ?",
     )?;
-    stmt.bind((1_usize, timestamp as i64))?;
-    stmt.bind((2_usize, timestamp as i64))?;
-    stmt.bind((3_usize, id as i64))?;
+    stmt.bind((1_usize, timestamp))?;
+    stmt.bind((2_usize, timestamp))?;
+    stmt.bind((3_usize, id))?;
     stmt.next()?;
     let mut id_stmt = conn.prepare("SELECT last_insert_rowid()")?;
     id_stmt.next()?;
-    Ok(id_stmt.read::<i64, _>(0)?)
+    id_stmt.read::<i64, _>(0)
 }
 
 pub(crate) fn do_find_collection_requests_by_ids(
@@ -236,7 +222,7 @@ pub(crate) fn do_find_collection_requests_by_ids(
     );
     let mut stmt = conn.prepare(sql)?;
     for (i, id) in ids.iter().enumerate() {
-        stmt.bind(((i + 1) as usize, *id as i64))?;
+        stmt.bind(((i + 1), (*id)))?;
     }
     let mut results = Vec::new();
     while let sqlite::State::Row = stmt.next()? {

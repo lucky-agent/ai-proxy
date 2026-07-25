@@ -98,6 +98,7 @@ pub fn move_node(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn save_request(
     state: tauri::State<'_, AppState>,
     id: i64,
@@ -116,19 +117,19 @@ pub fn save_request(
     let headers_json = serde_json::to_string(&headers.unwrap_or_default()).unwrap_or_default();
     let params_json = serde_json::to_string(&params.unwrap_or_default()).unwrap_or_default();
     let cookies_json = serde_json::to_string(&cookies.unwrap_or_default()).unwrap_or_default();
-    db.update_collection_request(
+    db.update_collection_request(crate::storage::collection_requests::UpdateCollectionRequestParams {
         id,
-        &method,
-        &url,
-        &headers_json,
-        &params_json,
-        body.as_deref(),
-        body_type.as_deref().unwrap_or(""),
-        &cookies_json,
-        auth_type.as_deref().unwrap_or(""),
-        auth_data.as_deref().unwrap_or(""),
-        ts,
-    )
+        method: &method,
+        uri: &url,
+        headers: &headers_json,
+        query: &params_json,
+        body: body.as_deref(),
+        body_type: body_type.as_deref().unwrap_or(""),
+        cookies: &cookies_json,
+        auth_type: auth_type.as_deref().unwrap_or(""),
+        auth_data: auth_data.as_deref().unwrap_or(""),
+        timestamp: ts,
+    })
     .map_err(|e| e.to_string())
 }
 
