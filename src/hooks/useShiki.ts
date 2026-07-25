@@ -1,52 +1,19 @@
-import { useState, useEffect, useRef } from 'react'
-
-type CodeToHtmlFn = (code: string, options: { lang: string; theme: string }) => Promise<string>
-
-// 模块级缓存，避免每次渲染都动态 import
-let _codeToHtml: CodeToHtmlFn | null = null
-
-async function getCodeToHtml(): Promise<CodeToHtmlFn> {
-  if (!_codeToHtml) {
-    const { codeToHtml } = await import('shiki')
-    _codeToHtml = codeToHtml
-  }
-  return _codeToHtml!
-}
+import { useRef } from 'react'
+import { useShikiHighlighter } from 'react-shiki'
 
 /**
- * 使用 shiki 进行语法高亮，自动处理异步加载和清理
+ * 使用 react-shiki 进行语法高亮，返回 React 元素。
+ * 缓存上一次有效结果：高亮计算中（返回 null）时沿用旧值，消除异步加载导致的闪烁。
  */
-export function useShiki(
-  code: string,
-  lang: string,
-  theme: string,
-): string {
-  const [html, setHtml] = useState('')
-  const codeRef = useRef(code)
-  codeRef.current = code
+export function useShiki(code: string, lang: string, theme: string): React.ReactElement | null {
+  const result = useShikiHighlighter(code, lang as any, theme, { addDefaultStyles: false })
+  const cachedRef = useRef<React.ReactElement | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
+  if (result !== null) {
+    cachedRef.current = result
+    return result
+  }
 
-    ;(async () => {
-      const codeToHtml = await getCodeToHtml()
-      if (cancelled) return
-
-      const result = await codeToHtml(codeRef.current, {
-        lang,
-        theme,
-      })
-      // 去掉 .line 之间多余的换行符，避免 pre-wrap 下多出空行
-      const fixed = result.replace(/<\/span>\n(?=<span class="line")/g, '</span>')
-      if (!cancelled) {
-        setHtml(fixed)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [code, lang, theme])
-
-  return html
+  // 高亮尚未完成（WASM 加载 / 异步计算中），返回上一次的有效结果避免 fallback 闪烁
+  return cachedRef.current
 }

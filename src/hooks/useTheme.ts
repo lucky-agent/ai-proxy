@@ -10,9 +10,7 @@ function effectiveTheme(theme: Theme, osDark: boolean): 'light' | 'dark' {
 
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>('system')
-  const [osDark, setOsDark] = useState(
-    window.matchMedia('(prefers-color-scheme: dark)').matches
-  )
+  const [osDark, setOsDark] = useState(window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const apply = useCallback((resolved: 'light' | 'dark') => {
     document.documentElement.classList.toggle('dark', resolved === 'dark')
@@ -21,7 +19,7 @@ export function useTheme() {
 
   useEffect(() => {
     invoke<Theme>('get_theme')
-      .then((t) => {
+      .then(t => {
         setThemeState(t)
         apply(effectiveTheme(t, osDark))
       })
@@ -49,7 +47,7 @@ export function useTheme() {
   const setTheme = useCallback((t: Theme) => {
     invoke<string>('set_theme', { theme: t })
       .then(() => setThemeState(t))
-      .catch((err) => console.error('Failed to save theme:', err))
+      .catch(err => console.error('Failed to save theme:', err))
   }, [])
 
   return { theme, resolvedTheme: effectiveTheme(theme, osDark), setTheme }

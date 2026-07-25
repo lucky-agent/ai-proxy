@@ -81,7 +81,7 @@ export function isStreamingContentType(headers: Record<string, string> | null | 
 // 合并消息 — 将多个 SSE 事件聚合成一条完整内容
 // ---------------------------------------------------------------------------
 
-export type MergeFormat = 'openai'
+export type MergeFormat = 'openai' | 'anthropic'
 
 export interface MergeResult {
   /** 合并后的纯文本内容 */
@@ -109,11 +109,34 @@ export interface TokenUsage {
 
 /**
  * 从 SSE 事件列表中提取 token 用量信息。
- * OpenAI 的最后一个 chunk 通常包含 usage 字段：
- *   {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":50,"total_tokens":150,"prompt_tokens_details":{"cached_tokens":30}}}
- * 遍历 events 从后向前查找带 usage 的 chunk。
+ * - OpenAI：最后一个 chunk 通常包含 usage 字段
+ * - Anthropic：input_tokens 在 message_start、output_tokens 在 message_delta，需跨事件聚合
  */
 export function extractTokenUsage(events: SseEvent[]): TokenUsage | null {
+  // 尝试 Anthropic 跨事件聚合
+  let anthropicInput: number | undefined
+  let anthropicOutput: number | undefined
+  for (const evt of events) {
+    try {
+      const p = JSON.parse(evt.data)
+      if (!p || typeof p !== 'object') continue
+      if (p.type === 'message_start' && p.message?.usage?.input_tokens != null) {
+        anthropicInput = p.message.usage.input_tokens
+      }
+      if (p.type === 'message_delta' && p.usage?.output_tokens != null) {
+        anthropicOutput = p.usage.output_tokens
+      }
+    } catch { continue }
+  }
+  if (anthropicInput != null || anthropicOutput != null) {
+    return {
+      promptTokens: anthropicInput,
+      completionTokens: anthropicOutput,
+      totalTokens: (anthropicInput ?? 0) + (anthropicOutput ?? 0),
+    }
+  }
+
+  // OpenAI 末 chunk usage
   for (let i = events.length - 1; i >= 0; i--) {
     const data = events[i].data.trim()
     if (data === '[DONE]') continue
@@ -169,10 +192,49 @@ function extractOpenAIContent(data: string): string | null {
 }
 
 /**
+ * 从 Anthropic SSE event 中提取 text_delta 文本。
+ * content_block_delta: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+ */
+function extractAnthropicDelta(evt: SseEvent): string | null {
+  try {
+    const p = JSON.parse(evt.data)
+    if (p?.type !== 'content_block_delta') return null
+    const delta = p?.delta
+    if (!delta || delta.type !== 'text_delta' || typeof delta.text !== 'string') return null
+    return delta.text
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 从 OpenAI SSE event.data 中提取 tool_call arguments 增量文本。
+ * 返回值是每个 tool_call 的 name + arguments JSON 片段，方便在 merged 视图中格式化展示。
+ */
+function extractOpenAIToolCallText(data: string): string | null {
+  if (data.trim() === '[DONE]') return null
+  try {
+    const p = JSON.parse(data)
+    const toolCalls = p?.choices?.[0]?.delta?.tool_calls
+    if (!Array.isArray(toolCalls) || toolCalls.length === 0) return null
+    const parts: string[] = []
+    for (const tc of toolCalls) {
+      if (tc.function?.arguments) {
+        const prefix = tc.function.name ? `${tc.function.name}: ` : ''
+        parts.push(prefix + tc.function.arguments)
+      }
+    }
+    return parts.length > 0 ? parts.join('') : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * 将 SSE 事件列表按指定格式合并为一条消息。
  *
  * @param events  SSE 事件列表
- * @param format  目标格式
+ * @param format  目标格式（'openai' | 'anthropic'）
  * @returns       合并结果，events 为空时返回 null
  */
 export function mergeSseMessages(
@@ -183,9 +245,27 @@ export function mergeSseMessages(
 
   if (format === 'openai') {
     const parts: string[] = []
+    const toolParts: string[] = []
     for (const evt of events) {
       const content = extractOpenAIContent(evt.data)
       if (content !== null) parts.push(content)
+      const toolText = extractOpenAIToolCallText(evt.data)
+      if (toolText !== null) toolParts.push(toolText)
+    }
+    let content = parts.join('')
+    // 如果有 tool_call 数据，追加到 merged 内容后
+    if (toolParts.length > 0) {
+      const toolSection = '\n\n--- TOOL CALLS ---\n' + toolParts.join('')
+      content += toolSection
+    }
+    return { content, formatted: content, eventCount: events.length }
+  }
+
+  if (format === 'anthropic') {
+    const parts: string[] = []
+    for (const evt of events) {
+      const block = extractAnthropicDelta(evt)
+      if (block !== null) parts.push(block)
     }
     const content = parts.join('')
     return { content, formatted: content, eventCount: events.length }

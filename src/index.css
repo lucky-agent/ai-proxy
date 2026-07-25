@@ -2,6 +2,10 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/geist';
+@import 'streamdown/styles.css';
+
+/* streamdown：让 Tailwind 扫描其运行时类名（README 要求） */
+@source '../node_modules/streamdown/dist/*.js';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -39,6 +43,13 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-surface-deep: var(--surface-deep);
+  --color-surface-base: var(--surface-base);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-ai-user-bubble: var(--ai-user-bubble);
+  --color-ai-user-bubble-text: var(--ai-user-bubble-text);
+  --color-ai-provider-openai: var(--ai-provider-openai);
+  --color-ai-provider-anthropic: var(--ai-provider-anthropic);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -46,6 +57,20 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* ═══ 字体：UI 骨架（固定，设计定稿） ═══ */
+  --text-ui-2xs: 0.5625rem;    /* 9px  — 极小徽章/角标 */
+  --text-ui-xs:  0.625rem;     /* 10px — 表头、辅助文字、计数 */
+  --text-ui-sm:  0.6875rem;    /* 11px — Tooltip、TabBar、筛选栏 */
+  --text-ui-md:  0.75rem;      /* 12px — 按钮小号、设置项 */
+  --text-ui-lg:  0.8125rem;    /* 13px — 导航项、菜单 */
+
+  /* ═══ 字体：数据内容（跟随 --prose-scale 等比缩放，注释为 scale=1 时的值） ═══ */
+  --text-prose-xs:  calc(0.6875rem * var(--prose-scale)); /* 11px */
+  --text-prose-sm:  calc(0.75rem * var(--prose-scale));   /* 12px */
+  --text-prose-md:  calc(0.8125rem * var(--prose-scale)); /* 13px — 代码/JSON/Body 默认 */
+  --text-prose-lg:  calc(0.875rem * var(--prose-scale));  /* 14px — CodeMirror 编辑器 */
+  --text-prose-xl:  calc(0.9375rem * var(--prose-scale)); /* 15px — AI 对话正文 */
 }
 
 :root {
@@ -82,22 +107,33 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
---badge-get: oklch(0.55 0.15 220);
+  --badge-get: oklch(0.55 0.15 220);
   --badge-post: oklch(0.55 0.22 150);
   --badge-put: oklch(0.58 0.18 85);
   --badge-delete: oklch(0.5 0.25 20);
   --badge-patch: oklch(0.55 0.18 290);
   --badge-head: oklch(0.5 0.06 220);
   --badge-options: oklch(0.5 0.12 250);
-  --badge-connect: oklch(0.55 0.16 260);
-  --badge-bypass: oklch(0.5 0.08 180);
   --badge-success: oklch(0.55 0.22 150);
   --badge-redirect: oklch(0.6 0.2 85);
-  --badge-client-err: oklch(0.53 0.24 25);
-  --badge-server-err: oklch(0.5 0.25 25);
-  --scrollbar-thumb: oklch(0.75 0 0);
-  --scrollbar-thumb-hover: oklch(0.62 0 0);
+  --badge-client-error: oklch(0.53 0.24 25);
+  --badge-server-error: oklch(0.5 0.25 25);
+  --badge-error: oklch(0.5 0.25 25);
+  --badge-pending: oklch(0.5 0.06 100);
+  --scrollbar-thumb: oklch(0.717 0 0);
+  --scrollbar-thumb-hover: oklch(0.595 0 0);
   --scrollbar-track: transparent;
+  --surface-deep: oklch(0.985 0 0);
+  --surface-base: oklch(0.968 0 0);
+  --surface-elevated: oklch(0.922 0 0);
+  --ai-user-bubble: oklch(0.55 0.19 255);
+  --ai-user-bubble-text: oklch(0.99 0 0);
+  --ai-provider-openai: oklch(0.55 0.22 150);
+  --ai-provider-anthropic: oklch(0.62 0.15 45);
+
+  /* 内容字号等比缩放系数：small=0.8462(11/13) normal=1 large=1.1538(15/13)，
+     由 useProseFontSize hook 运行时写入，UI 骨架（--text-ui-*）不受影响 */
+  --prose-scale: 1;
 }
 
 .dark {
@@ -140,15 +176,22 @@
   --badge-patch: oklch(0.7 0.18 290);
   --badge-head: oklch(0.65 0.06 220);
   --badge-options: oklch(0.63 0.12 250);
-  --badge-connect: oklch(0.7 0.16 260);
-  --badge-bypass: oklch(0.65 0.08 180);
   --badge-success: oklch(0.7 0.22 150);
   --badge-redirect: oklch(0.75 0.2 85);
-  --badge-client-err: oklch(0.65 0.24 25);
-  --badge-server-err: oklch(0.62 0.25 25);
-  --scrollbar-thumb: oklch(0.38 0 0);
-  --scrollbar-thumb-hover: oklch(0.48 0 0);
-  --scrollbar-track: oklch(0.21 0 0);
+  --badge-client-error: oklch(0.65 0.24 25);
+  --badge-server-error: oklch(0.62 0.25 25);
+  --badge-error: oklch(0.62 0.25 25);
+  --badge-pending: oklch(0.55 0.04 100);
+  --scrollbar-thumb: oklch(0.269 0 0);
+  --scrollbar-thumb-hover: oklch(0.338 0 0);
+  --scrollbar-track: transparent;
+  --surface-deep: oklch(0.145 0 0);
+  --surface-base: oklch(0.183 0 0);
+  --surface-elevated: oklch(0.269 0 0);
+  --ai-user-bubble: oklch(0.38 0.1 255);
+  --ai-user-bubble-text: oklch(1 0 0);
+  --ai-provider-openai: oklch(0.7 0.22 150);
+  --ai-provider-anthropic: oklch(0.72 0.14 45);
 }
 
 @layer base {
@@ -175,87 +218,312 @@
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
-  *::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-    background: var(--scrollbar-track);
-  }
   *::-webkit-scrollbar-track {
-    background: var(--scrollbar-track);
+    background: transparent;
   }
   *::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
-    border-radius: 3px;
-    border: 1px solid var(--scrollbar-track);
+    border-radius: 4px;
+    border: none;
   }
   *::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-thumb-hover);
   }
   *::-webkit-scrollbar-corner {
-    background: var(--scrollbar-track);
+    background: transparent;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   滚动条尺寸（无 layer 规则 — 必须高于 @layer base，否则被 CodeMirror 等
+   第三方无 layer 样式覆盖）
+   ═══════════════════════════════════════════════════════════════════════════ */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
 }
 
 @layer components {
   [data-slot='button'][data-variant='default'] {
     border-color: var(--primary-border);
   }
-  /* 全局 badge 颜色映射 */
-  .badge-method {
-    border-radius: 0.25rem;
-    padding: 0.125rem 0.375rem;
-    font-size: 0.625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
- .badge-status {
-   border-radius: 0.25rem;
-   padding: 0.125rem 0.25rem;
-   font-size: 0.625rem;
-   font-weight: 600;
- }
-  .badge-status::before {
-    content: '';
-    display: inline-block;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    margin-right: 3px;
-    background: currentColor;
-    vertical-align: middle;
-    flex-shrink: 0;
-  }
-  .badge-status[data-dot='false']::before {
-    display: none;
-  }
+  /* 全局 badge 颜色变量仍保留在 :root/.dark 中以支持 Badge 内联 style 引用 */
 }
 
-/* shiki 代码高亮 */
-.shiki-root {
-  font-size: 0.75rem;
+/* 弹窗底部按钮统一：保存/确认（default 变体）采用与取消（outline 变体）相同的配色。
+   刻意写成「无 layer」规则——Tailwind v4 里 utilities layer 晚于 components，
+   放进 @layer 会被 bg-primary 等工具类覆盖；无 layer 声明优先级高于所有 @layer。
+   所有使用 DialogFooter 的弹窗自动生效，明暗主题各自对齐 outline 的定义。 */
+[data-slot='dialog-footer'] [data-slot='button'][data-variant='default'] {
+  background-color: var(--background);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+[data-slot='dialog-footer'] [data-slot='button'][data-variant='default']:hover {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+.dark [data-slot='dialog-footer'] [data-slot='button'][data-variant='default'] {
+  border-color: var(--input);
+  background-color: color-mix(in oklch, var(--input) 30%, transparent);
+}
+.dark [data-slot='dialog-footer'] [data-slot='button'][data-variant='default']:hover {
+  background-color: color-mix(in oklch, var(--input) 50%, transparent);
+}
+
+/* Tooltip 箭头统一隐藏：ui/tooltip.tsx 的 Arrow 颜色硬编码为 bg-foreground（暗色下近白），
+   而业务侧普遍用 bg-popover 覆盖气泡底色，箭头颜色跟不上 → 气泡边缘露出白色小方块。
+   ui/ 组件禁止修改，故全局隐藏箭头（气泡自带 sideOffset 间距，无箭头样式更干净）。 */
+[data-slot='tooltip-content'] > div[data-side] {
+  display: none;
+}
+
+/* react-shiki 代码高亮 */
+.shiki-body {
+  font-size: var(--text-prose-md, 0.8125rem);
   line-height: 1.5;
 }
-.shiki-root .shiki {
+.shiki-body pre {
   background: transparent !important;
+  /* 切断对气泡文字色的继承：streamdown 只在 token span 上设 --sdm-c，pre 本身 fallback
+     到 inherit。蓝色 user 气泡会继承 text-white，落在亮色 bg-background 白底上隐形。
+     钉死 foreground 与代码体 bg-background 形成正确对比；token span 自带显式色不受影响 */
+  color: var(--foreground);
   margin: 0;
   padding: 0.5rem 0.75rem;
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
 }
-.shiki-root .shiki code {
+.shiki-body pre code {
   font-family: var(--font-mono, 'Geist Mono', 'Menlo', monospace);
   counter-reset: step;
   counter-increment: step 0;
 }
-.shiki-root .shiki .line {
+.shiki-body .line {
   display: block;
   line-height: 1.5;
 }
-.shiki-root .shiki .line:empty {
+.shiki-body .line:empty {
   display: none;
 }
-.shiki-root .shiki .line::after {
+.shiki-body .line::after {
   content: none;
 }
 
+/* CodeMirror syntax highlight - classHighlighter tokens */
+.tok-propertyName { color: #8250df }
+.tok-string { color: #0a3069 }
+.tok-number { color: #0550ae }
+.tok-bool { color: #0550ae }
+.tok-null { color: #0550ae }
+.tok-separator { color: #6e7781 }
+.tok-brace { color: #6e7781 }
+.tok-bracket { color: #6e7781 }
+.tok-punctuation { color: #6e7781 }
+.tok-keyword { color: #cf222e }
+.tok-comment { color: #6e7781 }
+.tok-variableName { color: #953800 }
+.tok-typeName { color: #0550ae }
+.tok-operator { color: #0550ae }
+.tok-atom { color: #0550ae }
+.tok-literal { color: #0550ae }
+.tok-string2 { color: #0a3069 }
+.tok-macroName { color: #8250df }
+.tok-namespace { color: #0550ae }
+.tok-className { color: #0550ae }
+.tok-labelName { color: #953800 }
+.tok-meta { color: #6e7781 }
+.tok-invalid { color: #f00 }
+.tok-link { text-decoration: underline }
+.tok-heading { font-weight: bold }
+.tok-emphasis { font-style: italic }
+.tok-strong { font-weight: bold }
+.tok-strikethrough { text-decoration: line-through }
+.tok-inserted { color: #0a3069 }
+.tok-deleted { color: #cf222e }
+
+.dark .tok-propertyName { color: #e06c75 }
+.dark .tok-string { color: #98c379 }
+.dark .tok-number { color: #d19a66 }
+.dark .tok-bool { color: #d19a66 }
+.dark .tok-null { color: #d19a66 }
+.dark .tok-separator { color: #abb2bf }
+.dark .tok-brace { color: #abb2bf }
+.dark .tok-bracket { color: #abb2bf }
+.dark .tok-punctuation { color: #abb2bf }
+.dark .tok-keyword { color: #c678dd }
+.dark .tok-comment { color: #5c6370 }
+.dark .tok-variableName { color: #e06c75 }
+.dark .tok-typeName { color: #e5c07b }
+.dark .tok-operator { color: #56b6c2 }
+.dark .tok-atom { color: #d19a66 }
+.dark .tok-literal { color: #d19a66 }
+.dark .tok-string2 { color: #98c379 }
+.dark .tok-macroName { color: #61afef }
+.dark .tok-namespace { color: #e5c07b }
+.dark .tok-className { color: #e5c07b }
+.dark .tok-labelName { color: #e06c75 }
+.dark .tok-meta { color: #5c6370 }
+.dark .tok-inserted { color: #98c379 }
+.dark .tok-deleted { color: #e06c75 }
+
+/* ============ AI 气泡内 Markdown 渲染 ============ */
+/* 紧凑化 + 语义变量，明暗主题自动适配；streamdown 自带类由 @source 扫描生效 */
+.md-content {
+  line-height: 1.6;
+}
+.md-content h1,
+.md-content h2,
+.md-content h3,
+.md-content h4,
+.md-content h5,
+.md-content h6 {
+  font-weight: 600;
+  margin: 0.6em 0 0.3em;
+}
+.md-content h1 { font-size: 1.25em; }
+.md-content h2 { font-size: 1.15em; }
+.md-content h3 { font-size: 1.05em; }
+.md-content h4, .md-content h5, .md-content h6 { font-size: 1em; }
+.md-content p { margin: 0.35em 0; }
+.md-content ul, .md-content ol { margin: 0.35em 0; padding-left: 1.4em; }
+.md-content ul { list-style: disc; }
+.md-content ol { list-style: decimal; }
+.md-content li { margin: 0.15em 0; }
+.md-content blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 0.75em;
+  margin: 0.5em 0;
+  color: var(--muted-foreground);
+}
+.md-content table { border-collapse: collapse; margin: 0.5em 0; font-size: 0.95em; }
+.md-content th, .md-content td { border: 1px solid var(--border); padding: 0.25em 0.6em; }
+.md-content th { background: rgb(0 0 0 / 0.06); font-weight: 600; }
+.dark .md-content th { background: rgb(255 255 255 / 0.06); }
+/* streamdown 表格双层 wrapper：外层 bg-sidebar（带工具栏）+ 内层 bg-background（滚动容器）。
+   assistant 气泡即 bg-background，内层与气泡同色融合、外层呈微浮卡片，无需覆盖。
+   蓝底 user 气泡（md-inverted）不在 shadcn 色板内：白字落白底会隐形、近黑卡片贴蓝很突兀，
+   用半透明黑叠蓝上 → 深一档蓝卡片，与蓝同族又和纯文本区拉开层次；白字 + 白描边可读。
+   全屏表格 portal 到 body、在 .md-content 之外，不受影响，保留自身底色 */
+.md-inverted [data-streamdown="table-wrapper"],
+.md-inverted [data-streamdown="table-wrapper"] :has(> [data-streamdown="table"]) {
+  background-color: rgb(0 0 0 / 0.2);
+}
+.md-content :not(pre) > code {
+  background: var(--muted);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+.md-content pre { font-size: var(--text-prose-md, 0.8125rem); }
+/* streamdown 代码块 pre 自带 shiki 主题背景（github-dark 为蓝灰 #24292e），与中性灰的
+   wrapper/工具栏浮块色调冲突。与 .shiki-body 同约定：背景强制透明，继承 code-block-body
+   的 bg-background（蓝底暗色气泡则继承半透明黑叠蓝的深蓝卡片） */
+.md-content [data-streamdown="code-block-body"] pre {
+  background-color: transparent;
+}
+/* md 内容里代码块/表格的内部滚动条：全局 --scrollbar-thumb 是中性实色（暗色 #262626），
+   在暗色代码块底、蓝底气泡深蓝卡片上要么隐形要么突兀。改为半透明黑/白，随底色自适应：
+   亮色白底用黑系，暗色底用白系；蓝底气泡表格卡片亮暗皆深蓝，恒用白系 */
+.md-content {
+  --scrollbar-thumb: rgb(0 0 0 / 0.25);
+  --scrollbar-thumb-hover: rgb(0 0 0 / 0.4);
+}
+.dark .md-content,
+.md-inverted [data-streamdown="table-wrapper"] {
+  --scrollbar-thumb: rgb(255 255 255 / 0.25);
+  --scrollbar-thumb-hover: rgb(255 255 255 / 0.4);
+}
+.md-content a { color: var(--color-blue-500); text-decoration: underline; text-underline-offset: 2px; }
+.dark .md-content a { color: var(--color-blue-400); }
+.md-content hr { border-color: var(--border); margin: 0.75em 0; }
+
+/* streamdown 表格全屏：Portal 到 body 后 fixed inset-0 会覆盖 TitleBar 和侧边栏。
+   约束到 TitleBar 下方（h-8=32px）、左侧 ToolBar 右侧（42px），与内容区对齐。 */
+[data-streamdown="table-fullscreen"] {
+  top: 32px !important;
+  left: 42px !important;
+}
+
+/* 深蓝底 user 气泡（白字）反色适配 */
+.md-inverted blockquote { border-color: rgb(255 255 255 / 0.4); color: rgb(255 255 255 / 0.85); }
+.md-inverted th, .md-inverted td { border-color: rgb(255 255 255 / 0.3); }
+.md-inverted th { background: rgb(255 255 255 / 0.05); }
+.md-inverted :not(pre) > code { background: rgb(255 255 255 / 0.18); color: #fff; }
+.md-inverted a { color: #fff; }
+.dark .md-inverted a { color: #fff; }
+
+/* 蓝底 user 气泡内的 streamdown 代码块（data-streamdown="code-block" / "code-block-body"）。
+   streamdown 用 bg-sidebar / bg-background 做 wrapper + pre 文字色 fallback 到 inherit：
+   - 亮色：pre 继承 text-white，落在 bg-background 白底上 → 白字白底隐形。保留白底（token 深色
+     在白底可见、本身即白卡与文本区分），仅把 code-body 文字钉死 foreground，让 plain 代码可读
+   - 暗色：bg-sidebar/bg-background 近黑，贴蓝气泡呈黑块很不搭。改用半透明黑叠蓝上 → 深一档
+     蓝卡片，与蓝同族不突兀，又和纯文本/表格拉开层次；light token + foreground 文字可读 */
+.md-inverted [data-streamdown="code-block-body"] {
+  color: var(--foreground);
+}
+.dark .md-inverted [data-streamdown="code-block"],
+.dark .md-inverted [data-streamdown="code-block-body"] {
+  background-color: rgb(0 0 0 / 0.25);
+}
+/* 暗色蓝底气泡里复制/下载按钮的悬浮块用 bg-sidebar/80（近黑），贴深蓝卡片呈黑色块。
+   改半透明黑 + 白描边，融入蓝族 */
+.dark .md-inverted [data-streamdown="code-block-actions"] {
+  background-color: rgb(0 0 0 / 0.3);
+  border-color: rgb(255 255 255 / 0.15);
+}
+
+/* 深蓝卡片内 streamdown 工具栏元素（复制/下载/全屏按钮、语言标签）默认用 text-muted-foreground
+   + hover:bg-muted（灰色系），跟蓝底不搭。本地覆写 --muted / --muted-foreground 为白色族，
+   所有 muted 工具类自动融入蓝底。表格工具栏（table-wrapper）深蓝卡片亮暗皆是，两模式都覆写；
+   代码块（code-block）亮色是白底、灰色 muted 本就匹配，只在暗色深蓝卡片覆写 */
+.md-inverted [data-streamdown="table-wrapper"],
+.dark .md-inverted [data-streamdown="code-block"] {
+  --muted: rgb(255 255 255 / 0.12);
+  --muted-foreground: rgb(255 255 255 / 0.7);
+}
+
+/* ===== Slide-over 侧滑面板动画 ===== */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0.6; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes slide-out-right {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(100%); opacity: 0.6; }
+}
+@keyframes fade-in-overlay {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fade-out-overlay {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out both;
+}
+.animate-slide-out-right {
+  animation: slide-out-right 0.15s ease-in both;
+}
+.animate-fade-in-overlay {
+  animation: fade-in-overlay 0.15s ease-out both;
+}
+.animate-fade-out-overlay {
+  animation: fade-out-overlay 0.1s ease-in both;
+}
+
+/* ═══ 列表项选中效果：左侧彩色强调条 + 抬高底色 ═══
+   用法：基础容器加 .list-item-base，选中态加 .list-item-selected。
+   border-left 走 inline style 的 borderLeftWidth 或 Tailwind border-l-[3px] 自由控制宽度；
+   此 class 仅管颜色与背景，避免 tailwind-merge 冲突。 */
+.list-item-base {
+  border-left-style: solid;
+  border-left-color: transparent;
+}
+.list-item-selected {
+  border-left-color: var(--badge-get);
+  background-color: var(--surface-elevated);
+}

@@ -1,48 +1,50 @@
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::{
+    path::PathBuf,
+    sync::Arc,
+};
 
-use dirs::home_dir;
 use log::LevelFilter;
+
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
 
-use crate::config::LogConfig;
+use crate::config::{LogConfig, db::Db};
 
 /// 应用数据存储路径管理，默认路径在用户目录的 .ai-proxy 下
 pub struct Store {
-    data_dir: Arc<Mutex<PathBuf>>,
+    data_dir: PathBuf,
+    db: Arc<Db>,
     scripts_dir: PathBuf,
 }
 
 impl Store {
-    pub fn new() -> Self {
-        let data_dir = std::env::var("AI_PROXY_HOME")
-            .map(PathBuf::from)
-            .ok()
-            .or_else(home_dir)
-            .expect("Failed to determine data directory")
-            .join(".ai-proxy");
-        std::fs::create_dir_all(&data_dir).expect("Failed to create .ai-proxy directory");
+    pub fn new(data_dir: PathBuf) -> Self {
+        std::fs::create_dir_all(&data_dir).expect("Failed to create data directory");
         let scripts_dir = data_dir.join("scripts");
         std::fs::create_dir_all(&scripts_dir).ok();
+        let db_path = data_dir.join("traffic.db");
+        let db = Db::open(&db_path).expect("Failed to initialize database");
         Self {
-            data_dir: Arc::new(Mutex::new(data_dir)),
+            data_dir,
+            db: Arc::new(db),
             scripts_dir,
         }
     }
 
-    pub fn data_dir(&self) -> PathBuf {
-        self.data_dir
-            .lock()
-            .expect("Failed to lock data directory")
-            .clone()
+    pub fn data_dir(&self) -> &PathBuf {
+        &self.data_dir
     }
 
     pub fn scripts_dir(&self) -> &PathBuf {
         &self.scripts_dir
     }
 
-    pub fn db_path(&self) -> PathBuf {
-        self.data_dir().join("traffic.db")
+    pub(crate) fn db(&self) -> Arc<Db> {
+        self.db.clone()
+    }
+
+    /// 查询 traffic_logs 当前最大 id，用于启动时恢复计数器。
+    pub(crate) fn max_traffic_id(&self) -> Result<i64, sqlite::Error> {
+        self.db.max_traffic_id()
     }
 
     pub fn build_log_plugin(log: &LogConfig) -> tauri_plugin_log::Builder {
@@ -70,7 +72,15 @@ impl Store {
             .format(|out, message, record| {
                 out.finish(format_args!(
                     "[{}][{}] {}",
-                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+                    time::OffsetDateTime::now_local()
+                        .unwrap_or_else(|_| time::OffsetDateTime::now_utc())
+                        .format(
+                            &time::format_description::parse(
+                                "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]",
+                            )
+                            .expect("valid time format description"),
+                        )
+                        .unwrap_or_else(|e| format!("?? {e}")),
                     record.level(),
                     message
                 ))

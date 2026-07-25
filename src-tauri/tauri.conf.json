@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nickel-lang/json-schema-store/main/tauri/v2/schema.json",
   "productName": "AI Proxy",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "identifier": "com.ai-proxy.app",
   "build": {
     "beforeDevCommand": "bun run dev:vite",
@@ -16,14 +16,15 @@
         "title": "AI Proxy",
         "decorations": false,
         "dragDropEnabled": false,
-        "width": 1000,
-        "height": 650,
-        "minWidth": 900,
+        "width": 1200,
+        "height": 780,
+        "minWidth": 1024,
         "minHeight": 600,
         "visible": false,
         "resizable": true,
         "fullscreen": false,
-        "center": true
+        "center": true,
+        "backgroundColor": "#fafbfb"
       }
     ],
     "security": {
@@ -37,6 +38,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -44,5 +46,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMwN0U0RUYxNTRFRjRGQzAKUldUQVQrOVU4VTUrd05XeHF6K21VU050RmlJZTlsL2tpQzlSNERqNEI5ZEJxUE5WSEpVNHI5cHEK",
+      "endpoints": ["https://github.com/lucky-agent/ai-proxy/releases/latest/download/latest.json"]
+    }
   }
 }

@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
-use bytes::BytesMut;
-use rama::http::{header, Body, Method, Request, Response, StatusCode, Uri};
-use rama::futures::StreamExt;
+use rama::http::{Body, Method, Request, Response, StatusCode, header};
+use rama::net::uri::Uri;
 use serde::{Deserialize, Serialize};
+
+use crate::utils::buf_pool;
 
 use super::engine;
 
@@ -26,12 +27,12 @@ pub struct ResponseData {
 
 impl RequestData {
     /// 从 rama request Parts 和 body 字符串构造。
-    pub fn from_rama_parts(parts: &rama::http::request::Parts, body: &str) -> Self {
+    pub fn from_rama_parts(parts: &rama::http::request::Parts, body: String) -> Self {
         Self {
             method: parts.method.to_string(),
             uri: parts.uri.to_string(),
             headers: headers_to_hashmap(&parts.headers),
-            body: body.to_string(),
+            body,
         }
     }
 
@@ -42,17 +43,19 @@ impl RequestData {
             parts.uri = uri;
         }
         parts.headers = hashmap_to_headers(&self.headers);
+        // body 可能被脚本修改，移除旧 content-length 交由框架按实际长度重设
+        parts.headers.remove(header::CONTENT_LENGTH);
         Request::from_parts(parts, Body::from(self.body))
     }
 }
 
 impl ResponseData {
     /// 从 rama response Parts 和 body 字符串构造。
-    pub fn from_rama_parts(parts: &rama::http::response::Parts, body: &str) -> Self {
+    pub fn from_rama_parts(parts: &rama::http::response::Parts, body: String) -> Self {
         Self {
             status: parts.status.as_u16(),
             headers: headers_to_hashmap(&parts.headers),
-            body: body.to_string(),
+            body,
         }
     }
 
@@ -60,26 +63,33 @@ impl ResponseData {
     pub fn apply(self, mut parts: rama::http::response::Parts) -> Response {
         parts.status = StatusCode::from_u16(self.status).unwrap_or(parts.status);
         parts.headers = hashmap_to_headers(&self.headers);
+        // body 可能被脚本修改，移除旧 content-length 交由框架按实际长度重设
+        parts.headers.remove(header::CONTENT_LENGTH);
         Response::from_parts(parts, Body::from(self.body))
     }
 }
 
 /// 收集 rama Body 的所有 chunk，返回 UTF-8 字符串。
-pub async fn collect_body_str(body: Body) -> String {
-    let mut buf = BytesMut::new();
-    let mut stream = body.into_data_stream();
-    while let Some(chunk) = stream.next().await {
-        if let Ok(bytes) = chunk {
-            buf.extend_from_slice(&bytes);
+/// body 超过收集上限时返回 `Err(重组后的原始 body)`，调用方应跳过脚本原样转发。
+///
+/// 委托给 [`buf_pool::collect_body`]，复用同一套 capped-collect 逻辑。
+pub async fn collect_body_str(body: Body) -> Result<String, Body> {
+    match buf_pool::collect_body(body).await {
+        buf_pool::CollectedBody::Full(bytes) => {
+            Ok(String::from_utf8_lossy(&bytes).into_owned())
+        }
+        buf_pool::CollectedBody::Capped { body, .. } => Err(body),
+        // 流错误：保留已读部分（与旧行为一致——忽略出错的 chunk）
+        buf_pool::CollectedBody::Error { prefix, .. } => {
+            Ok(String::from_utf8_lossy(&prefix).into_owned())
         }
     }
-    String::from_utf8_lossy(&buf).into_owned()
 }
 
-/// Run onRequest hooks across all scripts in sequence.
-/// Returns `None` if any script blocks the request.
-pub fn run_request_hooks(scripts: &[String], data: &RequestData) -> Option<RequestData> {
-    let mut current = data.clone();
+/// 按顺序运行所有脚本的 onRequest 钩子，如果有脚本返回 None 则表示阻止请求，
+/// 最终返回修改后的 RequestData 或 None。
+pub fn run_request_hooks(scripts: &[String], data: RequestData) -> Option<RequestData> {
+    let mut current = data;
     for script in scripts {
         match engine::exec_request_hook(script, &current) {
             Ok(Some(modified)) => current = modified,
@@ -91,8 +101,8 @@ pub fn run_request_hooks(scripts: &[String], data: &RequestData) -> Option<Reque
 }
 
 /// Run onResponse hooks across all scripts in sequence.
-pub fn run_response_hooks(scripts: &[String], data: &ResponseData) -> ResponseData {
-    let mut current = data.clone();
+pub fn run_response_hooks(scripts: &[String], data: ResponseData) -> ResponseData {
+    let mut current = data;
     for script in scripts {
         match engine::exec_response_hook(script, &current) {
             Ok(modified) => current = modified,

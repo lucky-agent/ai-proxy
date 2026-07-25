@@ -22,7 +22,7 @@ bun run build
 bun run build:vite
 ```
 
-本项目当前没有测试。Rust 版本要求：1.91.1+，edition 2024。包管理使用 bun。
+本项目当前没有测试。Rust 版本要求：1.96.0+，edition 2024。包管理使用 bun。
 
 ## 配置
 
@@ -40,33 +40,29 @@ bun run build:vite
 ai-proxy/
 ├── src/                          # 前端（React + TypeScript）
 │   ├── main.tsx                  # 入口，渲染后显示窗口
-│   ├── App.tsx                   # 根组件：代理控制、布局编排
+│   ├── App.tsx                   # 根组件：视图路由、全局状态、弹窗编排
 │   └── index.css                 # 全局样式（Tailwind 主题变量 + 自定义组件样式）
 │   │
-│   ├── components/
-│   │   └── ui/                   # 通用 UI 原子组件（shadcn）
-│   │       ├── button.tsx
-│   │       ├── dialog.tsx
-│   │       └── dropdown-menu.tsx
+│   ├── components/               # 公共组件（跨 feature 共享，无业务含义）
+│   │   ├── core/                  # 核心通用组件（CopyButton 等）
+│   │   ├── ui/                   # shadcn/ui 原子组件（button、dialog 等）
+│   │   ├── icons/                # 自定义图标组件（GripDots、ScriptIcon 等）
+│   │   └── json-tree/            # JSON 树形展示组件
 │   │
 │   ├── features/                 # 按功能域组织的业务组件
-│   │   ├── traffic-log/          # 主内容区（三栏布局）
-│   │   │   ├── TrafficLog.tsx    # 容器：域名侧栏 + 请求列表 + 详情面板
-│   │   │   ├── DomainSidebar.tsx
-│   │   │   ├── RequestList.tsx
-│   │   │   ├── DetailPanel.tsx
-│   │   │   └── index.ts          # 对外导出入口
-│   │   ├── title-bar/            # 自定义标题栏
-│   │   │   ├── TitleBar.tsx
-│   │   │   └── index.ts
-│   │   └── settings/             # 设置弹窗
-│   │       ├── SettingsDialog.tsx
-│   │       └── index.ts
+│   │   ├── proxy/                # 代理视图（TypeFilterBar + traffic-log 子模块）
+│   │   ├── new-request/          # 新建请求（Postman 风格）
+│   │   ├── title-bar/            # 自定义标题栏 + 标签页
+│   │   ├── tool-bar/             # 左侧图标工具栏
+│   │   ├── bottom-bar/           # 底部状态栏
+│   │   ├── detail-panel/         # 请求详情面板（proxy + new-request 共享）
+│   │   ├── settings/             # 设置弹窗
+│   │   ├── about/                # 关于弹窗
+│   │   ├── ssl-config/           # SSL 配置弹窗
+│   │   ├── script-config/        # 脚本配置弹窗
+│   │   └── ai-view/              # AI 视图
 │   │
 │   ├── hooks/                    # 跨 feature 复用的 React hooks
-│   │   ├── useProxyEvents.ts     # 监听后端流量事件
-│   │   ├── useTheme.ts
-│   │   └── useLocale.ts
 │   ├── i18n/                     # i18next 初始化
 │   ├── locales/                  # 翻译文件（en.json、zh.json）
 │   ├── lib/                      # 工具函数（format、cn 等）
@@ -103,17 +99,18 @@ ai-proxy/
 
 ### 前端组织原则
 
-| 目录 | 放什么 | 判断标准 |
-|------|--------|----------|
-| `components/ui/` | Button、Dialog 等 | 无业务含义，任何地方可复用 |
-| `features/<区域>/` | TrafficLog、SettingsDialog 等 | 属于某块功能/布局 |
-| `features/<区域>/components/` | 仅该区域用的子组件 | 不跨 feature 复用时放这里 |
-| `hooks/`、`lib/`、`types/` | 逻辑、工具、类型 | 非 UI |
+| 目录                        | 放什么                                     | 判断标准                        |
+| --------------------------- | ------------------------------------------ | ------------------------------- |
+| `components/`               | ui/、icons/、json-tree/ 等公共组件         | 无业务含义，任何 feature 可复用 |
+| `features/<区域>/`          | proxy/、new-request/、settings/ 等业务组件 | 属于某块功能/布局               |
+| `features/<区域>/` 的子目录 | 仅该区域用的子模块/子组件                  | 不跨 feature 复用               |
+| `hooks/`、`lib/`、`types/`  | 逻辑、工具、类型                           | 非 UI                           |
 
 `App.tsx` 通过 `@/features/<区域>` 导入各功能域入口，例如：
 
 ```ts
-import { TrafficLog } from '@/features/traffic-log'
+import { ProxyView, EditRequestDialog } from '@/features/proxy'
+import { NewRequestView } from '@/features/new-request'
 import { SettingsDialog } from '@/features/settings'
 import { TitleBar } from '@/features/title-bar'
 ```
@@ -140,8 +137,62 @@ import { TitleBar } from '@/features/title-bar'
 **关键框架**：
 
 - 后端：rama（https://github.com/plabayo/rama）—— HTTP 服务端/客户端、TLS、代理
+- rama 源码路径 E:\project\rust\rama
 - 前端：React 19 + Vite 8 + Tailwind CSS 4 + shadcn/ui
 - 桌面：Tauri 2
+
+## 主题系统（Theming）
+
+主题基于 **Tailwind CSS 4 + shadcn/ui**，所有颜色以 **OKLCH** 定义，全部集中在 `src/index.css`。**新增/修改 UI 颜色时不要写死颜色值，应使用下方的语义变量或 Tailwind 语义类（如 `text-foreground`、`bg-card`），确保明暗两套主题都正确。**
+
+### 主题切换机制
+
+- 三态：`light` / `dark` / `system`（跟随系统），类型见 `src/hooks/useTheme.ts` 的 `Theme`
+- 切换逻辑全在 `useTheme` hook：通过在 `<html>` 上 **增删 `.dark` class** + 设置 `style.colorScheme` 实现，`system` 模式监听 `prefers-color-scheme` 媒体查询
+- 持久化：`useTheme` 调用 Tauri command `get_theme` / `set_theme`（`src-tauri/src/commands/theme.rs`），写入 `setting.json` 的 `ui.theme`
+- CSS 侧：`:root` 定义亮色变量，`.dark` 覆盖为暗色；`@custom-variant dark (&:is(.dark *))` 使 `dark:` 变体生效
+
+### 变量分层（`src/index.css`）
+
+1. `@theme inline {}`（第 8–52 行）：把 `--xxx` 桥接为 Tailwind 的 `--color-xxx`，使 `bg-card`、`text-muted-foreground` 等语义类可用；同时定义字体与 `--radius-*` 阶梯
+2. `:root {}`（亮色）与 `.dark {}`（暗色）：**两处必须成对维护**，改一个变量记得改另一个
+
+### 字体大小令牌（禁止再写 `text-[Npx]` 任意值）
+
+字号分两套阶梯，定义在 `@theme inline` 的 `--text-ui-*` / `--text-prose-*`，按内容性质选用：
+
+| 阶梯 | 场景 | 档位 |
+| --- | --- | --- |
+| `text-ui-*` | **UI 骨架**（固定界面文本）：工具栏、TabBar、Tooltip、表头、徽章、菜单、筛选栏 | `ui-2xs`(9px) `ui-xs`(10px) `ui-sm`(11px) `ui-md`(12px) `ui-lg`(13px) |
+| `text-prose-*` | **数据内容**（后端返回/用户输入）：Body/Raw/JSON 树、SSE chunk、AI 对话、表单数据、请求编辑输入框 | `prose-xs`(11px) `prose-sm`(12px) `prose-md`(13px) `prose-lg`(14px) `prose-xl`(15px) |
+
+- 新增 UI 文本时从上表选档位，**不要写 `text-[11px]` 这类任意值**；shadcn 组件内部的 `text-xs`/`text-sm` 标准类保持原样
+- **新增字号档位必须同步注册到 `src/lib/utils.ts` 的 `extendTailwindMerge` 配置**——tailwind-merge 不认识自定义 `text-*` 字号类，会把它误判为文字颜色，在 `cn(字号类, ..., text-颜色类)` 中静默丢弃字号类（症状：元素落回 16px 默认字号，且只有经过 `cn()` 的元素中招）
+- 纯 CSS 场景（如 `.shiki-root`、`.md-content pre`）用 `var(--text-prose-md, 0.8125rem)` 引用（带回退值）
+- **内容字号设置项已接线**：`--text-prose-*` 全部定义为 `calc(base * var(--prose-scale))`，`useProseFontSize` hook 运行时把档位（small=0.8462 / normal=1 / large=1.1538，以 prose-md 为锚即 11px / 13px / 15px）写入 `--prose-scale`，持久化走 `get_prose_font_size` / `set_prose_font_size` command → `setting.json` 的 `ui.prose_font_size`。UI 骨架（`--text-ui-*`）不参与缩放
+
+### 语义变量分组（改 UI 优先复用这些）
+
+| 分组 | 变量 | 用途 |
+| --- | --- | --- |
+| 基础前景/背景 | `--background` `--foreground` | 页面级底色与正文色 |
+| 卡片/浮层 | `--card(-foreground)` `--popover(-foreground)` | 卡片、下拉、弹层 |
+| 主色/次色/强调 | `--primary(-foreground)` `--secondary` `--accent` `--muted(-foreground)` | **注意：`--primary` 是按钮填充色，暗色下为近黑色，不能当正文色用；正文用 `--foreground`** |
+| 表面层级 | `--surface-deep` `--surface-base` `--surface-elevated` | 项目自定义的三级面板底色，用于分隔区域深浅 |
+| 边框/输入/焦点 | `--border` `--input` `--ring` `--primary-border` | |
+| 破坏性 | `--destructive` | 删除/危险操作 |
+| 侧栏 | `--sidebar*` | shadcn sidebar 专用 |
+| 图表 | `--chart-1..5` | |
+| 滚动条 | `--scrollbar-thumb(-hover)` `--scrollbar-track` | 全局细滚动条（`@layer base` 中 6px 样式） |
+
+### 流量视图专用：HTTP 方法 / 状态徽章
+
+`--badge-*` 系列（`--badge-get/post/put/delete/patch/head/options/connect/bypass`、`--badge-success/redirect/client-err/server-err/error`）供 `SummaryBar`、traffic-log 等**内联 `style` 引用**（因动态拼接类名 `var(--badge-${method})` 无法被 Tailwind 静态提取）。暗色版本饱和度/亮度整体调高以保证可读性。
+
+### 代码高亮（两套独立主题，均需明暗成对）
+
+- **Shiki**（`.shiki-root`）：背景强制透明，继承容器底色
+- **CodeMirror**（`.tok-*`）：亮色为 GitHub 风格，`.dark .tok-*` 为 One Dark 风格——新增 token 类型时两处都要加
 
 ## 重要注意事项
 
@@ -149,9 +200,12 @@ import { TitleBar } from '@/features/title-bar'
 - MITM 代理使用自签名证书，客户端需要信任或忽略证书警告
 - SSE 流式响应（`text/event-stream`）采用逐 chunk 透传模式，非流式响应会完整收集后转发
 - 错误处理不使用 anyhow，而是自建的 `bail!` / `anyhow!` 宏 + rama 的 `OpaqueError`
-- 新增业务组件放 `features/<区域>/`，通用 UI 组件放 `components/ui/`，跨 feature 复用逻辑放 `hooks/` 或 `lib/`
+- 新增业务组件放 `features/<区域>/`，公共组件放 `components/<类别>/`，跨 feature 复用逻辑放 `hooks/` 或 `lib/`
+- `src/components/ui/` 下的组件来自 shadcn/ui，**禁止修改**。需要额外功能时在业务组件中直接使用 Base UI 原语（`import { Select as SelectPrimitive } from '@base-ui/react/select'`）绕过 wrapper。
+- **禁止使用 `git checkout -- <file>` 还原文件** — 会丢失未提交的改动，只能通过手动编辑修复。
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
+
 # Superpowers-ZH 中文增强版
 
 本项目已安装 superpowers-zh 技能框架（20 个 skills）。
@@ -193,4 +247,5 @@ Skills 位于 `.claude/skills/` 目录，每个 skill 有独立的 `SKILL.md` �
 当任务匹配某个 skill 时，使用 `Skill` 工具加载对应 skill 并严格遵循其流程。绝不要用 Read 工具读取 SKILL.md 文件。
 
 如果你认为哪怕只有 1% 的可能性某个 skill 适用于你正在做的事情，你必须调用该 skill 检查。
+
 <!-- superpowers-zh:end -->

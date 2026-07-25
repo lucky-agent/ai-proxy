@@ -1,345 +1,345 @@
-use std::collections::HashMap;
-use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::mpsc;
 
-use rama::http::HeaderMap;
-use serde::Serialize;
+
 use sqlite;
 
-#[derive(Debug, Clone, Serialize)]
-pub(crate) struct StoredEntry {
-    pub id: String,
-    pub method: String,
-    pub uri: String,
-    #[serde(rename = "requestTimestamp")]
-    pub request_timestamp: i64,
-    #[serde(rename = "requestHeaders")]
-    pub request_headers: HashMap<String, String>,
-    #[serde(rename = "requestBody")]
-    pub request_body: Option<String>,
-    #[serde(rename = "requestQuery")]
-    pub request_query: Option<HashMap<String, String>>,
-    pub status: Option<u16>,
-    #[serde(rename = "responseTimestamp")]
-    pub response_timestamp: Option<i64>,
-    #[serde(rename = "durationMs")]
-    pub duration_ms: Option<u64>,
-    #[serde(rename = "responseHeaders")]
-    pub response_headers: Option<HashMap<String, String>>,
-    #[serde(rename = "responseBody")]
-    pub response_body: Option<String>,
-    pub error: Option<String>,
-    pub edited: Option<bool>,
+use crate::storage::traffic;
+use crate::storage::traffic::TrafficTable;
+use crate::storage::collection_requests;
+use crate::storage::collection_requests::CollectionRequestsTable;
+use crate::storage::collection_nodes;
+use crate::storage::collection_nodes::CollectionNodesTable;
+use crate::storage::DbTable;
+
+// ── Writer thread command ──────────────────────────────────────────────────────
+
+type SyncSender = mpsc::SyncSender<DbCmd>;
+
+pub(crate) enum DbCmd {
+    // ── Traffic logging ────────────────────────────────────────────────────
+    UpsertTrafficLog {
+        id: i64,
+        method: String,
+        uri: String,
+        timestamp: i64,
+        headers_json: String,
+        query_json: String,
+        body: Option<String>,
+        reply: Option<mpsc::Sender<Result<(), sqlite::Error>>>,
+    },
+    UpdateTrafficResponse {
+        id: i64,
+        status: u16,
+        timestamp: i64,
+        duration_ms: u64,
+        headers_json: String,
+    },
+    UpdateTrafficResponseBody {
+        id: i64,
+        body: String,
+    },
+    SetTrafficError {
+        id: i64,
+        error: String,
+    },
+    InsertChunk {
+        request_id: i64,
+        chunk: String,
+        seq: i64,
+        created_at: i64,
+    },
+    LoadAllTraffic {
+        reply: mpsc::Sender<Result<Vec<traffic::TrafficLogEntry>, sqlite::Error>>,
+    },
+    LoadChunks {
+        request_id: i64,
+        reply: mpsc::Sender<Result<Vec<traffic::ChunkRecord>, sqlite::Error>>,
+    },
+    LoadTrafficDetail {
+        id: i64,
+        reply: mpsc::Sender<Result<traffic::TrafficLogEntry, sqlite::Error>>,
+    },
+    ClearTraffic {
+        reply: mpsc::Sender<Result<(), sqlite::Error>>,
+    },
+    /// Query the maximum traffic_logs id for counter initialization.
+    MaxTrafficId {
+        reply: mpsc::Sender<Result<i64, sqlite::Error>>,
+    },
+
+    // ── Collection management ───────────────────────────────────────────────
+    LoadAllCollectionNodes {
+        reply: mpsc::Sender<Result<Vec<collection_nodes::CollectionNodeRow>, sqlite::Error>>,
+    },
+    InsertCollectionRequest {
+        name: String,
+        method: String,
+        uri: String,
+        timestamp: i64,
+        reply: mpsc::Sender<Result<i64, sqlite::Error>>,
+    },
+    UpdateCollectionRequest {
+        id: i64,
+        method: String,
+        uri: String,
+        headers: String,
+        query: String,
+        body: Option<String>,
+        body_type: String,
+        cookies: String,
+        auth_type: String,
+        auth_data: String,
+        timestamp: i64,
+    },
+    DuplicateCollectionRequest {
+        id: i64,
+        timestamp: i64,
+        reply: mpsc::Sender<Result<i64, sqlite::Error>>,
+    },
+    FindCollectionRequestsByIds {
+        ids: Vec<i64>,
+        reply: mpsc::Sender<Result<Vec<collection_requests::CollectionRequestRow>, sqlite::Error>>,
+    },
+    CreateCollection {
+        name: String,
+        timestamp: i64,
+        reply: mpsc::Sender<Result<i64, sqlite::Error>>,
+    },
+    CreateFolder {
+        parent_id: i64,
+        name: String,
+        timestamp: i64,
+        reply: mpsc::Sender<Result<i64, sqlite::Error>>,
+    },
+    CreateRequestNode {
+        parent_id: i64,
+        name: String,
+        request_id: i64,
+        timestamp: i64,
+        reply: mpsc::Sender<Result<i64, sqlite::Error>>,
+    },
+    RenameNode {
+        id: i64,
+        new_name: String,
+        timestamp: i64,
+    },
+    MoveNode {
+        id: i64,
+        new_parent_id: i64,
+        timestamp: i64,
+    },
+    DeleteNodeIfNotLast {
+        node_id: i64,
+        reply: mpsc::Sender<Result<(), sqlite::Error>>,
+    },
+
+    /// Graceful shutdown — writer thread exits after processing pending commands.
+    Shutdown,
 }
 
+// ── Db shell ───────────────────────────────────────────────────────────────────
+
+#[derive(Clone)]
 pub(crate) struct Db {
-    conn: Option<sqlite::Connection>,
-    db_path: Option<String>,
+    tx: Option<Arc<SyncSender>>,
 }
 
 impl Db {
-    pub(crate) fn open(path: &Path) -> Result<Self, sqlite::Error> {
+    pub(crate) fn open(path: &PathBuf) -> Result<Self, sqlite::Error> {
+        let db_path = path.to_string_lossy().to_string();
         let conn = sqlite::open(path)?;
-        let db_path = Some(path.to_string_lossy().to_string());
-        let db = Self {
-            conn: Some(conn),
-            db_path,
-        };
-        db.migrate()?;
-        Ok(db)
+        migrate(&conn)?;
+
+        let (cmd_tx, cmd_rx) = mpsc::sync_channel::<DbCmd>(256);
+        let tx = Arc::new(cmd_tx);
+        std::thread::Builder::new()
+            .name("db-writer".into())
+            .spawn(move || writer_loop(conn, cmd_rx, db_path))
+            .expect("failed to spawn db-writer thread");
+
+        Ok(Self { tx: Some(tx) })
     }
 
-    pub(crate) fn noop() -> Self {
-        Self {
-            conn: None,
-            db_path: None,
+    pub(crate) fn shutdown(&self) {
+        if let Some(ref tx) = self.tx {
+            tx.send(DbCmd::Shutdown).ok();
         }
     }
 
-    fn migrate(&self) -> Result<(), sqlite::Error> {
-        let conn = match self.conn {
-            Some(ref conn) => conn,
-            None => return Ok(()),
-        };
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS requests (
-                id TEXT PRIMARY KEY,
-                method TEXT NOT NULL,
-                uri TEXT NOT NULL,
-                request_timestamp INTEGER NOT NULL,
-                request_headers TEXT NOT NULL DEFAULT '{}',
-                request_body TEXT,
-                request_query TEXT DEFAULT '{}',
-                status INTEGER,
-                response_timestamp INTEGER,
-                duration_ms INTEGER,
-                response_headers TEXT,
-                response_body TEXT,
-                error TEXT,
-                edited INTEGER NOT NULL DEFAULT 0
-            )",
-        )?;
-        let conn = match self.conn {
-            Some(ref conn) => conn,
-            None => return Ok(()),
-        };
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS response_chunks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                request_id TEXT NOT NULL,
-                chunk TEXT NOT NULL,
-                seq INTEGER NOT NULL,
-                FOREIGN KEY (request_id) REFERENCES requests(id)
-            )",
-        )?;
-        Ok(())
-    }
-
-    pub(crate) fn upsert_request(
-        &self,
-        id: &str,
-        method: &str,
-        uri: &str,
-        timestamp: i64,
-        headers_json: &str,
-        query_json: &str,
-        body: Option<&str>,
-        edited: bool,
-    ) -> Result<(), sqlite::Error> {
-        let conn = match self.conn {
-            Some(ref conn) => conn,
-            None => return Ok(()),
-        };
-        let mut stmt = conn.prepare(
-            "INSERT INTO requests (id, method, uri, request_timestamp, request_headers, request_query, request_body, edited) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        )?;
-        stmt.bind((1_usize, id))?;
-        stmt.bind((2_usize, method))?;
-        stmt.bind((3_usize, uri))?;
-        stmt.bind((4_usize, timestamp as i64))?;
-        stmt.bind((5_usize, headers_json))?;
-        stmt.bind((6_usize, query_json))?;
-        match body {
-            Some(b) => stmt.bind((7_usize, b))?,
-            None => stmt.bind((7_usize, sqlite::Value::Null))?,
+    /// Send a command, failing if the writer thread is gone.
+    pub(crate) fn send(&self, cmd: DbCmd) -> Result<(), sqlite::Error> {
+        match self.tx {
+            Some(ref tx) => tx.send(cmd).map_err(|_| sqlite::Error {
+                code: None,
+                message: Some("db writer thread disconnected".into()),
+            }),
+            None => Ok(()),
         }
-        stmt.bind((8_usize, if edited { 1 } else { 0 }))?;
-        stmt.next()?;
-        Ok(())
     }
+}
 
-    pub(crate) fn update_response(
-        &self,
-        id: &str,
-        status: u16,
-        timestamp: i64,
-        duration_ms: u64,
-        headers_json: &str,
-    ) -> Result<(), sqlite::Error> {
-        let conn = match self.conn {
-            Some(ref conn) => conn,
-            None => return Ok(()),
-        };
-        let mut stmt = conn.prepare(
-            "UPDATE requests SET status = ?, response_timestamp = ?, duration_ms = ?, response_headers = ? WHERE id = ?",
-        )?;
-        stmt.bind((1_usize, status as i64))?;
-        stmt.bind((2_usize, timestamp as i64))?;
-        stmt.bind((3_usize, duration_ms as i64))?;
-        stmt.bind((4_usize, headers_json))?;
-        stmt.bind((5_usize, id))?;
-        stmt.next()?;
-        Ok(())
-    }
+// ── Migration ─────────────────────────────────────────────────────────────────
 
-    pub(crate) fn update_response_body(&self, id: &str, body: &str) -> Result<(), sqlite::Error> {
-        let conn = match self.conn {
-            Some(ref conn) => conn,
-            None => return Ok(()),
-        };
-        let mut stmt = conn.prepare("UPDATE requests SET response_body = ? WHERE id = ?")?;
-        stmt.bind((1_usize, body))?;
-        stmt.bind((2_usize, id))?;
-        stmt.next()?;
-        Ok(())
-    }
+fn migrate(conn: &sqlite::Connection) -> Result<(), sqlite::Error> {
+    conn.execute("PRAGMA journal_mode=WAL")?;
 
-    pub(crate) fn set_error(&self, id: &str, error: &str) -> Result<(), sqlite::Error> {
-        let conn = match self.conn {
-            Some(ref conn) => conn,
-            None => return Ok(()),
-        };
-        let mut stmt = conn.prepare("UPDATE requests SET error = ? WHERE id = ?")?;
-        stmt.bind((1_usize, error))?;
-        stmt.bind((2_usize, id))?;
-        stmt.next()?;
-        Ok(())
-    }
+    // Drop old tables (clean break from unified `requests` era)
+    conn.execute("DROP TABLE IF EXISTS response_chunks")?;
+    conn.execute("DROP TABLE IF EXISTS requests")?;
 
-    /// Convert an HTTP HeaderMap to a JSON string.
-    pub(crate) fn headers_to_json(headers: &HeaderMap) -> String {
-        let h: std::collections::HashMap<String, String> = headers
-            .iter()
-            .filter_map(|(k, v)| Some((k.to_string(), v.to_str().ok()?.to_string())))
-            .collect();
-        serde_json::to_string(&h).unwrap_or_default()
-    }
+    // Each module handles its own table creation
+    CollectionNodesTable::migrate(conn)?;
+    CollectionRequestsTable::migrate(conn)?;
+    TrafficTable::migrate(conn)?;
 
-    /// Extract URI query parameters as a JSON string.
-    pub(crate) fn query_to_json(uri: &rama::http::Uri) -> String {
-        let q_str = uri.query().unwrap_or("");
-        if q_str.is_empty() {
-            return "{}".to_string();
-        }
-        let q: std::collections::HashMap<String, String> = q_str
-            .split('&')
-            .filter_map(|pair| {
-                let mut it = pair.splitn(2, '=');
-                let key = it.next()?;
-                let val = it.next().unwrap_or("");
-                Some((key.to_string(), val.to_string()))
-            })
-            .collect();
-        serde_json::to_string(&q).unwrap_or_default()
-    }
+    Ok(())
+}
 
-    /// Spawn a background thread to upsert request. Returns immediately.
-    pub(crate) fn upsert_request_async(
-        &self,
-        id: &str,
-        method: &str,
-        uri: &str,
-        timestamp: i64,
-        headers_json: &str,
-        query_json: &str,
-        body: Option<&str>,
-        edited: bool,
-    ) {
-        let path = match self.db_path {
-            Some(ref p) => p.clone(),
-            None => return,
-        };
-        let rid = id.to_string();
-        let m = method.to_string();
-        let u = uri.to_string();
-        let ts = timestamp;
-        let h = headers_json.to_string();
-        let q = query_json.to_string();
-        let b = body.map(String::from);
-        let ed = edited;
-        std::thread::spawn(move || {
-            if let Ok(conn) = sqlite::open(&path) {
-                let db = Self {
-                    conn: Some(conn),
-                    db_path: None,
-                };
-                if let Err(e) = db.upsert_request(&rid, &m, &u, ts, &h, &q, b.as_deref(), ed) {
-                    log::warn!("upsert_request_async failed: {e}");
-                }
+// ── Writer thread ─────────────────────────────────────────────────────────────
+
+fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: String) {
+    while let Ok(cmd) = rx.recv() {
+        match cmd {
+            DbCmd::Shutdown => break,
+
+            // ── Traffic logging ────────────────────────────────────────────
+            DbCmd::UpsertTrafficLog {
+                id, method, uri, timestamp, headers_json, query_json, body, reply,
+            } => {
+                let result = traffic::do_upsert_traffic_log(
+                    &conn, id, &method, &uri, timestamp, &headers_json, &query_json, body.as_deref(),
+                );
+                if let Some(reply) = reply { reply.send(result).ok(); }
             }
-        });
-    }
 
-    /// Spawn a background thread to update response. Returns immediately.
-    pub(crate) fn update_response_async(
-        &self,
-        id: &str,
-        status: u16,
-        timestamp: i64,
-        duration_ms: u64,
-        headers_json: &str,
-    ) {
-        let path = match self.db_path {
-            Some(ref p) => p.clone(),
-            None => return,
-        };
-        let rid = id.to_string();
-        let st = status;
-        let ts = timestamp;
-        let dur = duration_ms;
-        let h = headers_json.to_string();
-        std::thread::spawn(move || {
-            if let Ok(conn) = sqlite::open(&path) {
-                let db = Self {
-                    conn: Some(conn),
-                    db_path: None,
-                };
-                if let Err(e) = db.update_response(&rid, st, ts, dur, &h) {
-                    log::warn!("update_response_async failed: {e}");
-                }
+            DbCmd::UpdateTrafficResponse {
+                id, status, timestamp, duration_ms, headers_json,
+            } => {
+                traffic::do_update_traffic_response(&conn, id, status, timestamp, duration_ms, &headers_json)
+                    .unwrap_or_else(|e| log::warn!("update_traffic_response: {e}"));
             }
-        });
-    }
 
-    /// Spawn a background thread to set error. Returns immediately.
-    pub(crate) fn set_error_async(&self, id: &str, error: &str) {
-        let path = match self.db_path {
-            Some(ref p) => p.clone(),
-            None => return,
-        };
-        let rid = id.to_string();
-        let err = error.to_string();
-        std::thread::spawn(move || {
-            if let Ok(conn) = sqlite::open(&path) {
-                let db = Self {
-                    conn: Some(conn),
-                    db_path: None,
-                };
-                if let Err(e) = db.set_error(&rid, &err) {
-                    log::warn!("set_error_async failed: {e}");
-                }
+            DbCmd::UpdateTrafficResponseBody { id, body } => {
+                traffic::do_update_traffic_response_body(&conn, id, &body)
+                    .unwrap_or_else(|e| log::warn!("update_traffic_response_body: {e}"));
             }
-        });
-    }
 
-    pub(crate) fn load_all(&self) -> Result<Vec<StoredEntry>, sqlite::Error> {
-        let conn = match self.conn {
-            Some(ref conn) => conn,
-            None => return Ok(Vec::new()),
-        };
-        let mut stmt = conn.prepare(
-            "SELECT id, method, uri, request_timestamp, request_headers, request_body, request_query, status, response_timestamp, duration_ms, response_headers, response_body, error, edited FROM requests ORDER BY request_timestamp DESC",
-        )?;
-        let mut entries = Vec::new();
-        while let sqlite::State::Row = stmt.next()? {
-            let headers_str: String = stmt.read::<String, _>(4)?;
-            let headers: HashMap<String, String> =
-                serde_json::from_str(&headers_str).unwrap_or_default();
-            let query_str: Option<String> = stmt.read::<Option<String>, _>(6)?;
-            let query: Option<HashMap<String, String>> =
-                query_str.and_then(|s| serde_json::from_str(&s).ok());
-            let resp_headers_str: Option<String> = stmt.read::<Option<String>, _>(10)?;
-            let resp_headers: Option<HashMap<String, String>> =
-                resp_headers_str.and_then(|s| serde_json::from_str(&s).ok());
-            let edited_int: i64 = stmt.read::<i64, _>(13)?;
+            DbCmd::SetTrafficError { id, error } => {
+                traffic::do_set_traffic_error(&conn, id, &error)
+                    .unwrap_or_else(|e| log::warn!("set_traffic_error: {e}"));
+            }
 
-            entries.push(StoredEntry {
-                id: stmt.read::<String, _>(0)?,
-                method: stmt.read::<String, _>(1)?,
-                uri: stmt.read::<String, _>(2)?,
-                request_timestamp: stmt.read::<i64, _>(3)?,
-                request_headers: headers,
-                request_body: stmt.read::<Option<String>, _>(5)?,
-                request_query: query,
-                status: stmt.read::<Option<i64>, _>(7)?.map(|v| v as u16),
-                response_timestamp: stmt.read::<Option<i64>, _>(8)?,
-                duration_ms: stmt.read::<Option<i64>, _>(9)?.map(|v| v as u64),
-                response_headers: resp_headers,
-                response_body: stmt.read::<Option<String>, _>(11)?,
-                error: stmt.read::<Option<String>, _>(12)?,
-                edited: if edited_int != 0 { Some(true) } else { None },
-            });
+            DbCmd::InsertChunk { request_id, chunk, seq, created_at } => {
+                traffic::do_insert_chunk(&conn, request_id, &chunk, seq, created_at)
+                    .unwrap_or_else(|e| log::warn!("insert_chunk: {e}"));
+            }
+
+            DbCmd::LoadAllTraffic { reply } => {
+                reply.send(traffic::do_load_all_traffic(&conn)).ok();
+            }
+
+            DbCmd::LoadChunks { request_id, reply } => {
+                reply.send(traffic::do_load_chunks(&conn, request_id)).ok();
+            }
+
+            DbCmd::LoadTrafficDetail { id, reply } => {
+                reply.send(traffic::do_load_traffic_detail(&conn, id)).ok();
+            }
+
+            DbCmd::ClearTraffic { reply } => {
+                let result = (|| {
+                    conn.execute("DELETE FROM response_chunks")?;
+                    conn.execute("DELETE FROM traffic_logs")?;
+                    Ok(())
+                })();
+                reply.send(result).ok();
+            }
+
+            DbCmd::MaxTrafficId { reply } => {
+                let result = (|| {
+                    let mut stmt = conn.prepare("SELECT COALESCE(MAX(id), 0) FROM traffic_logs")?;
+                    stmt.next()?;
+                    Ok(stmt.read::<i64, _>(0)?)
+                })();
+                reply.send(result).ok();
+            }
+
+            // ── Collection management ───────────────────────────────────────
+            DbCmd::LoadAllCollectionNodes { reply } => {
+                reply.send(collection_nodes::do_load_all_collection_nodes(&conn)).ok();
+            }
+
+            DbCmd::InsertCollectionRequest {
+                name, method, uri, timestamp, reply,
+            } => {
+                reply
+                    .send(collection_requests::do_insert_collection_request(
+                        &conn, &name, &method, &uri, timestamp,
+                    ))
+                    .ok();
+            }
+
+            DbCmd::UpdateCollectionRequest {
+                id, method, uri, headers, query, body, body_type, cookies,
+                auth_type, auth_data, timestamp,
+            } => {
+                collection_requests::do_update_collection_request(
+                    &conn, id, &method, &uri, &headers, &query, body.as_deref(),
+                    &body_type, &cookies, &auth_type, &auth_data, timestamp,
+                )
+                .unwrap_or_else(|e| log::warn!("update_collection_request: {e}"));
+            }
+
+            DbCmd::DuplicateCollectionRequest { id, timestamp, reply } => {
+                reply
+                    .send(collection_requests::do_duplicate_collection_request(&conn, id, timestamp))
+                    .ok();
+            }
+
+            DbCmd::FindCollectionRequestsByIds { ids, reply } => {
+                reply
+                    .send(collection_requests::do_find_collection_requests_by_ids(&conn, &ids))
+                    .ok();
+            }
+
+            DbCmd::CreateCollection { name, timestamp, reply } => {
+                reply
+                    .send(collection_nodes::do_create_collection(&conn, &name, timestamp))
+                    .ok();
+            }
+
+            DbCmd::CreateFolder { parent_id, name, timestamp, reply } => {
+                reply
+                    .send(collection_nodes::do_create_folder(&conn, parent_id, &name, timestamp))
+                    .ok();
+            }
+
+            DbCmd::CreateRequestNode { parent_id, name, request_id, timestamp, reply } => {
+                reply
+                    .send(collection_nodes::do_create_request_node(
+                        &conn, parent_id, &name, request_id, timestamp,
+                    ))
+                    .ok();
+            }
+
+            DbCmd::RenameNode { id, new_name, timestamp } => {
+                collection_nodes::do_rename_node(&conn, id, &new_name, timestamp)
+                    .unwrap_or_else(|e| log::warn!("rename_node: {e}"));
+            }
+
+            DbCmd::MoveNode { id, new_parent_id, timestamp } => {
+                collection_nodes::do_move_node(&conn, id, new_parent_id, timestamp)
+                    .unwrap_or_else(|e| log::warn!("move_node: {e}"));
+            }
+
+            DbCmd::DeleteNodeIfNotLast { node_id, reply } => {
+                reply
+                    .send(collection_nodes::do_delete_node_if_not_last(&conn, node_id))
+                    .ok();
+            }
         }
-        Ok(entries)
     }
-
-    #[allow(dead_code)]
-    pub(crate) fn clear(&self) -> Result<(), sqlite::Error> {
-        let conn = match self.conn {
-            Some(ref conn) => conn,
-            None => return Ok(()),
-        };
-        conn.execute("DELETE FROM response_chunks")?;
-        conn.execute("DELETE FROM requests")?;
-        Ok(())
-    }
+    log::info!("db writer thread exiting (path={db_path})");
 }

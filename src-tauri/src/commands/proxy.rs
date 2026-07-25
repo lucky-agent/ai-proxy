@@ -2,7 +2,6 @@ use crate::AppState;
 use crate::bail;
 use crate::proxy::ProxyServer;
 use crate::proxy::events::ProxyEvent;
-use crate::script;
 use tauri::ipc::Channel;
 use tokio::sync::oneshot;
 
@@ -11,8 +10,7 @@ pub async fn start_proxy(
     state: tauri::State<'_, AppState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    let data_dir = state.store().data_dir();
-    let scripts_dir = state.store().scripts_dir().clone();
+    let data_dir = state.store().data_dir().clone();
     let settings = state.settings();
 
     if state.running() {
@@ -23,19 +21,12 @@ pub async fn start_proxy(
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     state.set_shutdown_signal(shutdown_tx);
 
-    let scripts = script::load_scripts(&scripts_dir);
-    log::info!(
-        "Loaded {} scripts from {}",
-        scripts.len(),
-        scripts_dir.display()
-    );
-
     let listen_addr = format!(
         "{}:{}",
         settings.proxy.listen_host, settings.proxy.listen_port
     );
     log::info!("Proxy started on {}", listen_addr);
-    let server = ProxyServer::new(settings.proxy, app_handle, shutdown_rx, data_dir, scripts);
+    let server = ProxyServer::new(settings.proxy, app_handle, shutdown_rx, data_dir);
 
     tauri::async_runtime::spawn(async move {
         if let Err(err) = server.run().await {

@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use rama::error::{BoxError, ErrorContext};
-use rama::tls::rustls::server::{DynamicConfigProvider, TlsAcceptorData};
+use rama::tls::rustls::server::{DynamicConfigProvider, RustlsServerConfigExt};
+use rama::tls::server::TlsServerConfig;
 use rcgen::{
     BasicConstraints, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
     KeyUsagePurpose, PKCS_ECDSA_P256_SHA256,
@@ -48,8 +49,8 @@ impl MitmCertProvider {
         }
     }
 
-    pub(crate) fn into_tls_acceptor_data(self) -> TlsAcceptorData {
-        Arc::new(self).into()
+    pub(crate) fn into_tls_server_config(self) -> TlsServerConfig {
+        TlsServerConfig::new().with_dynamic_config(Arc::new(self))
     }
 }
 

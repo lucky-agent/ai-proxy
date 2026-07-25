@@ -1,49 +1,94 @@
+import type { AiConversation, AiTurn, AiUsage } from '@/types/ai'
+
 export interface RequestEvent {
-  id: string
+  id: number
   method: string
   uri: string
   timestamp: number
   headers: Record<string, string>
-   query_params?: Record<string, string>
+  query_params?: Record<string, string>
   decrypted: boolean
+  content_type?: string
 }
 
 export interface ResponseEvent {
-  id: string
+  id: number
   status: number
   timestamp: number
   duration_ms: number
   headers: Record<string, string>
+  content_type?: string
 }
 
 export interface ResponseChunkEvent {
-  id: string
+  id: number
   chunk: string
 }
 
 export interface ErrorEvent {
-  id: string
+  id: number
   error: string
 }
 
 export interface RequestBodyChunkEvent {
-  id: string
+  id: number
   chunk: string
 }
 
 export type ProxyEvent =
-  | { type: "request"; id: string; method: string; uri: string; timestamp: number; headers: Record<string, string>; decrypted: boolean }
-  | { type: "request_chunk"; id: string; chunk: string }
-  | { type: "response"; id: string; status: number; timestamp: number; duration_ms: number; headers: Record<string, string> }
-  | { type: "response_chunk"; id: string; chunk: string }
-  | { type: "error"; id: string; error: string }
+  | {
+      type: 'request'
+      id: number
+      method: string
+      uri: string
+      timestamp: number
+      headers: Record<string, string>
+      decrypted: boolean
+      content_type?: string
+    }
+  | { type: 'request_chunk'; id: number; chunk: string }
+  | {
+      type: 'response'
+      id: number
+      status: number
+      timestamp: number
+      duration_ms: number
+      headers: Record<string, string>
+      content_type?: string
+    }
+  | { type: 'response_chunk'; id: number; chunk: string }
+  | { type: 'error'; id: number; error: string }
+  | {
+      type: 'ai_normalized'
+      id: number
+      session_id: string
+      provider: string
+      conversation: AiConversation
+      streaming: boolean
+      /** 请求侧归一化 turns（请求体 messages），前端与 assistant 回复拼接为完整对话。 */
+      request_turns?: AiTurn[]
+    }
+  | {
+      type: 'ai_session'
+      session_id: string
+      scope_host: string
+      request_ids: number[]
+      usage_total: AiUsage
+      match_reason: string
+      /** 会话标题：来自首请求响应的 {"title": "..."}，无则缺省 */
+      title?: string
+      /** 来源归属：规则内 (来源, 合并头) 对的头命中时为对应来源名，无则缺省 */
+      source?: string
+    }
 
-export interface ChunkRecord {
-  data: string
+/** 从 AI 视图跳转到代理视图时下发的指令。nonce 自增确保重复跳同一 id 也能重触发。 */
+export interface ProxyJumpTarget {
+  id: number
+  nonce: number
 }
 
 export interface TrafficEntry {
-  id: string
+  id: number
   method: string
   uri: string
   requestNumber: number
@@ -51,13 +96,14 @@ export interface TrafficEntry {
   requestHeaders: Record<string, string>
   requestBody: string | null
   requestQuery?: Record<string, string>
- status: number | null
- responseTimestamp: number | null
- durationMs: number | null
- responseHeaders: Record<string, string> | null
- responseBody: string | null
- responseChunks: ChunkRecord[]
- error: string | null
-  edited?: boolean
+  requestContentType?: string
+  status: number | null
+  responseTimestamp: number | null
+  durationMs: number | null
+  responseHeaders: Record<string, string> | null
+  /** 响应体 chunks（字符串数组）。非流式为单元素数组。body = chunks.join('') */
+  responseChunks: string[]
+  responseContentType?: string
+  error: string | null
   decrypted?: boolean
 }
