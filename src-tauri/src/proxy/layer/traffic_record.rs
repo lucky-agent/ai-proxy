@@ -12,7 +12,7 @@ use crate::proxy::events::ProxyEvent;
 use crate::proxy::ext::{CachedRequestBody, RequestExt};
 use crate::proxy::record;
 use crate::proxy::state::{self, State};
-use crate::utils::buf_pool;
+use crate::utils::{buf_pool, date};
 
 /// Traffic recording layer: request event emission, DB persistence, AI pipeline,
 /// response body observation, and error handling.
@@ -107,7 +107,7 @@ where
         );
 
         // ── 转发到上游 ──
-        let forward_start = std::time::Instant::now();
+        let forward_start = date::instant_now();
         match self.inner.serve(forward_req).await {
             Ok(resp) => {
                 log::info!(

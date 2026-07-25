@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::sync::mpsc;
 
-use sqlite;
-
 use crate::storage::ApiCollection;
 use crate::storage::ApiTreeNode;
 use crate::storage::DbTable;

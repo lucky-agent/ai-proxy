@@ -1,6 +1,5 @@
 use crate::proxy::state::AppState;
 use crate::storage::traffic::TrafficLogEntry;
-use tauri;
 
 #[tauri::command]
 pub async fn load_traffic_history(

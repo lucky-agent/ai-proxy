@@ -2,8 +2,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use sqlite;
-
 use crate::storage::DbTable;
 use crate::storage::collection_nodes;
 use crate::storage::collection_nodes::CollectionNodesTable;

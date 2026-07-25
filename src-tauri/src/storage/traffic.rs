@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 use std::sync::mpsc;
 
-use serde::Serialize;
-use sqlite;
-
 use crate::storage::DbTable;
+use serde::Serialize;
 
 // ── Table marker ──────────────────────────────────────────────────────────────
 

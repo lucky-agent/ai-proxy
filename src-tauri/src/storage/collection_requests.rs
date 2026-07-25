@@ -1,7 +1,5 @@
 use std::sync::mpsc;
 
-use sqlite;
-
 use crate::storage::DbTable;
 
 // ── Row type ───────────────────────────────────────────────────────────────────

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use sqlite;
 
 pub(crate) mod collection_nodes;
 pub(crate) mod collection_requests;

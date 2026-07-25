@@ -11,9 +11,9 @@ pub(crate) struct CachedRequestBody(pub Bytes);
 /// 扩展 trait：从 rama 请求扩展中快速提取常用上下文。
 pub(crate) trait RequestExt {
     /// 提取 `T` 类型扩展值，未找到时 panic。
-    fn ext<T: Extension>(&self) -> T
+    fn ext<T>(&self) -> T
     where
-        T: Clone,
+        T: Clone + Extension,
     {
         self.try_ext::<T>().unwrap_or_else(|| {
             panic!(
