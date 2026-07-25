@@ -75,9 +75,7 @@ impl ResponseData {
 /// 委托给 [`buf_pool::collect_body`]，复用同一套 capped-collect 逻辑。
 pub async fn collect_body_str(body: Body) -> Result<String, Body> {
     match buf_pool::collect_body(body).await {
-        buf_pool::CollectedBody::Full(bytes) => {
-            Ok(String::from_utf8_lossy(&bytes).into_owned())
-        }
+        buf_pool::CollectedBody::Full(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
         buf_pool::CollectedBody::Capped { body, .. } => Err(body),
         // 流错误：保留已读部分（与旧行为一致——忽略出错的 chunk）
         buf_pool::CollectedBody::Error { prefix, .. } => {

@@ -132,11 +132,7 @@ impl AiDetectionConfig {
     /// 遍历 url_patterns，首条 domain_match 命中即止。
     /// 候选串 = host + path（host 由调用方通过 ctx.host_str() 统一获取，已含 Host 头回退）。
     /// 返回 (Option<AiProvider>, 命中规则的来源对列表)；未命中为 (None, 空)。
-    pub fn compute_hint(
-        &self,
-        host: &str,
-        path: &str,
-    ) -> (Option<AiProvider>, Vec<AiRuleSource>) {
+    pub fn compute_hint(&self, host: &str, path: &str) -> (Option<AiProvider>, Vec<AiRuleSource>) {
         let candidate = format!("{host}{path}");
         for rule in &self.url_patterns {
             if rule.url.is_empty() || !rule.enabled {

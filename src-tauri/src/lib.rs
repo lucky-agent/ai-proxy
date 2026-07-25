@@ -1,25 +1,25 @@
 mod commands;
 mod config;
-mod storage;
 mod proxy;
 mod script;
+mod storage;
 mod tray;
 pub mod utils;
 use proxy::state::AppState;
 use tauri::{Emitter, Manager, RunEvent};
 
-use crate::commands::load_traffic_history;
 use crate::commands::get_traffic_detail;
-use crate::commands::resend_request;
+use crate::commands::load_traffic_history;
 use crate::commands::open_url;
+use crate::commands::resend_request;
 use crate::commands::{
-    get_collections, get_locale, get_prose_font_size, get_script_config, get_script_content, get_settings, get_ssl_config, get_status,
-    get_theme, create_collection, create_folder, create_request, delete_node, rename_node,
-    move_node, save_request, duplicate_request, save_script_config, save_script_content, save_settings, save_ssl_config, set_locale,
-    set_prose_font_size, set_script_enabled, set_ssl_enabled,
-    set_theme, start_proxy, stop_proxy, subscribe_proxy_events, sync_tray_locale,
-    get_ai_config, save_ai_config, set_ai_enabled, test_rule_match,
-    install_ca_cert, read_ca_cert_pem, export_ca_cert,
+    create_collection, create_folder, create_request, delete_node, duplicate_request,
+    export_ca_cert, get_ai_config, get_collections, get_locale, get_prose_font_size,
+    get_script_config, get_script_content, get_settings, get_ssl_config, get_status, get_theme,
+    install_ca_cert, move_node, read_ca_cert_pem, rename_node, save_ai_config, save_request,
+    save_script_config, save_script_content, save_settings, save_ssl_config, set_ai_enabled,
+    set_locale, set_prose_font_size, set_script_enabled, set_ssl_enabled, set_theme, start_proxy,
+    stop_proxy, subscribe_proxy_events, sync_tray_locale, test_rule_match,
 };
 use crate::config::{Settings, Store};
 
@@ -82,7 +82,9 @@ fn app_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         window.set_theme(tauri_theme).ok();
 
         // 与 CSS 背景色同步，避免拖拽窗口时 webview 重绘滞后露出白色边缘
-        let is_dark = window.theme().is_ok_and(|t| matches!(t, tauri::Theme::Dark));
+        let is_dark = window
+            .theme()
+            .is_ok_and(|t| matches!(t, tauri::Theme::Dark));
         let bg = if is_dark {
             tauri::webview::Color(0x25, 0x25, 0x25, 0xff)
         } else {

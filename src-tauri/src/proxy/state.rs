@@ -70,10 +70,7 @@ impl State {
 
     /// 上游 HTTP 客户端（含超时/解压/流标准化；OnceLock 缓存，首次调用时构建）。
     pub(crate) fn upstream_client(&self) -> BoxService<Request, Response, BoxError> {
-        crate::proxy::client::build_upstream_service(
-            self.settings().proxy.upstream_proxy,
-            true,
-        )
+        crate::proxy::client::build_upstream_service(self.settings().proxy.upstream_proxy, true)
     }
 
     pub(crate) fn mitm_tls_service_data(&self) -> &TlsServerConfig {
@@ -116,8 +113,6 @@ impl State {
     pub(crate) fn settings(&self) -> std::sync::RwLockReadGuard<'_, Settings> {
         self.read_settings.read().expect("settings lock")
     }
-
-
 
     pub(crate) fn event_channel(&self) -> Option<Channel<ProxyEvent>> {
         self.event_channel

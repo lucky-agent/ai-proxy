@@ -10,7 +10,8 @@ pub(super) fn exec_request_hook(
     let ctx = Context::full(&rt).map_err(|e| e.to_string())?;
 
     ctx.with(|ctx| {
-        let data_json = serde_json::to_string(data).expect("JSON serialization of RequestData should always succeed");
+        let data_json = serde_json::to_string(data)
+            .expect("JSON serialization of RequestData should always succeed");
         let req_obj: Value = ctx
             .eval::<Value, _>(format!("({data_json})"))
             .map_err(|e| format!("parse request JSON: {e}"))?;
@@ -59,7 +60,8 @@ pub(super) fn exec_response_hook(
     let ctx = Context::full(&rt).map_err(|e| e.to_string())?;
 
     ctx.with(|ctx| {
-        let data_json = serde_json::to_string(data).expect("JSON serialization of ResponseData should always succeed");
+        let data_json = serde_json::to_string(data)
+            .expect("JSON serialization of ResponseData should always succeed");
         let res_obj: Value = ctx
             .eval::<Value, _>(format!("({data_json})"))
             .map_err(|e| format!("parse response JSON: {e}"))?;

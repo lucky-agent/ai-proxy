@@ -8,7 +8,7 @@ use rcgen::{
     BasicConstraints, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa, Issuer, KeyPair,
     KeyUsagePurpose, PKCS_ECDSA_P256_SHA256,
 };
-use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer, PrivateKeyDer};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::server::{ClientHello, ServerConfig};
 
 const CA_ORG_NAME: &str = "ai-proxy";
@@ -32,13 +32,14 @@ impl MitmCertProvider {
         let key_path = ca_key_path(ca_cert_dir);
 
         if cert_path.exists() && key_path.exists() {
-            let ca_key_pem =
-                std::fs::read_to_string(&key_path).context("read CA key PEM")?;
-            let ca_cert_pem =
-                std::fs::read_to_string(&cert_path).context("read CA cert PEM")?;
+            let ca_key_pem = std::fs::read_to_string(&key_path).context("read CA key PEM")?;
+            let ca_cert_pem = std::fs::read_to_string(&cert_path).context("read CA cert PEM")?;
             let ca_cert_der = pem_to_cert_der(&ca_cert_pem);
 
-            log::info!("Loaded existing CA certificate from {}", cert_path.display());
+            log::info!(
+                "Loaded existing CA certificate from {}",
+                cert_path.display()
+            );
 
             Ok(Self {
                 ca_key_pem,
@@ -61,8 +62,7 @@ impl DynamicConfigProvider for MitmCertProvider {
     ) -> Result<Arc<ServerConfig>, BoxError> {
         let hostname = client_hello.server_name().unwrap_or("localhost");
 
-        let ca_key_pair =
-            KeyPair::from_pem(&self.ca_key_pem).context("parse CA key PEM")?;
+        let ca_key_pair = KeyPair::from_pem(&self.ca_key_pem).context("parse CA key PEM")?;
         let ca_issuer = create_ca_issuer(ca_key_pair);
 
         let (server_cert_der, server_key_der) =
@@ -84,8 +84,7 @@ fn generate_new_ca(dir: &Path) -> Result<MitmCertProvider, BoxError> {
     let alg = &PKCS_ECDSA_P256_SHA256;
     let ca_key_pair = KeyPair::generate_for(alg).context("generate CA key pair")?;
 
-    let mut ca_params =
-        CertificateParams::new(Vec::new()).context("create CA params")?;
+    let mut ca_params = CertificateParams::new(Vec::new()).context("create CA params")?;
     ca_params
         .distinguished_name
         .push(DnType::OrganizationName, CA_ORG_NAME);
@@ -106,10 +105,8 @@ fn generate_new_ca(dir: &Path) -> Result<MitmCertProvider, BoxError> {
     let ca_key_pem = ca_key_pair.serialize_pem();
     let ca_cert_pem_str = ca_cert.pem();
 
-    std::fs::write(ca_cert_path(dir), &ca_cert_pem_str)
-        .context("write CA cert PEM")?;
-    std::fs::write(ca_key_path(dir), &ca_key_pem)
-        .context("write CA key PEM")?;
+    std::fs::write(ca_cert_path(dir), &ca_cert_pem_str).context("write CA cert PEM")?;
+    std::fs::write(ca_key_path(dir), &ca_key_pem).context("write CA key PEM")?;
 
     log::info!(
         "New CA certificate generated and saved to {}",
@@ -125,8 +122,7 @@ fn generate_new_ca(dir: &Path) -> Result<MitmCertProvider, BoxError> {
 }
 
 fn create_ca_issuer(ca_key_pair: KeyPair) -> Issuer<'static, KeyPair> {
-    let mut ca_params =
-        CertificateParams::new(Vec::new()).expect("create CA params");
+    let mut ca_params = CertificateParams::new(Vec::new()).expect("create CA params");
     ca_params
         .distinguished_name
         .push(DnType::OrganizationName, CA_ORG_NAME);
@@ -150,8 +146,7 @@ fn generate_server_cert_for_hostname(
     let server_key_pair = KeyPair::generate_for(alg).context("generate server key pair")?;
 
     let mut server_params =
-        CertificateParams::new(vec![hostname.to_string()])
-            .context("create server EE params")?;
+        CertificateParams::new(vec![hostname.to_string()]).context("create server EE params")?;
     server_params
         .distinguished_name
         .push(DnType::CommonName, hostname);

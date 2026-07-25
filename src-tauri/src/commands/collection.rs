@@ -29,8 +29,7 @@ pub fn create_collection(
 ) -> Result<String, String> {
     let db = state.db();
     let ts = crate::utils::date::now_ms();
-    let id = db.create_collection(&name, ts)
-        .map_err(|e| e.to_string())?;
+    let id = db.create_collection(&name, ts).map_err(|e| e.to_string())?;
     Ok(id.to_string())
 }
 
@@ -42,7 +41,8 @@ pub fn create_folder(
 ) -> Result<String, String> {
     let db = state.db();
     let ts = crate::utils::date::now_ms();
-    let id = db.create_folder(parent_id, &name, ts)
+    let id = db
+        .create_folder(parent_id, &name, ts)
         .map_err(|e| e.to_string())?;
     Ok(id.to_string())
 }
@@ -56,21 +56,21 @@ pub fn create_request(
     let db = state.db();
     let ts = crate::utils::date::now_ms();
     // Insert into collection_requests table first to get the request_id
-    let request_id = db.insert_collection_request(&name, Method::GET.as_str(), "", ts)
+    let request_id = db
+        .insert_collection_request(&name, Method::GET.as_str(), "", ts)
         .map_err(|e| e.to_string())?;
     // Then create the node referencing it
-    let node_id = db.create_request_node(parent_id, &name, request_id, ts)
+    let node_id = db
+        .create_request_node(parent_id, &name, request_id, ts)
         .map_err(|e| e.to_string())?;
     Ok(serde_json::json!({ "nodeId": node_id, "requestId": request_id }).to_string())
 }
 
 #[tauri::command]
-pub fn delete_node(
-    state: tauri::State<'_, AppState>,
-    node_id: i64,
-) -> Result<(), String> {
+pub fn delete_node(state: tauri::State<'_, AppState>, node_id: i64) -> Result<(), String> {
     let db = state.db();
-    db.delete_node_if_not_last(node_id).map_err(|e| e.to_string())
+    db.delete_node_if_not_last(node_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -113,12 +113,9 @@ pub fn save_request(
 ) -> Result<(), String> {
     let db = state.db();
     let ts = crate::utils::date::now_ms();
-    let headers_json =
-        serde_json::to_string(&headers.unwrap_or_default()).unwrap_or_default();
-    let params_json =
-        serde_json::to_string(&params.unwrap_or_default()).unwrap_or_default();
-    let cookies_json =
-        serde_json::to_string(&cookies.unwrap_or_default()).unwrap_or_default();
+    let headers_json = serde_json::to_string(&headers.unwrap_or_default()).unwrap_or_default();
+    let params_json = serde_json::to_string(&params.unwrap_or_default()).unwrap_or_default();
+    let cookies_json = serde_json::to_string(&cookies.unwrap_or_default()).unwrap_or_default();
     db.update_collection_request(
         id,
         &method,
@@ -144,16 +141,18 @@ pub fn duplicate_request(
 
     // Load all collections to find the original node's parent_id, name, and request_id
     let collections = db.load_all_collections().map_err(|e| e.to_string())?;
-    let (parent_id, name, request_id) =
-        find_request_node(&collections, node_id).ok_or_else(|| format!("node not found: {}", node_id))?;
+    let (parent_id, name, request_id) = find_request_node(&collections, node_id)
+        .ok_or_else(|| format!("node not found: {}", node_id))?;
 
     let ts = crate::utils::date::now_ms();
 
     // Duplicate the request row to get a new request_id
-    let new_request_id = db.duplicate_collection_request(request_id, ts)
+    let new_request_id = db
+        .duplicate_collection_request(request_id, ts)
         .map_err(|e| e.to_string())?;
     // Create a new collection node referencing the duplicated request
-    let new_node_id = db.create_request_node(parent_id, &format!("{} (副本)", name), new_request_id, ts)
+    let new_node_id = db
+        .create_request_node(parent_id, &format!("{} (副本)", name), new_request_id, ts)
         .map_err(|e| e.to_string())?;
 
     Ok(new_node_id.to_string())
@@ -173,7 +172,11 @@ fn find_request_node(collections: &[ApiCollection], target_id: i64) -> Option<(i
     None
 }
 
-fn find_in_nodes(nodes: &[ApiTreeNode], target_id: i64, parent_id: i64) -> Option<(i64, String, i64)> {
+fn find_in_nodes(
+    nodes: &[ApiTreeNode],
+    target_id: i64,
+    parent_id: i64,
+) -> Option<(i64, String, i64)> {
     for node in nodes {
         match node {
             ApiTreeNode::Folder { id, name, children } => {
@@ -184,7 +187,12 @@ fn find_in_nodes(nodes: &[ApiTreeNode], target_id: i64, parent_id: i64) -> Optio
                     return Some(result);
                 }
             }
-            ApiTreeNode::Request { id, name, request_id, .. } => {
+            ApiTreeNode::Request {
+                id,
+                name,
+                request_id,
+                ..
+            } => {
                 if *id == target_id {
                     return Some((parent_id, name.clone(), *request_id));
                 }

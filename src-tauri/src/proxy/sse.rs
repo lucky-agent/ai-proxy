@@ -84,9 +84,7 @@ impl SseFramer {
         self.scan_from = self.buffer.len().saturating_sub(1);
 
         if self.buffer.len() > MAX_EVENT_BUFFER {
-            log::warn!(
-                "[sse] event buffer exceeded {MAX_EVENT_BUFFER} bytes, dropped"
-            );
+            log::warn!("[sse] event buffer exceeded {MAX_EVENT_BUFFER} bytes, dropped");
             self.buffer.clear();
             self.scan_from = 0;
         }
@@ -188,9 +186,7 @@ fn parse_sse_block(raw: &str) -> SseEvent {
             "retry" => {
                 // WHATWG: retry 值必须为纯 ASCII 数字。
                 // `u64::parse` 默认接受 `+` 前缀，不符合规范，故手写校验。
-                if !value.is_empty()
-                    && value.bytes().all(|b| b.is_ascii_digit())
-                {
+                if !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()) {
                     if let Ok(ms) = value.parse() {
                         retry = Some(ms);
                     }

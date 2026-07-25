@@ -108,7 +108,16 @@ impl SessionStore {
             if let Some(val) = headers.get(&name.to_ascii_lowercase()) {
                 let sid = session_key(&scope, val);
                 let reason = format!("header:{name}");
-                self.touch_or_create(&sid, &scope, &fingerprints, request_id, tick, source.as_deref(), &reason, messages);
+                self.touch_or_create(
+                    &sid,
+                    &scope,
+                    &fingerprints,
+                    request_id,
+                    tick,
+                    source.as_deref(),
+                    &reason,
+                    messages,
+                );
                 return self.result_snapshot(sid, reason);
             }
         }
@@ -129,7 +138,14 @@ impl SessionStore {
             }
             if let Some((sid, _)) = best {
                 self.touch_or_create(
-                    &sid, &scope, &fingerprints, request_id, tick, None, "prefix", messages,
+                    &sid,
+                    &scope,
+                    &fingerprints,
+                    request_id,
+                    tick,
+                    None,
+                    "prefix",
+                    messages,
                 );
                 return self.result_snapshot(sid, "prefix".to_string());
             }
@@ -137,16 +153,21 @@ impl SessionStore {
 
         // ③ 新会话
         let sid = format!("sess-{}", Uuid::new_v4());
-        self.touch_or_create(&sid, &scope, &fingerprints, request_id, tick, None, "new", messages);
+        self.touch_or_create(
+            &sid,
+            &scope,
+            &fingerprints,
+            request_id,
+            tick,
+            None,
+            "new",
+            messages,
+        );
         self.result_snapshot(sid, "new".to_string())
     }
 
     /// 分组落定后就地读快照。新会话 tick 最大不会被 LRU 淘汰，entry 必然存在。
-    fn result_snapshot(
-        &self,
-        session_id: String,
-        match_reason: String,
-    ) -> AssignResult {
+    fn result_snapshot(&self, session_id: String, match_reason: String) -> AssignResult {
         let entry = &self.sessions[&session_id];
         AssignResult {
             request_ids: entry.request_ids.clone(),

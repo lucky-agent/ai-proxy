@@ -43,7 +43,10 @@ pub fn save_script_config(
         }
         // name 不允许全部数字（避免与 name 内部 script-N 自动 ID 混淆）
         if item.name.trim().chars().all(|c| c.is_ascii_digit()) {
-            return Err(format!("Script name must contain at least one letter: '{}'", item.name));
+            return Err(format!(
+                "Script name must contain at least one letter: '{}'",
+                item.name
+            ));
         }
     }
 
@@ -231,19 +234,19 @@ pub fn install_ca_cert(state: tauri::State<'_, AppState>) -> Result<String, Stri
 
     #[cfg(target_os = "windows")]
     {
-        use windows_sys::Win32::Security::Cryptography::{
-            CertAddEncodedCertificateToStore, CertCloseStore, CertOpenStore,
-            X509_ASN_ENCODING, CERT_STORE_ADD_REPLACE_EXISTING,
-            sz_CERT_STORE_PROV_SYSTEM_W, CERT_SYSTEM_STORE_CURRENT_USER,
-        };
-        use windows_sys::Win32::Foundation::GetLastError;
         use std::ptr::null_mut;
+        use windows_sys::Win32::Foundation::GetLastError;
+        use windows_sys::Win32::Security::Cryptography::{
+            CERT_STORE_ADD_REPLACE_EXISTING, CERT_SYSTEM_STORE_CURRENT_USER,
+            CertAddEncodedCertificateToStore, CertCloseStore, CertOpenStore, X509_ASN_ENCODING,
+            sz_CERT_STORE_PROV_SYSTEM_W,
+        };
 
         // 读取 PEM 并提取 DER 字节
         let ca_pem = std::fs::read_to_string(&ca_cert_path)
             .map_err(|e| format!("Failed to read CA cert: {e}"))?;
-        let der_bytes = pem_to_der(&ca_pem)
-            .map_err(|e| format!("Failed to decode CA cert PEM: {e}"))?;
+        let der_bytes =
+            pem_to_der(&ca_pem).map_err(|e| format!("Failed to decode CA cert PEM: {e}"))?;
 
         // 通过 CryptoAPI 静默安装到 CurrentUser\Root，不弹任何窗口
         unsafe {
@@ -317,8 +320,14 @@ pub fn install_ca_cert(state: tauri::State<'_, AppState>) -> Result<String, Stri
             log::info!("CA cert installed to login keychain: {stdout}");
             Ok("Certificate installed to login keychain".into())
         } else {
-            let code = output.status.code().map(|c| c.to_string()).unwrap_or_else(|| "unknown".into());
-            Err(format!("security exit={code}\nstdout: {stdout}\nstderr: {stderr}"))
+            let code = output
+                .status
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "unknown".into());
+            Err(format!(
+                "security exit={code}\nstdout: {stdout}\nstderr: {stderr}"
+            ))
         }
     }
 
@@ -326,9 +335,15 @@ pub fn install_ca_cert(state: tauri::State<'_, AppState>) -> Result<String, Stri
     {
         let candidates = [
             // Debian/Ubuntu 系
-            ("/usr/local/share/ca-certificates/ai-proxy.crt", "update-ca-certificates"),
+            (
+                "/usr/local/share/ca-certificates/ai-proxy.crt",
+                "update-ca-certificates",
+            ),
             // Fedora/RHEL 系
-            ("/etc/pki/ca-trust/source/anchors/ai-proxy.crt", "update-ca-trust"),
+            (
+                "/etc/pki/ca-trust/source/anchors/ai-proxy.crt",
+                "update-ca-trust",
+            ),
         ];
 
         for (dest_path, update_cmd) in &candidates {
@@ -354,24 +369,25 @@ pub fn install_ca_cert(state: tauri::State<'_, AppState>) -> Result<String, Stri
                 let update = std::process::Command::new("pkexec")
                     .arg(update_cmd)
                     .output()
-                    .or_else(|_| {
-                        std::process::Command::new("sudo").arg(update_cmd).output()
-                    });
+                    .or_else(|_| std::process::Command::new("sudo").arg(update_cmd).output());
 
                 match update {
                     Ok(o) if o.status.success() => {
-                        let msg = format!(
-                            "CA cert installed via {}",
-                            dest_path
-                        );
+                        let msg = format!("CA cert installed via {}", dest_path);
                         log::info!("{msg}");
                         return Ok(msg);
                     }
                     Ok(o) => {
                         let stdout = String::from_utf8_lossy(&o.stdout).to_string();
                         let stderr = String::from_utf8_lossy(&o.stderr).to_string();
-                        let code = o.status.code().map(|c| c.to_string()).unwrap_or_else(|| "unknown".into());
-                        return Err(format!("{update_cmd} exit={code}\nstdout: {stdout}\nstderr: {stderr}"));
+                        let code = o
+                            .status
+                            .code()
+                            .map(|c| c.to_string())
+                            .unwrap_or_else(|| "unknown".into());
+                        return Err(format!(
+                            "{update_cmd} exit={code}\nstdout: {stdout}\nstderr: {stderr}"
+                        ));
                     }
                     Err(e) => return Err(format!("Failed to run {update_cmd}: {e}")),
                 }
@@ -437,7 +453,10 @@ mod tests {
             vec![true, false, true]
         );
         // host+path 语义（AI 检测）：纯域名 pattern 匹配不到带路径的候选串
-        assert_eq!(test_rule_match(patterns, url, true), vec![false, true, true]);
+        assert_eq!(
+            test_rule_match(patterns, url, true),
+            vec![false, true, true]
+        );
     }
 
     #[test]

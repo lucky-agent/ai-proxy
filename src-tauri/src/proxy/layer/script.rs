@@ -2,17 +2,17 @@ use std::convert::Infallible;
 
 use bytes::Bytes;
 use rama::extensions::ExtensionsRef;
-use rama::http::{Body, Request, Response, StatusCode};
 use rama::http::header;
+use rama::http::{Body, Request, Response, StatusCode};
 use rama::layer::Layer;
 use rama::service::Service;
 
-use crate::proxy::events::ProxyEvent;
 use crate::proxy::error_response;
+use crate::proxy::events::ProxyEvent;
 use crate::proxy::ext::CachedRequestBody;
+use crate::proxy::ext::RequestExt;
 use crate::proxy::state::State;
 use crate::script;
-use crate::proxy::ext::RequestExt;
 
 /// Script layer that applies both request and response hooks.
 ///
@@ -140,10 +140,7 @@ async fn apply_request_scripts(
                 })
                 .ok();
             }
-            Err(error_response(
-                StatusCode::FORBIDDEN,
-                "Blocked by script",
-            ))
+            Err(error_response(StatusCode::FORBIDDEN, "Blocked by script"))
         }
     }
 }

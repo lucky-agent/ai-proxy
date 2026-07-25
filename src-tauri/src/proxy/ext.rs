@@ -15,8 +15,12 @@ pub(crate) trait RequestExt {
     where
         T: Clone,
     {
-        self.try_ext::<T>()
-            .unwrap_or_else(|| panic!("{} not found in request extensions", std::any::type_name::<T>()))
+        self.try_ext::<T>().unwrap_or_else(|| {
+            panic!(
+                "{} not found in request extensions",
+                std::any::type_name::<T>()
+            )
+        })
     }
 
     /// 提取 `T` 类型扩展值，未找到时返回 `None`。

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use rama::Layer;
 use rama::Service;
 use rama::extensions::ExtensionsRef;
+use rama::http::Method;
 use rama::http::layer::upgrade::Upgraded;
 use rama::http::layer::{
     map_response_body::MapResponseBodyLayer,
@@ -16,29 +17,27 @@ use rama::io::Io;
 use rama::layer::AddInputExtensionLayer;
 use rama::layer::ConsumeErrLayer;
 use rama::layer::timeout::TimeoutLayer;
+use rama::net::Protocol;
+use rama::net::address::HostWithPort;
 use rama::net::proxy::IoForwardService;
-use rama::tls::server::peek_client_hello_from_input;
+use rama::net::uri::Uri;
 use rama::rt::Executor;
 use rama::service::service_fn;
 use rama::tcp::proxy::IoToProxyBridgeIoLayer;
 use rama::tls::rustls::server::TlsAcceptorLayer;
-use rama::net::Protocol;
-use rama::http::Method;
-use rama::net::address::HostWithPort;
-use rama::net::uri::Uri;
+use rama::tls::server::peek_client_hello_from_input;
 
 use super::client::forward_to_upstream;
 use super::events::ProxyEvent;
+use super::ext::RequestExt;
 use super::layer::direct::direct_reply_layer;
 use super::layer::script::ScriptLayer;
 use super::layer::traffic_record::TrafficRecorderLayer;
 use super::state::{State, ViaConnectTunnel};
-use super::ext::RequestExt;
 
 pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infallible> {
     let start_ts = crate::utils::date::now_ms();
-    let state: State =
-        upgraded.ext::<State>();
+    let state: State = upgraded.ext::<State>();
 
     let peek_timeout = Some(std::time::Duration::from_secs(30));
     // 通过检查 TLS ClientHello 来决定是否进行 MITM
@@ -63,12 +62,11 @@ pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infalli
                 host
             );
             // 把隧道解密后的流量重新解析成 HTTP 语义
-            let http_mitm_service =
-                (
-                    AddInputExtensionLayer::new(ViaConnectTunnel),
-                    AddInputExtensionLayer::new(crate::proxy::state::StartTime(start_ts)),
-                )
-                    .into_layer(new_http_mitm_proxy());
+            let http_mitm_service = (
+                AddInputExtensionLayer::new(ViaConnectTunnel),
+                AddInputExtensionLayer::new(crate::proxy::state::StartTime(start_ts)),
+            )
+                .into_layer(new_http_mitm_proxy());
             let http_transport = HttpServer::auto(Executor::default()).service(http_mitm_service);
             let https_service = TlsAcceptorLayer::new(state.mitm_tls_service_data().clone())
                 .with_store_client_hello(true)
@@ -101,7 +99,10 @@ pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infalli
                 .map(|t| t.0.clone());
             log::info!(
                 "CONNECT {}: not in MITM whitelist, routing to tunnel",
-                authority.as_ref().map(|a| a.to_string()).unwrap_or_default()
+                authority
+                    .as_ref()
+                    .map(|a| a.to_string())
+                    .unwrap_or_default()
             );
             tunnel_connect_proxy(state, prefixed, protocol, authority, start_ts).await;
         }

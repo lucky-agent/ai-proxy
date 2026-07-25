@@ -11,8 +11,8 @@ use tauri::ipc::Channel;
 
 use crate::config::Settings;
 use crate::config::db::Db;
-use crate::proxy::ai::session::SessionStore;
 use crate::proxy::ai::AiTurn;
+use crate::proxy::ai::session::SessionStore;
 use crate::proxy::events::ProxyEvent;
 use crate::storage::id;
 
@@ -33,10 +33,7 @@ pub(crate) struct ProxyCtx {
     sessions: Option<Arc<Mutex<SessionStore>>>,
     /// 请求侧归一化判定出的 (provider, session_id)，供响应侧消费。
     /// 每请求最多写一次（请求侧），之后只读（响应侧），故用 OnceLock 而非 Mutex。
-    ai_req: OnceLock<(
-        crate::proxy::ai::Provider,
-        String,
-    )>,
+    ai_req: OnceLock<(crate::proxy::ai::Provider, String)>,
     /// 请求侧归一化：请求 turns 存入 ctx（OneShot），供响应侧构造
     /// 自包含的 AiNormalized 事件（不再依赖 AiTimelineDelta 合并）。
     request_turns: OnceLock<Vec<AiTurn>>,
@@ -123,21 +120,12 @@ impl ProxyCtx {
     }
 
     /// 请求侧登记归一化判定结果。仅首次写入生效。
-    pub(crate) fn set_ai_req(
-        &self,
-        provider: crate::proxy::ai::Provider,
-        session_id: String,
-    ) {
+    pub(crate) fn set_ai_req(&self, provider: crate::proxy::ai::Provider, session_id: String) {
         self.ai_req.set((provider, session_id)).ok();
     }
 
     /// 响应侧读取请求侧判定结果（浅克隆）。
-    pub(crate) fn ai_req(
-        &self,
-    ) -> Option<(
-        crate::proxy::ai::Provider,
-        String,
-    )> {
+    pub(crate) fn ai_req(&self) -> Option<(crate::proxy::ai::Provider, String)> {
         self.ai_req.get().cloned()
     }
 

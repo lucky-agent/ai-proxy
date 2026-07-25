@@ -12,8 +12,8 @@ use rama::service::BoxService;
 use rama::service::Service;
 use rama::tls::client::{ServerVerifyMode, TlsClientConfig};
 
-use super::state::State;
 use super::ext::RequestExt;
+use super::state::State;
 
 /// Pure upstream forwarding — no recording or error handling.
 /// Traffic recording, DB persistence, AI pipeline, and error-to-Infallible
@@ -43,8 +43,12 @@ pub(crate) fn build_upstream_service(
         ((up as usize) << 1) | (skip as usize)
     }
 
-    static CACHE: [OnceLock<BoxService<Request, Response, BoxError>>; 4] =
-        [OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new()];
+    static CACHE: [OnceLock<BoxService<Request, Response, BoxError>>; 4] = [
+        OnceLock::new(),
+        OnceLock::new(),
+        OnceLock::new(),
+        OnceLock::new(),
+    ];
 
     let idx = cache_key(upstream_proxy, skip_tls_verify);
     if let Some(svc) = CACHE[idx].get() {

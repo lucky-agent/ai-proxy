@@ -2,16 +2,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc;
 
-
 use sqlite;
 
-use crate::storage::traffic;
-use crate::storage::traffic::TrafficTable;
-use crate::storage::collection_requests;
-use crate::storage::collection_requests::CollectionRequestsTable;
+use crate::storage::DbTable;
 use crate::storage::collection_nodes;
 use crate::storage::collection_nodes::CollectionNodesTable;
-use crate::storage::DbTable;
+use crate::storage::collection_requests;
+use crate::storage::collection_requests::CollectionRequestsTable;
+use crate::storage::traffic;
+use crate::storage::traffic::TrafficTable;
 
 // ── Writer thread command ──────────────────────────────────────────────────────
 
@@ -206,19 +205,46 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
 
             // ── Traffic logging ────────────────────────────────────────────
             DbCmd::UpsertTrafficLog {
-                id, method, uri, timestamp, headers_json, query_json, body, reply,
+                id,
+                method,
+                uri,
+                timestamp,
+                headers_json,
+                query_json,
+                body,
+                reply,
             } => {
                 let result = traffic::do_upsert_traffic_log(
-                    &conn, id, &method, &uri, timestamp, &headers_json, &query_json, body.as_deref(),
+                    &conn,
+                    id,
+                    &method,
+                    &uri,
+                    timestamp,
+                    &headers_json,
+                    &query_json,
+                    body.as_deref(),
                 );
-                if let Some(reply) = reply { reply.send(result).ok(); }
+                if let Some(reply) = reply {
+                    reply.send(result).ok();
+                }
             }
 
             DbCmd::UpdateTrafficResponse {
-                id, status, timestamp, duration_ms, headers_json,
+                id,
+                status,
+                timestamp,
+                duration_ms,
+                headers_json,
             } => {
-                traffic::do_update_traffic_response(&conn, id, status, timestamp, duration_ms, &headers_json)
-                    .unwrap_or_else(|e| log::warn!("update_traffic_response: {e}"));
+                traffic::do_update_traffic_response(
+                    &conn,
+                    id,
+                    status,
+                    timestamp,
+                    duration_ms,
+                    &headers_json,
+                )
+                .unwrap_or_else(|e| log::warn!("update_traffic_response: {e}"));
             }
 
             DbCmd::UpdateTrafficResponseBody { id, body } => {
@@ -231,7 +257,12 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
                     .unwrap_or_else(|e| log::warn!("set_traffic_error: {e}"));
             }
 
-            DbCmd::InsertChunk { request_id, chunk, seq, created_at } => {
+            DbCmd::InsertChunk {
+                request_id,
+                chunk,
+                seq,
+                created_at,
+            } => {
                 traffic::do_insert_chunk(&conn, request_id, &chunk, seq, created_at)
                     .unwrap_or_else(|e| log::warn!("insert_chunk: {e}"));
             }
@@ -268,11 +299,17 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
 
             // ── Collection management ───────────────────────────────────────
             DbCmd::LoadAllCollectionNodes { reply } => {
-                reply.send(collection_nodes::do_load_all_collection_nodes(&conn)).ok();
+                reply
+                    .send(collection_nodes::do_load_all_collection_nodes(&conn))
+                    .ok();
             }
 
             DbCmd::InsertCollectionRequest {
-                name, method, uri, timestamp, reply,
+                name,
+                method,
+                uri,
+                timestamp,
+                reply,
             } => {
                 reply
                     .send(collection_requests::do_insert_collection_request(
@@ -282,41 +319,87 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
             }
 
             DbCmd::UpdateCollectionRequest {
-                id, method, uri, headers, query, body, body_type, cookies,
-                auth_type, auth_data, timestamp,
+                id,
+                method,
+                uri,
+                headers,
+                query,
+                body,
+                body_type,
+                cookies,
+                auth_type,
+                auth_data,
+                timestamp,
             } => {
                 collection_requests::do_update_collection_request(
-                    &conn, id, &method, &uri, &headers, &query, body.as_deref(),
-                    &body_type, &cookies, &auth_type, &auth_data, timestamp,
+                    &conn,
+                    id,
+                    &method,
+                    &uri,
+                    &headers,
+                    &query,
+                    body.as_deref(),
+                    &body_type,
+                    &cookies,
+                    &auth_type,
+                    &auth_data,
+                    timestamp,
                 )
                 .unwrap_or_else(|e| log::warn!("update_collection_request: {e}"));
             }
 
-            DbCmd::DuplicateCollectionRequest { id, timestamp, reply } => {
+            DbCmd::DuplicateCollectionRequest {
+                id,
+                timestamp,
+                reply,
+            } => {
                 reply
-                    .send(collection_requests::do_duplicate_collection_request(&conn, id, timestamp))
+                    .send(collection_requests::do_duplicate_collection_request(
+                        &conn, id, timestamp,
+                    ))
                     .ok();
             }
 
             DbCmd::FindCollectionRequestsByIds { ids, reply } => {
                 reply
-                    .send(collection_requests::do_find_collection_requests_by_ids(&conn, &ids))
+                    .send(collection_requests::do_find_collection_requests_by_ids(
+                        &conn, &ids,
+                    ))
                     .ok();
             }
 
-            DbCmd::CreateCollection { name, timestamp, reply } => {
+            DbCmd::CreateCollection {
+                name,
+                timestamp,
+                reply,
+            } => {
                 reply
-                    .send(collection_nodes::do_create_collection(&conn, &name, timestamp))
+                    .send(collection_nodes::do_create_collection(
+                        &conn, &name, timestamp,
+                    ))
                     .ok();
             }
 
-            DbCmd::CreateFolder { parent_id, name, timestamp, reply } => {
+            DbCmd::CreateFolder {
+                parent_id,
+                name,
+                timestamp,
+                reply,
+            } => {
                 reply
-                    .send(collection_nodes::do_create_folder(&conn, parent_id, &name, timestamp))
+                    .send(collection_nodes::do_create_folder(
+                        &conn, parent_id, &name, timestamp,
+                    ))
                     .ok();
             }
 
-            DbCmd::CreateRequestNode { parent_id, name, request_id, timestamp, reply } => {
+            DbCmd::CreateRequestNode {
+                parent_id,
+                name,
+                request_id,
+                timestamp,
+                reply,
+            } => {
                 reply
                     .send(collection_nodes::do_create_request_node(
                         &conn, parent_id, &name, request_id, timestamp,
@@ -324,12 +407,20 @@ fn writer_loop(conn: sqlite::Connection, rx: mpsc::Receiver<DbCmd>, db_path: Str
                     .ok();
             }
 
-            DbCmd::RenameNode { id, new_name, timestamp } => {
+            DbCmd::RenameNode {
+                id,
+                new_name,
+                timestamp,
+            } => {
                 collection_nodes::do_rename_node(&conn, id, &new_name, timestamp)
                     .unwrap_or_else(|e| log::warn!("rename_node: {e}"));
             }
 
-            DbCmd::MoveNode { id, new_parent_id, timestamp } => {
+            DbCmd::MoveNode {
+                id,
+                new_parent_id,
+                timestamp,
+            } => {
                 collection_nodes::do_move_node(&conn, id, new_parent_id, timestamp)
                     .unwrap_or_else(|e| log::warn!("move_node: {e}"));
             }

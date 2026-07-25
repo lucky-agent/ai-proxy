@@ -1,4 +1,8 @@
-use tauri::{AppHandle, menu::{Menu, MenuItem, PredefinedMenuItem}, tray::TrayIconBuilder};
+use tauri::{
+    AppHandle,
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::TrayIconBuilder,
+};
 
 pub const TRAY_ID: &str = "main";
 

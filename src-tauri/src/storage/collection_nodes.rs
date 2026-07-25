@@ -32,8 +32,19 @@ pub(crate) struct CollectionNodesTable;
 pub(crate) trait CollectionNodesRepository {
     fn load_all_collections(&self) -> Result<Vec<ApiCollection>, sqlite::Error>;
     fn create_collection(&self, name: &str, timestamp: i64) -> Result<i64, sqlite::Error>;
-    fn create_folder(&self, parent_id: i64, name: &str, timestamp: i64) -> Result<i64, sqlite::Error>;
-    fn create_request_node(&self, parent_id: i64, name: &str, request_id: i64, timestamp: i64) -> Result<i64, sqlite::Error>;
+    fn create_folder(
+        &self,
+        parent_id: i64,
+        name: &str,
+        timestamp: i64,
+    ) -> Result<i64, sqlite::Error>;
+    fn create_request_node(
+        &self,
+        parent_id: i64,
+        name: &str,
+        request_id: i64,
+        timestamp: i64,
+    ) -> Result<i64, sqlite::Error>;
     fn rename_node(&self, id: i64, new_name: &str, timestamp: i64) -> Result<(), sqlite::Error>;
     fn move_node(&self, id: i64, new_parent_id: i64, timestamp: i64) -> Result<(), sqlite::Error>;
     fn delete_node_if_not_last(&self, node_id: i64) -> Result<(), sqlite::Error>;
@@ -49,11 +60,10 @@ impl CollectionNodesRepository for Db {
     fn load_all_collections(&self) -> Result<Vec<ApiCollection>, sqlite::Error> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send(DbCmd::LoadAllCollectionNodes { reply: reply_tx })?;
-        let nodes: Vec<CollectionNodeRow> =
-            reply_rx.recv().map_err(|_| sqlite::Error {
-                code: None,
-                message: Some("db writer thread disconnected".into()),
-            })??;
+        let nodes: Vec<CollectionNodeRow> = reply_rx.recv().map_err(|_| sqlite::Error {
+            code: None,
+            message: Some("db writer thread disconnected".into()),
+        })??;
 
         if nodes.is_empty() {
             return Ok(Vec::new());
@@ -62,7 +72,11 @@ impl CollectionNodesRepository for Db {
         let request_ids: Vec<i64> = nodes
             .iter()
             .filter_map(|n| {
-                if n.node_type == "request" { n.request_id } else { None }
+                if n.node_type == "request" {
+                    n.request_id
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -115,7 +129,12 @@ impl CollectionNodesRepository for Db {
         })?
     }
 
-    fn create_folder(&self, parent_id: i64, name: &str, timestamp: i64) -> Result<i64, sqlite::Error> {
+    fn create_folder(
+        &self,
+        parent_id: i64,
+        name: &str,
+        timestamp: i64,
+    ) -> Result<i64, sqlite::Error> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.send(DbCmd::CreateFolder {
             parent_id,
@@ -199,11 +218,13 @@ fn assemble_tree(
     parent_id: i64,
     requests_map: &HashMap<i64, RequestData>,
 ) -> Vec<ApiTreeNode> {
-    let mut children: Vec<&CollectionNodeRow> = nodes
-        .iter()
-        .filter(|n| n.parent_id == parent_id)
-        .collect();
-    children.sort_by(|a, b| a.sort_order.cmp(&b.sort_order).then_with(|| a.id.cmp(&b.id)));
+    let mut children: Vec<&CollectionNodeRow> =
+        nodes.iter().filter(|n| n.parent_id == parent_id).collect();
+    children.sort_by(|a, b| {
+        a.sort_order
+            .cmp(&b.sort_order)
+            .then_with(|| a.id.cmp(&b.id))
+    });
 
     children
         .into_iter()
@@ -402,8 +423,15 @@ pub(crate) fn do_delete_node_subtree(
     }
 
     if !request_ids.is_empty() {
-        let req_placeholders: String = request_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let req_sql = format!("DELETE FROM collection_requests WHERE id IN ({})", req_placeholders);
+        let req_placeholders: String = request_ids
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(",");
+        let req_sql = format!(
+            "DELETE FROM collection_requests WHERE id IN ({})",
+            req_placeholders
+        );
         let mut req_stmt = conn.prepare(req_sql)?;
         for (i, req_id) in request_ids.iter().enumerate() {
             req_stmt.bind(((i + 1) as usize, *req_id))?;
@@ -411,7 +439,10 @@ pub(crate) fn do_delete_node_subtree(
         req_stmt.next()?;
     }
 
-    let del_sql = format!("DELETE FROM collection_nodes WHERE id IN ({})", placeholders);
+    let del_sql = format!(
+        "DELETE FROM collection_nodes WHERE id IN ({})",
+        placeholders
+    );
     let mut del_stmt = conn.prepare(del_sql)?;
     for (i, node_id) in to_delete.iter().enumerate() {
         del_stmt.bind(((i + 1) as usize, *node_id))?;

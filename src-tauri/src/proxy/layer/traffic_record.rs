@@ -7,8 +7,8 @@ use rama::layer::Layer;
 use rama::service::Service;
 
 use crate::proxy::ctx::ProxyCtx;
-use crate::proxy::events::ProxyEvent;
 use crate::proxy::error_response;
+use crate::proxy::events::ProxyEvent;
 use crate::proxy::ext::{CachedRequestBody, RequestExt};
 use crate::proxy::record;
 use crate::proxy::state::{self, State};
@@ -134,10 +134,7 @@ where
                 if let (Some(db), Some(db_id)) = (ctx.db_ref(), ctx.db_id()) {
                     db.set_traffic_error(db_id, &msg).ok();
                 }
-                Ok(error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    msg,
-                ))
+                Ok(error_response(StatusCode::INTERNAL_SERVER_ERROR, msg))
             }
         }
     }

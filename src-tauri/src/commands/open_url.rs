@@ -1,6 +1,6 @@
-use tauri::command;
 use rama::net::Protocol;
 use rama::net::uri::Uri;
+use tauri::command;
 
 /// 用系统默认浏览器打开 URL（仅 http/https）
 #[command]
