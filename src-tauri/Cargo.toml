@@ -40,7 +40,7 @@ rama = { git = "https://github.com/plabayo/rama", features = [
 ] }
 bytes = "1"
 uuid = { version = "1", features = ["v4"] }
-base64 = "0.22"
+base64 = "0.23"
 rcgen = { version = "0.14", features = ["ring"] }
 rustls = { version = "0.23", default-features = false, features = [
   "ring",
@@ -50,7 +50,7 @@ rustls = { version = "0.23", default-features = false, features = [
 rquickjs = { version = "0.12" }
 sqlite = "0.37.0"
 open = "5"
-windows-sys = { version = "0.59", features = ["Win32_Security_Cryptography"] }
+windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography"] }
 
 [profile.release]
 codegen-units = 1
