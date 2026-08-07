@@ -2219,9 +2219,9 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.2.34"
+version = "0.2.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e184d09547b80eb7e20d141ba2fb1fbac843ca53f4cf1b31210adc4c1adc6e16"
+checksum = "668b7183bd07af9a4885f5c35b0cc5c83c4607a913c16b7e17291832910d2dcc"
 dependencies = [
  "defmt",
  "jiff-core",
@@ -2245,9 +2245,9 @@ dependencies = [
 
 [[package]]
 name = "jiff-static"
-version = "0.2.34"
+version = "0.2.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "323da076b7a6faf914dc677cb05a4b907742ff7375c8322c9e7f5061e5e0e9de"
+checksum = "3a69dcb3a21cfb32ce1cd056169337ca284af0766dd766e7878819b251a49204"
 dependencies = [
  "jiff-core",
  "proc-macro2",
@@ -3596,10 +3596,10 @@ dependencies = [
 [[package]]
 name = "rama"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "ahash",
- "base64 0.22.1",
+ "base64 0.23.0",
  "cc",
  "rama-core",
  "rama-crypto",
@@ -3630,9 +3630,9 @@ dependencies = [
 
 [[package]]
 name = "rama-boring"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f899e9ccacaa487dc9c656d9422c323fdc6c77a09923fba8756329cea4f8c99"
+checksum = "dc6b0716256d365128e74ce4398762b0eecc6f61b767bea830e8eabb17cc65af"
 dependencies = [
  "bitflags 2.13.0",
  "foreign-types",
@@ -3643,9 +3643,9 @@ dependencies = [
 
 [[package]]
 name = "rama-boring-sys"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c44cdd4922c2b9458987407aa8a4390570c2eb434034845753eae0c97c7e74e9"
+checksum = "f8cd1cfa51da07f18dcc9ab07ec56209b84c207440c858276f27886e8d96d504"
 dependencies = [
  "bindgen",
  "cmake",
@@ -3655,9 +3655,9 @@ dependencies = [
 
 [[package]]
 name = "rama-boring-tokio"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea23548df5ce659524f45bdc2b45e5811d374588a57c3fa81ea072eb94c17a8f"
+checksum = "cd46febc278a06ea0e3a6050fe928befc824fb3dfdda9c57aacf427e9cbd1d08"
 dependencies = [
  "rama-boring",
  "rama-boring-sys",
@@ -3667,7 +3667,7 @@ dependencies = [
 [[package]]
 name = "rama-core"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "ahash",
  "asynk-strim",
@@ -3691,10 +3691,10 @@ dependencies = [
 [[package]]
 name = "rama-crypto"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "ahash",
- "base64 0.22.1",
+ "base64 0.23.0",
  "openssl-probe",
  "rama-boring",
  "rama-core",
@@ -3716,10 +3716,11 @@ dependencies = [
 [[package]]
 name = "rama-dns"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "ahash",
  "arc-swap",
+ "base64 0.23.0",
  "bindgen",
  "libc",
  "moka",
@@ -3727,8 +3728,11 @@ dependencies = [
  "pin-project-lite",
  "rama-core",
  "rama-net",
+ "rama-unix",
  "rama-utils",
  "rand",
+ "serde",
+ "serde_json",
  "tokio",
  "windows-sys 0.61.2",
 ]
@@ -3736,12 +3740,12 @@ dependencies = [
 [[package]]
 name = "rama-error"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 
 [[package]]
 name = "rama-fastcgi"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "rama-core",
  "rama-http-types",
@@ -3754,10 +3758,10 @@ dependencies = [
 [[package]]
 name = "rama-grpc"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "arc-swap",
- "base64 0.22.1",
+ "base64 0.23.0",
  "flate2",
  "pin-project-lite",
  "prost",
@@ -3765,11 +3769,14 @@ dependencies = [
  "radix_trie",
  "rama-core",
  "rama-grpc-build",
+ "rama-grpc-macros",
  "rama-http",
  "rama-http-core",
  "rama-http-types",
  "rama-net",
  "rama-utils",
+ "serde",
+ "serde_json",
  "sync_wrapper",
  "tokio",
  "zstd",
@@ -3778,7 +3785,7 @@ dependencies = [
 [[package]]
 name = "rama-grpc-build"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "prettyplease 0.3.0",
  "proc-macro-crate 3.5.0",
@@ -3792,13 +3799,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "rama-grpc-macros"
+version = "0.3.1"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rama-grpc-build",
+ "syn 3.0.3",
+]
+
+[[package]]
 name = "rama-http"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "ahash",
  "async-compression",
- "base64 0.22.1",
+ "base64 0.23.0",
  "bitflags 2.13.0",
  "compression-codecs",
  "compression-core",
@@ -3836,7 +3854,7 @@ dependencies = [
 [[package]]
 name = "rama-http-backend"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "parking_lot",
  "pin-project-lite",
@@ -3857,7 +3875,7 @@ dependencies = [
 [[package]]
 name = "rama-http-core"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "ahash",
  "atomic-waker",
@@ -3882,10 +3900,10 @@ dependencies = [
 [[package]]
 name = "rama-http-headers"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "ahash",
- "base64 0.22.1",
+ "base64 0.23.0",
  "const_format",
  "httpdate",
  "jiff",
@@ -3902,7 +3920,7 @@ dependencies = [
 [[package]]
 name = "rama-http-hyperium"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "http",
  "http-body",
@@ -3915,7 +3933,7 @@ dependencies = [
 [[package]]
 name = "rama-http-macros"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "proc-macro-crate 3.5.0",
  "proc-macro2",
@@ -3926,7 +3944,7 @@ dependencies = [
 [[package]]
 name = "rama-http-types"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "bytes",
  "const_format",
@@ -3957,7 +3975,7 @@ dependencies = [
 [[package]]
 name = "rama-json"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "itoa",
  "rama-utils",
@@ -3969,7 +3987,7 @@ dependencies = [
 [[package]]
 name = "rama-macros"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "proc-macro-crate 3.5.0",
  "proc-macro2",
@@ -3980,7 +3998,7 @@ dependencies = [
 [[package]]
 name = "rama-net"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "ahash",
  "bitflags 2.13.0",
@@ -4011,7 +4029,7 @@ dependencies = [
 [[package]]
 name = "rama-socks5"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "byteorder",
  "rama-core",
@@ -4026,7 +4044,7 @@ dependencies = [
 [[package]]
 name = "rama-tcp"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "libc",
  "pin-project-lite",
@@ -4040,10 +4058,10 @@ dependencies = [
 [[package]]
 name = "rama-tls"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "ahash",
- "base64 0.22.1",
+ "base64 0.23.0",
  "bytes",
  "flume",
  "hex",
@@ -4066,7 +4084,7 @@ dependencies = [
 [[package]]
 name = "rama-tls-boring"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "brotli",
  "flate2",
@@ -4089,7 +4107,7 @@ dependencies = [
 [[package]]
 name = "rama-tls-rustls"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "pin-project-lite",
  "rama-core",
@@ -4107,7 +4125,7 @@ dependencies = [
 [[package]]
 name = "rama-tower"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "http",
  "http-body",
@@ -4122,7 +4140,7 @@ dependencies = [
 [[package]]
 name = "rama-ua"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "ahash",
  "itertools 0.15.0",
@@ -4140,7 +4158,7 @@ dependencies = [
 [[package]]
 name = "rama-udp"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "rama-core",
  "rama-net",
@@ -4152,7 +4170,7 @@ dependencies = [
 [[package]]
 name = "rama-unix"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "libc",
  "pin-project-lite",
@@ -4165,7 +4183,7 @@ dependencies = [
 [[package]]
 name = "rama-utils"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "const_format",
  "memchr",
@@ -4184,7 +4202,7 @@ dependencies = [
 [[package]]
 name = "rama-ws"
 version = "0.3.1"
-source = "git+https://github.com/plabayo/rama#9c3d11c5af0a79c6ac736ab0a0ae84ee5ab97e6f"
+source = "git+https://github.com/plabayo/rama#eec3959da4d8a21f07bb013bebcb1d28db3986db"
 dependencies = [
  "flate2",
  "rama-core",
@@ -4395,18 +4413,18 @@ dependencies = [
 
 [[package]]
 name = "rquickjs"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ce6b626d30ecbedaaf8097a04982bc3b081f958f5bdf9b8796be4ac00ee48bb"
+checksum = "4e04e4eedfb060b503b5f0a2644abb890b0b3620d3fb674f9455f230014964e4"
 dependencies = [
  "rquickjs-core",
 ]
 
 [[package]]
 name = "rquickjs-core"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9334dd11023d5ae6c751f64496510a576208802ed1d022ef94afa7639c2c55e"
+checksum = "16e4f499ac5b943d97ee6dbc44f23c2c10426f420f7d2f1793d6318911b6608c"
 dependencies = [
  "hashbrown 0.17.1",
  "relative-path",
@@ -4415,9 +4433,9 @@ dependencies = [
 
 [[package]]
 name = "rquickjs-sys"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eef73520804cf5aa4876097ac5733058d628c769eba9678e0f4dba5a4ef79703"
+checksum = "a13ac243b86a74120814ef7e9e30ad5a2c1199b7b9963b1cf7c84e4cdc1cad99"
 dependencies = [
  "cc",
 ]
@@ -4461,9 +4479,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.42"
+version = "0.23.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c54fcab019b409d04215d3a17cb438fd7fbf192ee61461f20f4fe18704bc138"
+checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
 dependencies = [
  "log",
  "once_cell",
@@ -5255,9 +5273,9 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tauri"
-version = "2.11.2"
+version = "2.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "437404997acf375d85f1177afa7e11bb971f274ed6a7b83a2a3e339015f4cc28"
+checksum = "667b20e2726d572dea2de7370da16e188eb06008faf9a92fab7cdc46791190b5"
 dependencies = [
  "anyhow",
  "bytes",
@@ -5328,9 +5346,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-codegen"
-version = "2.6.2"
+version = "2.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4a0319528a025a38c4078e7dae2c446f4e63620ddb0659a643ede1cb38f90e9"
+checksum = "08279169ff42f8fc45a1dbc9dcae888893ba95288142e5880c59b93a26d2cfc5"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -5355,9 +5373,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-macros"
-version = "2.6.2"
+version = "2.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae6cb4e3896c21d2f6da5b31251d2faea0153bba56ed0e970f918115dbee4924"
+checksum = "e8b394794f399a421811d06966343e7933fcae92d59f5180b9388d1174497a45"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -5496,9 +5514,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-runtime"
-version = "2.11.2"
+version = "2.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48222d7116c8807eaa6fe2f372e023fae125084e61e6eca6d70b7961cdf129ef"
+checksum = "b0b4bc95aed361b0019067d189a1174a603d460d0f6c72606512d59fc9c12ec8"
 dependencies = [
  "cookie",
  "dpi",
@@ -5521,9 +5539,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-runtime-wry"
-version = "2.11.2"
+version = "2.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b83849ee63ecb27a8e8d0fe51915ca215076914aca43f96db1179f0f415f6cd9"
+checksum = "4e6fac707727b7a2f48e4ded90976324267371073edbb415ffb73bb0458d203f"
 dependencies = [
  "gtk",
  "http",
@@ -6065,9 +6083,9 @@ dependencies = [
 
 [[package]]
 name = "tray-icon"
-version = "0.23.1"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15edbb0d80583e85ee8df283410038e17314df5cba30da2087a54a85216c0773"
+checksum = "045979e3f037cd18ad1cb2a419dfda133c5c29c9f3453370079f2255d46c257e"
 dependencies = [
  "crossbeam-channel",
  "dirs",
