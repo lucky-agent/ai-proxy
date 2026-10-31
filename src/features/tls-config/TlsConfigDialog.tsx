@@ -1,17 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
-import { CheckIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import { CheckIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { ConfigDialog } from "@/components/core/ConfigDialog";
 import { HintIcon } from "@/components/core/HintIcon";
+import { ListSection } from "@/components/core/ListSection";
 import { MatchTestRow } from "@/components/match-test/MatchTestRow";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocale } from "@/hooks/useLocale";
 import { useMatchTest } from "@/hooks/useMatchTest";
+import { notifyConfigChanged } from "@/lib/config-events";
 import { cn } from "@/lib/utils";
 import type { TlsConfig, TlsWhitelistItem } from "@/types/settings";
 
@@ -129,6 +129,7 @@ export default function TlsConfigDialog({ open, onOpenChange }: Props) {
         tls: { enabled, whitelist: cleaned, record_decrypted_only: recordDecryptedOnly },
       });
       setWhitelist(cleaned);
+      notifyConfigChanged();
       onOpenChange(false);
     } catch (err) {
       setError(String(err));
@@ -138,157 +139,125 @@ export default function TlsConfigDialog({ open, onOpenChange }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <div className="flex items-center gap-2.5">
-            <DialogTitle>{t("tlsConfig.title")}</DialogTitle>
-            <HintIcon label={t("tlsConfig.description")} />
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
-          </div>
-          <div className="flex items-center gap-2.5 pt-1">
-            <span className="text-xs font-medium">{t("tlsConfig.recordDecryptedOnly")}</span>
-            <HintIcon label={t("tlsConfig.recordDecryptedOnlyHint")} />
-            <Switch checked={recordDecryptedOnly} onCheckedChange={setRecordDecryptedOnly} />
-          </div>
-        </DialogHeader>
+    <ConfigDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("tlsConfig.title")}
+      description={t("tlsConfig.description")}
+      enabled={enabled}
+      onEnabledChange={setEnabled}
+      headerExtra={
+        <div className="flex items-center gap-2.5 pt-1">
+          <span className="text-xs font-medium">{t("tlsConfig.recordDecryptedOnly")}</span>
+          <HintIcon label={t("tlsConfig.recordDecryptedOnlyHint")} />
+          <Switch checked={recordDecryptedOnly} onCheckedChange={setRecordDecryptedOnly} />
+        </div>
+      }
+      widthClass="sm:max-w-md"
+      error={error}
+      loading={loading}
+      saving={saving}
+      onSave={handleSave}
+    >
+      <ListSection
+        title={t("tlsConfig.whitelistHeader")}
+        countLabel={t("tlsConfig.domainCount", { n: whitelist.length })}
+        addLabel={t("tlsConfig.addDomain")}
+        onAdd={addRow}
+        loading={loading}
+        loadingLabel={t("settings.loading")}
+        empty={whitelist.length === 0}
+        emptyLabel={t("tlsConfig.emptyWhitelist")}
+        disabled={!enabled}
+        listRef={listRef}
+      >
+        <div
+          className={cn(
+            ROW_GRID,
+            "sticky top-0 z-10 h-7 border-b border-border bg-[color-mix(in_oklab,var(--popover),var(--foreground)_3%)]",
+          )}
+        >
+          <span className={cn(COL.enabled, HEADER_CELL)}>{t("tlsConfig.colEnabled")}</span>
+          <span className={cn(COL.domain, HEADER_CELL, "pl-1.5")}>{t("tlsConfig.domain")}</span>
+          <span className={COL.actions} />
+        </div>
 
-        {loading ? (
-          <p className="text-sm text-muted-foreground">{t("settings.loading")}</p>
-        ) : (
+        {whitelist.map((item, index) => (
           <div
-            className={cn("grid gap-2 transition-opacity duration-150", !enabled && "pointer-events-none opacity-40")}
+            // biome-ignore lint/suspicious/noArrayIndexKey: 域名即行内可编辑内容，作 key 会在输入时重建行导致失焦
+            key={index}
+            data-match-hit={rowHit(item, index) || undefined}
+            className={cn(
+              ROW_GRID,
+              "group/row h-[34px] border-b border-border transition-colors last:border-b-0 hover:bg-foreground/[0.035]",
+              rowHit(item, index) &&
+                "bg-ai-user-bubble/[0.08] shadow-[inset_2px_0_0_var(--ai-user-bubble)] hover:bg-ai-user-bubble/[0.12]",
+            )}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">
-                {t("tlsConfig.whitelistHeader")}
-                {whitelist.length > 0 && (
-                  <span className="ml-1 font-normal opacity-80">
-                    {t("tlsConfig.domainCount", { n: whitelist.length })}
-                  </span>
-                )}
-              </span>
-              <Button variant="ghost" size="xs" onClick={addRow}>
-                <PlusIcon className="size-3.5" />
-                {t("tlsConfig.addDomain")}
-              </Button>
-            </div>
-
-            {whitelist.length === 0 ? (
-              <p className="px-0.5 text-xs text-muted-foreground">{t("tlsConfig.emptyWhitelist")}</p>
-            ) : (
-              <div ref={listRef} className="max-h-80 overflow-y-auto rounded-[10px] border border-border">
-                <div
-                  className={cn(
-                    ROW_GRID,
-                    "sticky top-0 z-10 h-7 border-b border-border bg-[color-mix(in_oklab,var(--popover),var(--foreground)_3%)]",
-                  )}
-                >
-                  <span className={cn(COL.enabled, HEADER_CELL)}>{t("tlsConfig.colEnabled")}</span>
-                  <span className={cn(COL.domain, HEADER_CELL, "pl-1.5")}>{t("tlsConfig.domain")}</span>
-                  <span className={COL.actions} />
-                </div>
-
-                {whitelist.map((item, index) => (
-                  <div
-                    key={item.domain}
-                    data-match-hit={rowHit(item, index) || undefined}
-                    className={cn(
-                      ROW_GRID,
-                      "group/row h-[34px] border-b border-border transition-colors last:border-b-0 hover:bg-foreground/[0.035]",
-                      rowHit(item, index) &&
-                        "bg-ai-user-bubble/[0.08] shadow-[inset_2px_0_0_var(--ai-user-bubble)] hover:bg-ai-user-bubble/[0.12]",
-                    )}
-                  >
-                    <span className={COL.enabled}>
-                      <Checkbox
-                        className={ACCENT_CHECKBOX}
-                        checked={item.enabled}
-                        onCheckedChange={() => toggleItem(index)}
-                      />
-                    </span>
-                    <span className={cn(COL.domain, !item.enabled && "opacity-40")}>
-                      <Tooltip>
-                        <TooltipTrigger
-                          className="block w-full min-w-0"
-                          render={
-                            <Input
-                              className={ROW_INPUT}
-                              value={item.domain}
-                              placeholder={t("tlsConfig.placeholderDomain")}
-                              autoFocus={item.domain === ""}
-                              onChange={(e) => updateDomain(index, e.target.value)}
-                              onKeyDown={(e) => {
-                                // 回车快速续加下一行（当前行已有内容时）
-                                if (e.key === "Enter" && item.domain.trim()) addRow();
-                              }}
-                            />
-                          }
-                        />
-                        <TooltipContent
-                          side="top"
-                          align="start"
-                          className="max-w-[360px] bg-popover text-popover-foreground font-mono text-ui-sm"
-                        >
-                          {item.domain}
-                        </TooltipContent>
-                      </Tooltip>
-                    </span>
-                    <span className={cn(COL.actions, "relative")}>
-                      {rowEligible(item) && (
-                        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center transition-opacity group-hover/row:opacity-0">
-                          {hits[index] ? (
-                            <CheckIcon className="size-3.5" style={{ color: "var(--badge-success)" }} />
-                          ) : (
-                            <XIcon className="size-3.5 text-muted-foreground/60" />
-                          )}
-                        </span>
-                      )}
-                      <Tooltip>
-                        <TooltipTrigger
-                          className="inline-flex size-[22px] items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors group-hover/row:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
-                          onClick={() => removeItem(index)}
-                        >
-                          <Trash2Icon className="size-3.5" />
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
-                          {t("tlsConfig.delete")}
-                        </TooltipContent>
-                      </Tooltip>
-                    </span>
-                  </div>
-                ))}
-                <MatchTestRow
-                  value={testUrl}
-                  onChange={setTestUrl}
-                  placeholder={t("matchTest.placeholder")}
-                  runLabel={t("matchTest.run")}
-                  onRun={runTest}
-                  hit={tested ? hitCount > 0 : null}
-                  title={
-                    tested ? (hitCount > 0 ? t("matchTest.hit", { n: hitCount }) : t("matchTest.miss")) : undefined
+            <span className={COL.enabled}>
+              <Checkbox className={ACCENT_CHECKBOX} checked={item.enabled} onCheckedChange={() => toggleItem(index)} />
+            </span>
+            <span className={cn(COL.domain, !item.enabled && "opacity-40")}>
+              <Tooltip>
+                <TooltipTrigger
+                  className="block w-full min-w-0"
+                  render={
+                    <Input
+                      className={ROW_INPUT}
+                      value={item.domain}
+                      placeholder={t("tlsConfig.placeholderDomain")}
+                      autoFocus={item.domain === ""}
+                      onChange={(e) => updateDomain(index, e.target.value)}
+                      onKeyDown={(e) => {
+                        // 回车快速续加下一行（当前行已有内容时）
+                        if (e.key === "Enter" && item.domain.trim()) addRow();
+                      }}
+                    />
                   }
                 />
-              </div>
-            )}
+                <TooltipContent
+                  side="top"
+                  align="start"
+                  className="max-w-[360px] bg-popover text-popover-foreground font-mono text-ui-sm"
+                >
+                  {item.domain}
+                </TooltipContent>
+              </Tooltip>
+            </span>
+            <span className={cn(COL.actions, "relative")}>
+              {rowEligible(item) && (
+                <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center transition-opacity group-hover/row:opacity-0">
+                  {hits[index] ? (
+                    <CheckIcon className="size-3.5" style={{ color: "var(--badge-success)" }} />
+                  ) : (
+                    <XIcon className="size-3.5 text-muted-foreground/60" />
+                  )}
+                </span>
+              )}
+              <Tooltip>
+                <TooltipTrigger
+                  className="inline-flex size-[22px] items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors group-hover/row:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
+                  onClick={() => removeItem(index)}
+                >
+                  <Trash2Icon className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
+                  {t("tlsConfig.delete")}
+                </TooltipContent>
+              </Tooltip>
+            </span>
           </div>
-        )}
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t("tlsConfig.cancel")}
-          </Button>
-          <Button variant="outline" onClick={handleSave} disabled={loading || saving}>
-            {saving ? t("tlsConfig.saving") : t("tlsConfig.save")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        ))}
+        <MatchTestRow
+          value={testUrl}
+          onChange={setTestUrl}
+          placeholder={t("matchTest.placeholder")}
+          runLabel={t("matchTest.run")}
+          onRun={runTest}
+          hit={tested ? hitCount > 0 : null}
+          title={tested ? (hitCount > 0 ? t("matchTest.hit", { n: hitCount }) : t("matchTest.miss")) : undefined}
+        />
+      </ListSection>
+    </ConfigDialog>
   );
 }

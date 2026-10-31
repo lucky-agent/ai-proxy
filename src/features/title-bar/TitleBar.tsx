@@ -1,6 +1,8 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   AlignJustifyIcon,
+  ArrowLeftRightIcon,
+  CheckIcon,
   CodeIcon,
   InfoIcon,
   LogOutIcon,
@@ -30,6 +32,12 @@ type TitleBarProps = {
   onOpenScriptConfig: () => void;
   onOpenAiConfig: () => void;
   onOpenAuthzConfig: () => void;
+  onOpenReverseConfig: () => void;
+  /** 网络节流总开关 */
+  throttleEnabled: boolean;
+  onThrottleEnabledChange: (enabled: boolean) => void;
+  /** 打开节流规则弹窗 */
+  onOpenThrottleConfig: () => void;
   running: boolean;
   onStartProxy: () => void;
   onStopProxy: () => void;
@@ -49,7 +57,7 @@ function stopTitleBarDrag(event: { stopPropagation: () => void }) {
   event.stopPropagation();
 }
 
-type MenuId = "ai-proxy" | "tools";
+type MenuId = "ai-proxy" | "tools" | "network";
 
 function TitleBarMenu({
   label,
@@ -111,15 +119,20 @@ function MenuItem({
   children,
   onClick,
   variant = "default",
+  checked,
 }: {
   children: ReactNode;
   onClick: () => void;
   variant?: "default" | "destructive";
+  /** 传入即为单选项（menuitemradio），左侧显示勾选位 */
+  checked?: boolean;
 }) {
+  const radio = checked !== undefined;
   return (
     <button
       type="button"
-      role="menuitem"
+      role={radio ? "menuitemradio" : "menuitem"}
+      aria-checked={radio ? checked : undefined}
       data-tauri-drag-region={false}
       onMouseDown={stopTitleBarDrag}
       onPointerDown={stopTitleBarDrag}
@@ -127,8 +140,10 @@ function MenuItem({
       className={cn(
         "flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-sm text-muted-foreground outline-none transition-colors hover:bg-foreground/10 hover:text-foreground",
         variant === "destructive" && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+        checked && "text-foreground",
       )}
     >
+      {radio && <CheckIcon className={cn("size-4 shrink-0", !checked && "invisible")} />}
       {children}
     </button>
   );
@@ -169,6 +184,10 @@ export function TitleBar({
   onOpenScriptConfig,
   onOpenAiConfig,
   onOpenAuthzConfig,
+  onOpenReverseConfig,
+  throttleEnabled,
+  onThrottleEnabledChange,
+  onOpenThrottleConfig,
   running,
   onStartProxy,
   onStopProxy,
@@ -312,6 +331,15 @@ export function TitleBar({
               <MenuItem
                 onClick={() => {
                   close();
+                  onOpenReverseConfig();
+                }}
+              >
+                <ArrowLeftRightIcon className="size-4" />
+                {t("menu.reverseConfig")}
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  close();
                   onOpenScriptConfig();
                 }}
               >
@@ -319,6 +347,30 @@ export function TitleBar({
                 {t("menu.scriptConfig")}
               </MenuItem>
             </>
+          )}
+        </TitleBarMenu>
+        <TitleBarMenu label={t("menu.network")} menuId="network" activeMenu={activeMenu} onMenuChange={setActiveMenu}>
+          {(close) => (
+            <div className="min-w-36">
+              <MenuItem
+                checked={throttleEnabled}
+                onClick={() => {
+                  close();
+                  onThrottleEnabledChange(!throttleEnabled);
+                }}
+              >
+                {t("network.enableThrottling")}
+              </MenuItem>
+              <div className="my-1 h-px bg-surface-elevated" />
+              <MenuItem
+                onClick={() => {
+                  close();
+                  onOpenThrottleConfig();
+                }}
+              >
+                {t("network.configureRules")}
+              </MenuItem>
+            </div>
           )}
         </TitleBarMenu>
       </div>

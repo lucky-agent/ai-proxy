@@ -1,42 +1,56 @@
 import { invoke } from "@tauri-apps/api/core";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { PencilIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { HintIcon } from "@/components/core/HintIcon";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { ConfigDialog } from "@/components/core/ConfigDialog";
+import { ListSection } from "@/components/core/ListSection";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocale } from "@/hooks/useLocale";
+import { useSlidePanel } from "@/hooks/useSlidePanel";
+import { METHOD_BG_COLORS } from "@/lib/http-constants";
 import { cn } from "@/lib/utils";
 import type { AuthzConfig, AuthzRule } from "@/types/settings";
+import AuthzRuleEditForm from "./AuthzRuleEditForm";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-const METHOD_ANY = "ANY";
-const METHOD_OPTIONS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
-const DEFAULT_TIMEOUT = 500;
+/** 五列网格：表头与数据行共用，保证列对齐（与 AI 检测 / 反向代理配置同构） */
+const ROW_GRID = "flex items-center gap-2.5 px-3";
+const COL = {
+  enabled: "flex w-4 shrink-0 justify-start",
+  name: "min-w-0 w-[24%] shrink-0",
+  match: "min-w-0 flex-1",
+  url: "min-w-0 flex-1",
+  onError: "w-12 shrink-0",
+  actions: "flex w-[46px] shrink-0 items-center justify-end gap-0.5",
+};
 
-function emptyRule(): AuthzRule {
-  return {
-    name: "",
-    domain: "",
-    method: "",
-    enabled: true,
-    url: "",
-    timeout_ms: DEFAULT_TIMEOUT,
-    on_error: "closed",
-  };
+const HEADER_CELL =
+  "overflow-visible text-ui-xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase";
+
+const ACTION_BTN =
+  "inline-flex size-[22px] items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors group-hover/row:opacity-100 focus-visible:opacity-100";
+
+/** 带 tooltip 的单行截断文本（列宽有限时悬停看全文） */
+function TruncCell({ text, mono }: { text: string; mono?: boolean }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger className="block w-full min-w-0 text-left">
+        <span className={cn("block truncate text-xs", mono && "font-mono")}>{text}</span>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        align="start"
+        className={cn("max-w-[420px] bg-popover text-popover-foreground text-ui-sm", mono && "font-mono")}
+      >
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
-
-const FIELD_LABEL = "text-ui-xs font-medium tracking-wide text-muted-foreground";
-const FIELD_INPUT = "h-7 rounded-sm border-input px-2 text-xs transition-colors focus-visible:ring-1";
 
 export default function AuthzConfigDialog({ open, onOpenChange }: Props) {
   const { t } = useLocale();
@@ -46,10 +60,14 @@ export default function AuthzConfigDialog({ open, onOpenChange }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // 侧滑面板状态：index null = 新增，数字 = 编辑对应行
+  const panel = useSlidePanel();
+
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setError("");
+    panel.reset();
     invoke<AuthzConfig>("get_authz_config")
       .then((config) => {
         setEnabled(config.enabled);
@@ -57,16 +75,7 @@ export default function AuthzConfigDialog({ open, onOpenChange }: Props) {
       })
       .catch((err) => setError(String(err)))
       .finally(() => setLoading(false));
-  }, [open]);
-
-  function updateRule(index: number, patch: Partial<AuthzRule>) {
-    setError("");
-    setRules((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], ...patch };
-      return updated;
-    });
-  }
+  }, [open, panel.reset]);
 
   function toggleRule(index: number) {
     setRules((prev) => {
@@ -80,29 +89,36 @@ export default function AuthzConfigDialog({ open, onOpenChange }: Props) {
     setRules((prev) => prev.filter((_, i) => i !== index));
   }
 
+  /** 编辑器「确定」：新增追加（默认启用），编辑原位替换（保留启用状态） */
+  function applyRule(draft: Omit<AuthzRule, "enabled">) {
+    const target = panel.target;
+    setError("");
+    setRules((prev) => {
+      if (target === null) return prev;
+      if (target.index === null) return [...prev, { ...draft, enabled: true }];
+      const updated = [...prev];
+      updated[target.index] = { ...draft, enabled: updated[target.index].enabled };
+      return updated;
+    });
+    panel.close();
+  }
+
   async function handleSave() {
     setError("");
-    const cleaned = rules.map((r) => ({
-      ...r,
-      name: r.name.trim(),
-      domain: r.domain.trim(),
-      url: r.url.trim(),
-    }));
-    const kept = cleaned.filter((r) => r.name !== "" || r.domain !== "" || r.url !== "");
-    for (const r of kept) {
-      if (r.enabled && r.name === "") {
+    // 表单确定时已校验；这里兜底旧配置里可能存在的不完整规则
+    for (const r of rules) {
+      if (r.enabled && r.name.trim() === "") {
         setError(t("authzConfig.nameRequired"));
         return;
       }
-      if (r.enabled && r.url === "") {
+      if (r.enabled && r.url.trim() === "") {
         setError(t("authzConfig.urlRequired"));
         return;
       }
     }
     setSaving(true);
     try {
-      await invoke("save_authz_config", { authz: { enabled, rules: kept } });
-      setRules(kept);
+      await invoke("save_authz_config", { authz: { enabled, rules } });
       onOpenChange(false);
     } catch (err) {
       setError(String(err));
@@ -111,160 +127,136 @@ export default function AuthzConfigDialog({ open, onOpenChange }: Props) {
     }
   }
 
+  const editIndex = panel.target?.index ?? null;
+  const editingRule = editIndex !== null ? (rules[editIndex] ?? null) : null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <div className="flex items-center gap-2.5">
-            <DialogTitle>{t("authzConfig.title")}</DialogTitle>
-            <HintIcon label={t("authzConfig.description")} />
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
-          </div>
-        </DialogHeader>
+    <ConfigDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("authzConfig.title")}
+      description={t("authzConfig.description")}
+      enabled={enabled}
+      onEnabledChange={setEnabled}
+      widthClass="sm:max-w-[640px]"
+      error={error}
+      loading={loading}
+      saving={saving}
+      onSave={handleSave}
+      panel={panel.target && <AuthzRuleEditForm initial={editingRule} onConfirm={applyRule} onCancel={panel.close} />}
+      panelClosing={panel.closing}
+      onPanelDismiss={panel.close}
+    >
+      <ListSection
+        title={t("authzConfig.ruleListHeader")}
+        countLabel={t("authzConfig.ruleCount", { n: rules.length })}
+        addLabel={t("authzConfig.addRule")}
+        onAdd={() => panel.open(null)}
+        loading={loading}
+        loadingLabel={t("settings.loading")}
+        empty={rules.length === 0}
+        emptyLabel={t("authzConfig.emptyList")}
+        // 面板打开时外壳已整体变暗，不再叠加禁用态变暗
+        disabled={!enabled && !panel.target}
+        className="select-none"
+      >
+        <div
+          className={cn(
+            ROW_GRID,
+            "sticky top-0 z-10 h-7 border-b border-border bg-[color-mix(in_oklab,var(--popover),var(--foreground)_3%)]",
+          )}
+        >
+          <span className={cn(COL.enabled, HEADER_CELL)}>{t("authzConfig.colEnabled")}</span>
+          <span className={cn(COL.name, HEADER_CELL)}>{t("authzConfig.colName")}</span>
+          <span className={cn(COL.match, HEADER_CELL)}>{t("authzConfig.colMatch")}</span>
+          <span className={cn(COL.url, HEADER_CELL)}>{t("authzConfig.colUrl")}</span>
+          <span className={cn(COL.onError, HEADER_CELL)}>{t("authzConfig.colOnError")}</span>
+          <span className={COL.actions} />
+        </div>
 
-        {loading ? (
-          <p className="text-sm text-muted-foreground">{t("settings.loading")}</p>
-        ) : (
+        {rules.map((rule, index) => (
           <div
-            className={cn("grid gap-3 transition-opacity duration-150", !enabled && "pointer-events-none opacity-40")}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">
-                {t("authzConfig.ruleListHeader")}
-                {rules.length > 0 && (
-                  <span className="ml-1 font-normal opacity-80">{t("authzConfig.ruleCount", { n: rules.length })}</span>
-                )}
-              </span>
-              <Button variant="ghost" size="xs" onClick={() => setRules((prev) => [...prev, emptyRule()])}>
-                <PlusIcon className="size-3.5" />
-                {t("authzConfig.addRule")}
-              </Button>
-            </div>
-
-            {rules.length === 0 ? (
-              <p className="px-0.5 text-xs text-muted-foreground">{t("authzConfig.emptyList")}</p>
-            ) : (
-              <div className="grid gap-2.5">
-                {rules.map((item, index) => (
-                  <div
-                    // biome-ignore lint/suspicious/noArrayIndexKey: rules have no stable id (index-based editing)
-                    key={index}
-                    className={cn(
-                      "rounded-[10px] border border-border p-3 grid gap-2.5",
-                      !item.enabled && "opacity-60",
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Checkbox checked={item.enabled} onCheckedChange={() => toggleRule(index)} />
-                      <Input
-                        className={cn(FIELD_INPUT, "h-7 flex-1")}
-                        value={item.name}
-                        placeholder={t("authzConfig.placeholderName")}
-                        onChange={(e) => updateRule(index, { name: e.target.value })}
-                      />
-                      <Tooltip>
-                        <TooltipTrigger
-                          className="inline-flex size-[22px] items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => removeRule(index)}
-                        >
-                          <Trash2Icon className="size-3.5" />
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
-                          {t("authzConfig.delete")}
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div className="grid gap-1">
-                        <span className={FIELD_LABEL}>{t("authzConfig.domain")}</span>
-                        <Input
-                          className={cn(FIELD_INPUT, "font-mono")}
-                          value={item.domain}
-                          placeholder={t("authzConfig.placeholderDomain")}
-                          onChange={(e) => updateRule(index, { domain: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid gap-1">
-                        <span className={FIELD_LABEL}>{t("authzConfig.method")}</span>
-                        <Select
-                          value={item.method || METHOD_ANY}
-                          onValueChange={(v) => updateRule(index, { method: v === METHOD_ANY ? "" : String(v) })}
-                        >
-                          <SelectTrigger className={cn(FIELD_INPUT, "w-full", !item.method && "text-muted-foreground")}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="min-w-24">
-                            <SelectItem value={METHOD_ANY}>Any</SelectItem>
-                            {METHOD_OPTIONS.map((m) => (
-                              <SelectItem key={m} value={m}>
-                                {m}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-1">
-                      <span className={FIELD_LABEL}>{t("authzConfig.url")}</span>
-                      <Input
-                        className={cn(FIELD_INPUT, "font-mono")}
-                        value={item.url}
-                        placeholder={t("authzConfig.placeholderUrl")}
-                        onChange={(e) => updateRule(index, { url: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div className="grid gap-1">
-                        <span className={FIELD_LABEL}>{t("authzConfig.timeout")}</span>
-                        <Input
-                          className={FIELD_INPUT}
-                          type="number"
-                          min={1}
-                          value={item.timeout_ms}
-                          onChange={(e) => updateRule(index, { timeout_ms: Number(e.target.value) || DEFAULT_TIMEOUT })}
-                        />
-                      </div>
-                      <div className="grid gap-1">
-                        <span className={FIELD_LABEL}>{t("authzConfig.onError")}</span>
-                        <Select
-                          value={item.on_error}
-                          onValueChange={(v) => updateRule(index, { on_error: v as AuthzRule["on_error"] })}
-                        >
-                          <SelectTrigger className={cn(FIELD_INPUT, "w-full")}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="min-w-24">
-                            <SelectItem value="closed">{t("authzConfig.onErrorClosed")}</SelectItem>
-                            <SelectItem value="open">{t("authzConfig.onErrorOpen")}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            // biome-ignore lint/suspicious/noArrayIndexKey: rules have no stable id (index-based editing)
+            key={index}
+            className={cn(
+              ROW_GRID,
+              "group/row h-[34px] cursor-pointer border-b border-border transition-colors last:border-b-0 hover:bg-foreground/[0.035]",
             )}
+            onDoubleClick={() => panel.open(index)}
+          >
+            <span className={COL.enabled} onClick={(e) => e.stopPropagation()}>
+              <Checkbox checked={rule.enabled} onCheckedChange={() => toggleRule(index)} />
+            </span>
+            <span className={cn(COL.name, !rule.enabled && "opacity-40")}>
+              <TruncCell text={rule.name || "—"} />
+            </span>
+            <span className={cn(COL.match, "flex items-center gap-1.5", !rule.enabled && "opacity-40")}>
+              <span
+                className="shrink-0 text-ui-sm font-medium"
+                style={{
+                  color: rule.method
+                    ? (METHOD_BG_COLORS as Record<string, string>)[rule.method]
+                    : "var(--muted-foreground)",
+                }}
+              >
+                {rule.method || "Any"}
+              </span>
+              <span className="min-w-0 flex-1">
+                <TruncCell text={rule.domain || "*"} mono />
+              </span>
+            </span>
+            <span className={cn(COL.url, !rule.enabled && "opacity-40")}>
+              <TruncCell text={rule.url || "—"} mono />
+            </span>
+            <span
+              className={cn(
+                COL.onError,
+                "text-ui-sm",
+                rule.on_error === "open" ? "text-muted-foreground" : "text-foreground",
+                !rule.enabled && "opacity-40",
+              )}
+            >
+              {rule.on_error === "open" ? t("authzConfig.onErrorOpenShort") : t("authzConfig.onErrorClosedShort")}
+            </span>
+            <span className={COL.actions}>
+              <Tooltip>
+                <TooltipTrigger className="inline-flex">
+                  <button
+                    type="button"
+                    className={cn(ACTION_BTN, "hover:bg-muted hover:text-foreground")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      panel.open(index);
+                    }}
+                  >
+                    <PencilIcon className="size-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
+                  {t("authzConfig.editRule")}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger className="inline-flex">
+                  <button
+                    type="button"
+                    className={cn(ACTION_BTN, "hover:bg-destructive/10 hover:text-destructive")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeRule(index);
+                    }}
+                  >
+                    <Trash2Icon className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
+                  {t("authzConfig.delete")}
+                </TooltipContent>
+              </Tooltip>
+            </span>
           </div>
-        )}
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t("authzConfig.cancel")}
-          </Button>
-          <Button variant="outline" onClick={handleSave} disabled={loading || saving}>
-            {saving ? t("authzConfig.saving") : t("authzConfig.save")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        ))}
+      </ListSection>
+    </ConfigDialog>
   );
 }

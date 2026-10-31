@@ -9,8 +9,10 @@ import { AiConfigDialog } from "@/features/ai-config";
 import { AiView } from "@/features/ai-view";
 import { AuthzConfigDialog } from "@/features/authz-config";
 import { BottomBar, type DetailPosition } from "@/features/bottom-bar";
+import { ThrottleConfigDialog } from "@/features/network";
 import { NewRequestView } from "@/features/new-request";
 import { EditRequestDialog, ProxyView } from "@/features/proxy";
+import { ReverseConfigDialog } from "@/features/reverse-config";
 import { ScriptConfigDialog } from "@/features/script-config";
 import ScriptEditor from "@/features/script-config/ScriptEditor";
 import { SettingsDialog } from "@/features/settings";
@@ -21,10 +23,11 @@ import { useProseFontSize } from "@/hooks/useProseFontSize";
 import { useProxyEvents } from "@/hooks/useProxyEvents";
 import { useTheme } from "@/hooks/useTheme";
 import { copyToClipboard } from "@/lib/clipboard";
+import { onConfigChanged } from "@/lib/config-events";
 import { formatCurl } from "@/lib/curl";
 import { classifyEntry, type TypeFilter } from "@/lib/format";
 import type { ProxyJumpTarget } from "@/types/proxy";
-import type { ScriptItem } from "@/types/settings";
+import type { ScriptItem, ThrottleConfig } from "@/types/settings";
 import type { ScriptTab, ViewId } from "@/types/view";
 
 function nextScriptId(used: string[]): number {
@@ -49,6 +52,11 @@ function App() {
   const [scriptConfigOpen, setScriptConfigOpen] = useState(false);
   const [aiConfigOpen, setAiConfigOpen] = useState(false);
   const [authzConfigOpen, setAuthzConfigOpen] = useState(false);
+  const [reverseConfigOpen, setReverseConfigOpen] = useState(false);
+  const [throttleConfigOpen, setThrottleConfigOpen] = useState(false);
+  // 从菜单「启用」进入且尚无规则时，弹窗总开关预置为开
+  const [throttleConfigEnableOnOpen, setThrottleConfigEnableOnOpen] = useState(false);
+  const [throttleEnabled, setThrottleEnabled] = useState(false);
   const [sendRequestOpen, setSendRequestOpen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [detailPosition, setDetailPosition] = useState<DetailPosition>("bottom");
@@ -98,7 +106,62 @@ function App() {
       if (floatingScript?.tab.fileKey === key) return;
 
       // Load content from disk for existing scripts, use template for new ones
-      let content = `// ${label}\nfunction onRequest(req) {\n  return req;\n}\n\nfunction onResponse(res) {\n  return res;\n}\n`;
+      let content = `// ${label}
+
+/// Called before the request is sent to the server. Modify the request data here.
+/// req fields: method, uri (full URL), headers (object with lowercase keys), body
+/// body is a parsed object when Content-Type is JSON or x-www-form-urlencoded, otherwise a string
+/// (binary bodies are an empty string and forwarded unchanged unless you assign a new body).
+/// Mutate req in place. Returning null / undefined blocks the request (client receives 403).
+///
+async function onRequest(req) {
+    // log(req.method + " " + req.uri);
+
+    // Add or update headers
+    // req.headers["x-new-header"] = "my-value";
+
+    // Remove headers
+    // delete req.headers["x-unwanted"];
+
+    // Update method or URL
+    // req.method = "POST";
+    // req.uri = req.uri.replace("/v1/", "/v2/");
+
+    // Update JSON / form body
+    // req.body["max_tokens"] = 1000;
+
+    // Or replace body entirely (object for JSON, string for plain text)
+    // req.body = { "model": "my-model" };
+
+    // Done
+    return req;
+}
+
+/// Called before the response goes back to the client. Modify the response data here.
+/// res fields: status (status code), headers (object with lowercase keys), body
+/// body is a parsed object when Content-Type is JSON or x-www-form-urlencoded, otherwise a string
+/// (binary bodies are an empty string and forwarded unchanged unless you assign a new body).
+/// Mutate res in place.
+///
+async function onResponse(res) {
+    // log("status: " + res.status);
+
+    // Add or update headers
+    // res.headers["content-type"] = "application/json";
+
+    // Update status code
+    // res.status = 500;
+
+    // Update JSON body
+    // res.body["new-key"] = "new-value";
+
+    // Or replace body entirely (object for JSON, string for plain text)
+    // res.body = "Hello, World";
+
+    // Done
+    return res;
+}
+`;
       if (item.file_name) {
         try {
           content = await invoke<string>("get_script_content", { fileName: item.file_name });
@@ -262,6 +325,10 @@ function App() {
       const aiConfig = await invoke<{ enabled: boolean }>("get_ai_config");
       setAiEnabled(aiConfig.enabled);
     } catch (_) {}
+    try {
+      const throttle = await invoke<ThrottleConfig>("get_throttle_config");
+      setThrottleEnabled(throttle.enabled);
+    } catch (_) {}
   }, []);
 
   useEffect(() => {
@@ -279,6 +346,8 @@ function App() {
     }
     checkStatus();
     loadScriptAndTlsState();
+    // 任意入口保存配置后刷新底部栏开关（弹窗、脚本编辑器、解密提示等）
+    return onConfigChanged(loadScriptAndTlsState);
   }, [loadScriptAndTlsState]);
 
   useEffect(() => {
@@ -325,6 +394,30 @@ function App() {
     try {
       await invoke("set_ai_enabled", { enabled: next });
     } catch (_) {}
+    // 后端开启 AI 时会联动打开 TLS，重新读取以同步底部栏 TLS 图标
+    loadScriptAndTlsState();
+  }
+
+  async function changeThrottleEnabled(enabled: boolean) {
+    // 没有可用规则时直接打开总开关等于什么都不限：改为打开规则弹窗（开关预置为开），保存后才生效
+    if (enabled) {
+      try {
+        const cfg = await invoke<ThrottleConfig>("get_throttle_config");
+        if (!cfg.rules.some((r) => r.enabled && r.domain.trim())) {
+          setThrottleConfigEnableOnOpen(true);
+          setThrottleConfigOpen(true);
+          return;
+        }
+      } catch (_) {}
+    }
+    setThrottleEnabled(enabled);
+    try {
+      // 只切总开关，规则列表由后端原样保留
+      await invoke("set_throttle_enabled", { enabled });
+    } catch (err) {
+      setThrottleEnabled(!enabled);
+      setError(String(err));
+    }
   }
 
   async function startProxy() {
@@ -359,6 +452,13 @@ function App() {
           onOpenScriptConfig={() => setScriptConfigOpen(true)}
           onOpenAiConfig={() => setAiConfigOpen(true)}
           onOpenAuthzConfig={() => setAuthzConfigOpen(true)}
+          onOpenReverseConfig={() => setReverseConfigOpen(true)}
+          throttleEnabled={throttleEnabled}
+          onThrottleEnabledChange={changeThrottleEnabled}
+          onOpenThrottleConfig={() => {
+            setThrottleConfigEnableOnOpen(false);
+            setThrottleConfigOpen(true);
+          }}
           running={running}
           onStartProxy={startProxy}
           onStopProxy={stopProxy}
@@ -493,15 +593,14 @@ function App() {
           onOpenChange={setScriptConfigOpen}
           onEditScript={handleEditScript}
         />
-        <AiConfigDialog
-          open={aiConfigOpen}
-          onOpenChange={(open) => {
-            setAiConfigOpen(open);
-            // 保存 AI 配置可能联动打开 TLS 解密，关闭弹窗后刷新底部栏开关状态
-            if (!open) loadScriptAndTlsState();
-          }}
-        />
+        <AiConfigDialog open={aiConfigOpen} onOpenChange={setAiConfigOpen} />
         <AuthzConfigDialog open={authzConfigOpen} onOpenChange={setAuthzConfigOpen} />
+        <ReverseConfigDialog open={reverseConfigOpen} onOpenChange={setReverseConfigOpen} />
+        <ThrottleConfigDialog
+          open={throttleConfigOpen}
+          onOpenChange={setThrottleConfigOpen}
+          enableOnOpen={throttleConfigEnableOnOpen}
+        />
         <EditRequestDialog open={sendRequestOpen} onOpenChange={setSendRequestOpen} entry={null} entries={entries} />
         <SettingsDialog
           open={settingsOpen}

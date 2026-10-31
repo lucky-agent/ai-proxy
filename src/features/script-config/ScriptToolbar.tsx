@@ -3,6 +3,7 @@ import { CodeIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocale } from "@/hooks/useLocale";
+import { notifyConfigChanged } from "@/lib/config-events";
 import type { ScriptConfig } from "@/types/settings";
 
 interface Props {
@@ -27,6 +28,7 @@ export function ScriptToolbar({ onOpenFullConfig }: Props) {
     setScriptConfig(updated);
     try {
       await invoke("save_script_config", { script: updated });
+      notifyConfigChanged();
     } catch (_) {}
   }
 

@@ -1,6 +1,5 @@
 use std::convert::Infallible;
 
-use bytes::Bytes;
 use rama::extensions::ExtensionsRef;
 use rama::http::header;
 use rama::http::{Body, Request, Response, StatusCode};
@@ -111,8 +110,8 @@ async fn apply_request_scripts(
     parts: rama::http::request::Parts,
     body: Body,
 ) -> Result<Request, Box<Response>> {
-    let body_str = match script::collect_body_str(body).await {
-        Ok(s) => s,
+    let body_bytes = match script::collect_body_bytes(body).await {
+        Ok(b) => b,
         // Body exceeds capture limit → skip scripts, forward as-is.
         Err(body) => {
             log::warn!("[script] request body exceeds capture limit, skipping request hooks");
@@ -120,13 +119,13 @@ async fn apply_request_scripts(
         }
     };
 
-    let req_data = script::RequestData::from_rama_parts(&parts, body_str);
+    let req_data = script::RequestData::from_rama_parts(&parts, body_bytes);
 
     match script::run_request_hooks(scripts, req_data) {
         Some(modified) => {
             // 缓存改写后的 body，下游（TrafficRecorderLayer / AiPipeline）
             // 通过 extensions 读取，避免重复收集 body 流。
-            let body_bytes = Bytes::from(modified.body.clone());
+            let body_bytes = modified.body_bytes();
             let req = modified.apply(parts);
             req.extensions().insert(CachedRequestBody(body_bytes));
             Ok(req)
@@ -154,14 +153,14 @@ async fn apply_request_scripts(
 async fn apply_response_scripts(scripts: &[String], resp: Response) -> Response {
     let (parts, body) = resp.into_parts();
 
-    let body_str = match script::collect_body_str(body).await {
-        Ok(s) => s,
+    let body_bytes = match script::collect_body_bytes(body).await {
+        Ok(b) => b,
         Err(body) => {
             log::warn!("[script] response body exceeds capture limit, skipping response hooks");
             return Response::from_parts(parts, body);
         }
     };
 
-    let resp_data = script::ResponseData::from_rama_parts(&parts, body_str);
+    let resp_data = script::ResponseData::from_rama_parts(&parts, body_bytes);
     script::run_response_hooks(scripts, resp_data).apply(parts)
 }

@@ -16,11 +16,12 @@ use tauri::AppHandle;
 use tauri::Manager;
 use tokio::sync::oneshot;
 
-use crate::config::ProxyConfig;
+use crate::config::{ProxyConfig, ReverseProxyRule};
 use crate::proxy::ai::session::SessionStore;
 use state::{AppState, State};
 
 use mitm::{http_connect_proxy, new_http_mitm_proxy};
+use reverse::new_reverse_proxy;
 
 pub(crate) mod ai;
 pub(crate) mod cert;
@@ -31,8 +32,10 @@ pub(crate) mod ext;
 pub(crate) mod layer;
 pub(crate) mod mitm;
 pub(crate) mod record;
+pub(crate) mod reverse;
 pub(crate) mod sse;
 pub(crate) mod state;
+pub(crate) mod throttle;
 
 pub struct ProxyServer {
     config: ProxyConfig,
@@ -92,17 +95,53 @@ impl ProxyServer {
         let sessions: Arc<Mutex<SessionStore>> =
             Arc::new(Mutex::new(SessionStore::load(&db, max_sessions)));
 
-        graceful.spawn_task_fn({
-            move |_guard| async move {
-                let state = State::with_sessions(
-                    mitm_tls_service_data,
-                    settings,
-                    scripts_dir,
-                    event_channel,
-                    db,
-                    sessions,
-                );
+        // 反向代理规则：总开关开启时才绑定；仅绑定已启用的规则，端口占用等错误在启动期暴露。
+        let reverse_rules: Vec<ReverseProxyRule> = settings
+            .read()
+            .map(|s| {
+                if !s.reverse.enabled {
+                    Vec::new()
+                } else {
+                    s.reverse
+                        .rules
+                        .iter()
+                        .filter(|r| r.enabled)
+                        .cloned()
+                        .collect()
+                }
+            })
+            .unwrap_or_default();
 
+        let mut reverse_listeners = Vec::with_capacity(reverse_rules.len());
+        for rule in &reverse_rules {
+            let addr = format!("{}:{}", rule.listen_host, rule.listen_port);
+            let listener = TcpListener::build(exec.clone())
+                .bind_address(&addr)
+                .await
+                .context(format!("bind reverse proxy to {addr} failed"))?;
+            log::info!(
+                "Reverse proxy listening on http://{} -> {}://{}",
+                addr,
+                rule.upstream_scheme_normalized(),
+                rule.upstream_authority()
+            );
+            reverse_listeners.push((rule.clone(), listener));
+        }
+
+        // 共享 State 构建一次，clone 到每个监听器（DB/事件通道/会话均为 Arc 共享）。
+        let state = State::with_sessions(
+            mitm_tls_service_data,
+            settings,
+            scripts_dir,
+            event_channel,
+            db,
+            sessions,
+        );
+
+        graceful.spawn_task_fn({
+            let state = state.clone();
+            let exec = exec.clone();
+            move |_guard| async move {
                 let http_service = HttpServer::auto(exec.clone()).service(
                     (
                         TraceLayer::new_for_http(),
@@ -122,6 +161,20 @@ impl ProxyServer {
                     .await;
             }
         });
+
+        for (rule, listener) in reverse_listeners {
+            graceful.spawn_task_fn({
+                let state = state.clone();
+                let exec = exec.clone();
+                move |_guard| async move {
+                    let http_service =
+                        HttpServer::auto(exec.clone()).service(new_reverse_proxy(&rule));
+                    listener
+                        .serve(AddInputExtensionLayer::new(state).into_layer(http_service))
+                        .await;
+                }
+            });
+        }
 
         graceful
             .shutdown_with_limit(Duration::from_secs(30))

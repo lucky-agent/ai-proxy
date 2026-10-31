@@ -1,4 +1,5 @@
 use crate::utils::domain_match;
+use crate::utils::proxy_rules::UpstreamRules;
 use log::info;
 use rama::error::{BoxError, ErrorContext};
 use rama::net::address::ProxyAddress;
@@ -354,6 +355,143 @@ pub struct ProxyConfig {
     /// 上游代理端口
     #[serde(default)]
     pub upstream_proxy_port: u16,
+    /// 跟随操作系统系统代理：开启时忽略上面的地址/端口，改由 `SystemProxyLayer`
+    /// 按请求读取并跟随系统代理（Windows/macOS/Linux）。
+    #[serde(default)]
+    pub upstream_proxy_follow_system: bool,
+    /// 包含规则：为空表示全部走上游代理；非空时仅命中的主机走代理。
+    /// 语法见 [`crate::utils::proxy_rules`]。
+    #[serde(default)]
+    pub upstream_proxy_include: Vec<String>,
+    /// 排除规则：命中即直连，优先级高于包含规则。
+    #[serde(default = "default_upstream_proxy_exclude")]
+    pub upstream_proxy_exclude: Vec<String>,
+}
+
+/// 网络节流档位。序列化为 `"none"` / `"2g"` / `"3g"` / `"slow4g"` / `"fast4g"` / `"5g"` / `"custom"`。
+/// `None` = 不限速，用于把某些域名从更宽的规则（如 `*`）里排除。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThrottleProfile {
+    None,
+    #[serde(rename = "2g")]
+    TwoG,
+    #[default]
+    #[serde(rename = "3g")]
+    ThreeG,
+    Slow4g,
+    Fast4g,
+    #[serde(rename = "5g")]
+    FiveG,
+    Custom,
+}
+
+/// 一组节流参数。带宽单位 kbps（千比特/秒，1 kbps = 1000 bit/s），0 = 该方向不限速；
+/// 延迟单位毫秒，0 = 不加延迟。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub struct ThrottleParams {
+    #[serde(default)]
+    pub download_kbps: u64,
+    #[serde(default)]
+    pub upload_kbps: u64,
+    #[serde(default)]
+    pub latency_ms: u64,
+}
+
+impl ThrottleParams {
+    const fn new(download_kbps: u64, upload_kbps: u64, latency_ms: u64) -> Self {
+        Self {
+            download_kbps,
+            upload_kbps,
+            latency_ms,
+        }
+    }
+
+    const fn is_noop(&self) -> bool {
+        self.download_kbps == 0 && self.upload_kbps == 0 && self.latency_ms == 0
+    }
+}
+
+impl ThrottleProfile {
+    /// 预设档位的参数；`None` / `Custom` 返回 `None`。
+    ///
+    /// 3G / Slow 4G / Fast 4G 与 Chrome DevTools 预设一致（Lighthouse 口径：
+    /// 真实网络指标 × 吞吐折扣 / 延迟放大系数，用于补偿请求级模拟不含 TCP 慢启动与多次往返）。
+    /// 2G 取 Firefox Regular 2G（250 / 50 kbps，300 ms），按与 Chrome 3G 相同的系数
+    /// （吞吐 ×0.8、延迟 ×5）换算。Chrome / Firefox 均无 5G 预设，5G 为估算的典型值
+    /// （100 / 30 Mbps，20 ms），实际 5G 差异很大。修改档位只改这里，并同步前端 `throttle-presets.ts`。
+    pub const fn preset(self) -> Option<ThrottleParams> {
+        match self {
+            Self::None | Self::Custom => None,
+            Self::TwoG => Some(ThrottleParams::new(200, 40, 1500)),
+            Self::ThreeG => Some(ThrottleParams::new(400, 400, 2000)),
+            Self::Slow4g => Some(ThrottleParams::new(1440, 675, 562)),
+            Self::Fast4g => Some(ThrottleParams::new(8100, 1350, 165)),
+            Self::FiveG => Some(ThrottleParams::new(100_000, 30_000, 20)),
+        }
+    }
+}
+
+fn default_custom_throttle() -> ThrottleParams {
+    ThrottleParams::new(1000, 500, 100)
+}
+
+/// 一条节流规则：域名通配（`*` = 全部）→ 档位。
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ThrottleRule {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub domain: String,
+    #[serde(default)]
+    pub profile: ThrottleProfile,
+    /// `profile = custom` 时使用的参数；其他档位下也保留，便于来回切换。
+    #[serde(default = "default_custom_throttle")]
+    pub custom: ThrottleParams,
+}
+
+impl ThrottleRule {
+    /// 规则对应的实际参数；不限速或参数全为 0 时返回 `None`。
+    fn params(&self) -> Option<ThrottleParams> {
+        let params = match self.profile {
+            ThrottleProfile::Custom => self.custom,
+            profile => profile.preset()?,
+        };
+        (!params.is_noop()).then_some(params)
+    }
+}
+
+/// 网络节流配置：总开关 + 按域名的规则列表（自上而下命中第一条）。
+/// 带宽按**每个请求 / 每条隧道**独立计算，不在连接之间共享。
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ThrottleConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub rules: Vec<ThrottleRule>,
+}
+
+impl ThrottleConfig {
+    /// `host` 命中的节流参数：总开关关闭、未命中任何规则、命中「不限速」时返回 `None`。
+    pub fn params_for(&self, host: &str) -> Option<ThrottleParams> {
+        if !self.enabled {
+            return None;
+        }
+        self.rules
+            .iter()
+            .find(|r| {
+                let pattern = r.domain.trim();
+                r.enabled && !pattern.is_empty() && domain_match::domain_match(pattern, host)
+            })
+            .and_then(ThrottleRule::params)
+    }
+}
+
+fn default_upstream_proxy_exclude() -> Vec<String> {
+    ["localhost", "127.0.0.1", "::1", "*.local", "<local>"]
+        .into_iter()
+        .map(String::from)
+        .collect()
 }
 
 impl Default for ProxyConfig {
@@ -364,11 +502,43 @@ impl Default for ProxyConfig {
             upstream_proxy_enabled: true,
             upstream_proxy_host: String::new(),
             upstream_proxy_port: 0,
+            upstream_proxy_follow_system: false,
+            upstream_proxy_include: Vec::new(),
+            upstream_proxy_exclude: default_upstream_proxy_exclude(),
         }
     }
 }
 
 impl ProxyConfig {
+    /// 编译后的包含/排除规则。两份列表都为空（或全是无效行）时返回 `None`，
+    /// 调用方可跳过逐请求判定。
+    ///
+    /// 上游 client 每个请求都会重建一次外层 service，这里按规则文本缓存最近一次的
+    /// 编译结果，配置未变时直接复用，避免每个请求重新解析通配符 / CIDR。
+    pub fn upstream_rules(&self) -> Option<std::sync::Arc<UpstreamRules>> {
+        use std::sync::{Arc, Mutex};
+
+        type Cached = (Vec<String>, Vec<String>, Option<Arc<UpstreamRules>>);
+        static CACHE: Mutex<Option<Cached>> = Mutex::new(None);
+
+        let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((inc, exc, rules)) = cache.as_ref()
+            && *inc == self.upstream_proxy_include
+            && *exc == self.upstream_proxy_exclude
+        {
+            return rules.clone();
+        }
+        let compiled =
+            UpstreamRules::compile(&self.upstream_proxy_include, &self.upstream_proxy_exclude);
+        let rules = (!compiled.is_empty()).then(|| Arc::new(compiled));
+        *cache = Some((
+            self.upstream_proxy_include.clone(),
+            self.upstream_proxy_exclude.clone(),
+            rules.clone(),
+        ));
+        rules
+    }
+
     /// 解析上游代理地址，供 `ProxyAddressLayer` 使用。
     ///
     /// 开关关闭或地址为空 → `None`（直连）。地址非法 → 记录警告后同样返回 `None`，
@@ -378,7 +548,7 @@ impl ProxyConfig {
     /// 带 scheme（`http://`、`https://`）时沿用该 scheme，否则按 `http://` 处理；
     /// 地址里已自带端口时以其为准，忽略端口框。
     pub fn upstream_proxy_address(&self) -> Option<ProxyAddress> {
-        if !self.upstream_proxy_enabled {
+        if !self.upstream_proxy_enabled || self.upstream_proxy_follow_system {
             return None;
         }
         let raw = self.upstream_proxy_host.trim();
@@ -411,6 +581,117 @@ impl ProxyConfig {
                 info!("上游代理地址 {candidate} 解析失败，回落直连: {err}");
                 None
             }
+        }
+    }
+
+    /// 是否启用「跟随系统代理」：开启时忽略手动地址/端口，改由
+    /// `SystemProxyLayer` 按请求读取并跟随操作系统系统代理。
+    pub const fn follows_system_proxy(&self) -> bool {
+        self.upstream_proxy_enabled && self.upstream_proxy_follow_system
+    }
+}
+
+/// 反向代理配置：全局开关 + 规则列表。
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ReverseConfig {
+    /// 全局反向代理开关。关闭时忽略下方所有规则，不绑定任何本地监听端口。
+    #[serde(default)]
+    pub enabled: bool,
+    /// 规则列表，每项可单独开关。
+    #[serde(default)]
+    pub rules: Vec<ReverseProxyRule>,
+}
+
+impl<'de> Deserialize<'de> for ReverseConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            /// 新格式：`{ "enabled": bool, "rules": [...] }`
+            Object {
+                #[serde(default)]
+                enabled: bool,
+                #[serde(default)]
+                rules: Vec<ReverseProxyRule>,
+            },
+            /// 旧格式：裸数组 `[...]`，兼容已有配置——总开关视为开启。
+            Legacy(Vec<ReverseProxyRule>),
+        }
+        match Repr::deserialize(deserializer)? {
+            Repr::Object { enabled, rules } => Ok(ReverseConfig { enabled, rules }),
+            Repr::Legacy(rules) => Ok(ReverseConfig {
+                enabled: true,
+                rules,
+            }),
+        }
+    }
+}
+
+/// 反向代理规则：本地监听一个端口，把请求固定转发到指定的远程上游。
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ReverseProxyRule {
+    /// 是否启用该规则
+    #[serde(default)]
+    pub enabled: bool,
+    /// 本地监听地址
+    #[serde(default = "default_reverse_listen_host")]
+    pub listen_host: String,
+    /// 本地监听端口
+    #[serde(default)]
+    pub listen_port: u16,
+    /// 上游协议："http" | "https"
+    #[serde(default = "default_reverse_scheme")]
+    pub upstream_scheme: String,
+    /// 上游主机（IP 或域名）
+    #[serde(default)]
+    pub upstream_host: String,
+    /// 上游端口
+    #[serde(default)]
+    pub upstream_port: u16,
+}
+
+fn default_reverse_listen_host() -> String {
+    "127.0.0.1".to_string()
+}
+
+fn default_reverse_scheme() -> String {
+    "https".to_string()
+}
+
+impl ReverseProxyRule {
+    /// 上游 authority（`host[:port]`），IPv6 加方括号，默认端口省略。
+    /// 与 rama 的 `HostWithOptPort` 渲染规则一致，供改写层与 Host 头复用。
+    pub fn upstream_authority(&self) -> String {
+        let host = self.upstream_host.trim();
+        if host.is_empty() {
+            return String::new();
+        }
+        let host = if host.contains(':') && !host.starts_with('[') {
+            format!("[{host}]")
+        } else {
+            host.to_string()
+        };
+        let default_port = if self.upstream_scheme.trim() == "https" {
+            443
+        } else {
+            80
+        };
+        if self.upstream_port == 0 || self.upstream_port == default_port {
+            host
+        } else {
+            format!("{host}:{}", self.upstream_port)
+        }
+    }
+
+    /// 规范化的上游 scheme："https" 之外一律视为 "http"。
+    pub fn upstream_scheme_normalized(&self) -> &str {
+        if self.upstream_scheme.trim() == "https" {
+            "https"
+        } else {
+            "http"
         }
     }
 }
@@ -526,6 +807,12 @@ pub struct Settings {
     /// AI 流量检测配置
     #[serde(default)]
     pub ai: AiConfig,
+    /// 反向代理配置（全局开关 + 规则列表）
+    #[serde(default)]
+    pub reverse: ReverseConfig,
+    /// 网络节流（模拟弱网）：总开关 + 按域名规则
+    #[serde(default)]
+    pub throttle: ThrottleConfig,
     #[serde(default)]
     pub persistence: Option<bool>,
     /// 数据保留天数（0 = 永久保留），默认 30 天
@@ -547,6 +834,8 @@ impl Default for Settings {
             log: LogConfig::default(),
             ui: UiConfig::default(),
             ai: AiConfig::default(),
+            reverse: ReverseConfig::default(),
+            throttle: ThrottleConfig::default(),
             persistence: Some(false),
             retention_days: default_retention_days(),
         }
@@ -734,5 +1023,21 @@ mod tests {
                 .upstream_proxy_address()
                 .is_none()
         );
+    }
+
+    /// 跟随系统代理开启时忽略手动地址/端口：显式地址回落直连（由 SystemProxyLayer 接管），
+    /// 且主开关关闭时跟随系统代理同样不生效。
+    #[test]
+    fn upstream_proxy_follow_system_ignores_explicit_address() {
+        let mut cfg = proxy_cfg("127.0.0.1", 7890);
+        assert!(cfg.upstream_proxy_address().is_some());
+        assert!(!cfg.follows_system_proxy());
+
+        cfg.upstream_proxy_follow_system = true;
+        assert!(cfg.upstream_proxy_address().is_none());
+        assert!(cfg.follows_system_proxy());
+
+        cfg.upstream_proxy_enabled = false;
+        assert!(!cfg.follows_system_proxy());
     }
 }
