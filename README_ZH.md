@@ -183,7 +183,10 @@ client = OpenAI(http_client=httpx.Client(proxy="http://127.0.0.1:5201"))
     "listen_port": 5201,          // 代理监听端口
     "upstream_proxy_enabled": true, // 上游代理开关，关闭则直连
     "upstream_proxy_host": "",    // 上游代理地址，留空则直连
-    "upstream_proxy_port": 0      // 上游代理端口
+    "upstream_proxy_port": 0,      // 上游代理端口
+    "upstream_proxy_follow_system": false, // 跟随系统代理（忽略地址/端口）
+    "upstream_proxy_include": [],  // 包含代理：留空 = 全部走代理，否则仅命中的主机走代理
+    "upstream_proxy_exclude": ["localhost", "127.0.0.1", "::1", "*.local", "<local>"] // 排除代理：命中即直连，优先于包含
   },
   "ui": {
     "theme": "system",            // light / dark / system
@@ -242,21 +245,28 @@ client = OpenAI(http_client=httpx.Client(proxy="http://127.0.0.1:5201"))
 <details>
 <summary><strong>脚本引擎能做些什么？</strong></summary>
 
-脚本使用 JavaScript（rquickjs 运行时），可以拦截请求和响应。示例：
+脚本使用 JavaScript（rquickjs 运行时），可以拦截请求和响应。定义 `onRequest` 和/或 `onResponse`（均可为 `async`），直接修改传入的参数：
+
+- `req`：`method`、`uri`（完整 URL）、`headers`（键为小写的对象）、`body`
+- `res`：`status`、`headers`、`body`
+- Content-Type 为 JSON 或 `application/x-www-form-urlencoded` 时 `body` 是解析后的对象（表单中同名 key 合并为数组），否则为字符串；修改后会自动序列化回去
+- 二进制（非 UTF-8）body 在脚本中为空字符串，脚本未赋新 body 时原样转发
+- `onRequest` 返回 `null` / `undefined` 将拦截该请求（客户端收到 403）
+- 使用 `log()` 输出日志，内容写入应用日志
 
 ```js
-// 修改请求 body
-function onRequest(ctx) {
-    const body = JSON.parse(ctx.request.body);
-    body.max_tokens = 1000;
-    ctx.request.body = JSON.stringify(body);
-    return ctx;
+// 修改请求
+async function onRequest(req) {
+    req.headers["x-new-header"] = "my-value";
+    req.body["max_tokens"] = 1000;
+    return req;
 }
 
-// 记录响应
-function onResponse(ctx) {
-    console.log("Status:", ctx.response.status);
-    return ctx;
+// 修改响应
+async function onResponse(res) {
+    log("status: " + res.status);
+    res.body["new-key"] = "new-value";
+    return res;
 }
 ```
 </details>

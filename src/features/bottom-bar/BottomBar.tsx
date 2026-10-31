@@ -92,61 +92,84 @@ export function BottomBar({
       <div className="flex-1" />
 
       {/* Center-right: script toggle */}
-      <button
-        type="button"
-        onClick={onToggleScript}
-        className={cn(
-          "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
-          scriptEnabled
-            ? "bg-emerald-500/15 text-emerald-400"
-            : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
-        )}
-      >
-        {scriptEnabled && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />}
-        <ScriptIcon className="size-4" />
-      </button>
+      <Tooltip>
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <button
+            type="button"
+            onClick={onToggleScript}
+            className={cn(
+              "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
+              scriptEnabled
+                ? "bg-emerald-500/15 text-emerald-400"
+                : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
+            )}
+          >
+            {scriptEnabled && (
+              <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />
+            )}
+            <ScriptIcon className="size-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
+          {t("bottomBar.script")}
+        </TooltipContent>
+      </Tooltip>
 
       {/* Center-right: TLS toggle */}
-      <button
-        type="button"
-        onClick={onToggleTls}
-        className={cn(
-          "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
-          tlsEnabled
-            ? "bg-emerald-500/15 text-emerald-400"
-            : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
-        )}
-      >
-        {tlsEnabled && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />}
-        <ShieldMinusIcon className="size-4" />
-      </button>
+      <Tooltip>
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <button
+            type="button"
+            onClick={onToggleTls}
+            className={cn(
+              "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
+              tlsEnabled
+                ? "bg-emerald-500/15 text-emerald-400"
+                : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
+            )}
+          >
+            {tlsEnabled && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-emerald-400/70" />}
+            <ShieldMinusIcon className="size-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
+          {t("bottomBar.tls")}
+        </TooltipContent>
+      </Tooltip>
 
       {/* Center-right: AI detection toggle */}
-      <button
-        type="button"
-        onClick={onToggleAi}
-        className={cn(
-          "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
-          aiEnabled
-            ? "bg-violet-500/15 text-violet-400"
-            : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
-        )}
-      >
-        {aiEnabled && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-violet-400/70" />}
-        <svg
-          className="size-4"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
-          <circle cx="7.5" cy="14.5" r="1.5" />
-          <circle cx="16.5" cy="14.5" r="1.5" />
-        </svg>
-      </button>
+      <Tooltip>
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <button
+            type="button"
+            onClick={onToggleAi}
+            className={cn(
+              "relative inline-flex h-[22px] w-[26px] items-center justify-center rounded-md transition-colors",
+              aiEnabled
+                ? "bg-violet-500/15 text-violet-400"
+                : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground",
+            )}
+          >
+            {aiEnabled && <span className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full bg-violet-400/70" />}
+            <svg
+              className="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
+              <circle cx="7.5" cy="14.5" r="1.5" />
+              <circle cx="16.5" cy="14.5" r="1.5" />
+            </svg>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="bg-popover text-popover-foreground text-ui-sm">
+          {t("bottomBar.ai")}
+        </TooltipContent>
+      </Tooltip>
 
       {/* Right: detail position toggle */}
       <Tooltip>

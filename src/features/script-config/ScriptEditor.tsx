@@ -5,6 +5,7 @@ import CodeEditor from "@/components/code-editor/CodeEditor";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocale } from "@/hooks/useLocale";
+import { notifyConfigChanged } from "@/lib/config-events";
 import { METHOD_BG_COLORS } from "@/lib/http-constants";
 import type { ScriptTab } from "@/types/view";
 
@@ -90,6 +91,7 @@ export default function ScriptEditor({
         scripts.push(entry);
       }
       await invoke("save_script_config", { script: { enabled: true, scripts } });
+      notifyConfigChanged();
       // 重新加载以获取生成的 file_name
       const updated = await invoke<{ scripts: { name: string; file_name: string }[] }>("get_script_config");
       const saved = updated.scripts.find((s) => s.name.toLowerCase() === scriptName.toLowerCase());

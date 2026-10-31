@@ -35,6 +35,7 @@ use super::layer::direct::direct_reply_layer;
 use super::layer::script::ScriptLayer;
 use super::layer::traffic_record::TrafficRecorderLayer;
 use super::state::{State, ViaConnectTunnel};
+use super::throttle::{ThrottleLayer, throttle_tunnel};
 
 pub(crate) async fn http_connect_proxy(upgraded: Upgraded) -> Result<(), Infallible> {
     let start_ts = crate::utils::date::now_ms();
@@ -167,6 +168,9 @@ async fn tunnel_connect_proxy<P>(
             ),
     );
 
+    // 隧道无 HTTP 请求层：按目标 host 匹配节流规则，建立前延迟一次，字节流按单条隧道限速。
+    let target_host = authority.as_ref().map(|a| a.host.to_string());
+    let prefixed = throttle_tunnel(&state, target_host.as_deref(), prefixed).await;
     let tunnel_result = tunnel_svc.serve(prefixed).await;
     let end_ts = crate::utils::date::now_ms();
     let duration_ms = (end_ts - start_ts) as u64;
@@ -240,6 +244,8 @@ pub(crate) fn new_http_mitm_proxy()
             // TrafficRecorderLayer is the error boundary:
             // BoxError from forward_to_upstream → Infallible via error_response.
             TrafficRecorderLayer,
+            // 网络节流（按域名）：位于录制层内侧，耗时统计包含延迟与限速。
+            ThrottleLayer,
         )
             .into_layer(service_fn(forward_to_upstream)),
     )

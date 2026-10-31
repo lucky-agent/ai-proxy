@@ -6,7 +6,44 @@ export interface ProxyConfig {
   /** 上游代理地址；留空表示不使用上游代理，请求直连 */
   upstream_proxy_host: string;
   upstream_proxy_port: number;
+  /** 跟随系统代理；开启时忽略地址/端口，按请求读取并跟随 OS 系统代理 */
+  upstream_proxy_follow_system: boolean;
+  /** 包含规则：为空 = 全部走上游代理；非空时仅命中的主机走代理 */
+  upstream_proxy_include: string[];
+  /** 排除规则：命中即直连，优先级高于包含规则 */
+  upstream_proxy_exclude: string[];
 }
+
+/** 网络节流档位；none = 不限速（用于把域名从 `*` 等更宽的规则中排除） */
+export type ThrottleProfile = "none" | "2g" | "3g" | "slow4g" | "fast4g" | "5g" | "custom";
+
+/** 节流参数：带宽单位 kbps（0 = 不限速），延迟单位 ms（0 = 不加延迟） */
+export interface ThrottleParams {
+  download_kbps: number;
+  upload_kbps: number;
+  latency_ms: number;
+}
+
+/** 一条节流规则：域名通配（`*` = 全部）→ 档位 */
+export interface ThrottleRule {
+  enabled: boolean;
+  domain: string;
+  profile: ThrottleProfile;
+  /** profile = custom 时使用的参数 */
+  custom: ThrottleParams;
+}
+
+/** 网络节流配置：总开关 + 规则（自上而下命中第一条，每个请求独立限速） */
+export interface ThrottleConfig {
+  enabled: boolean;
+  rules: ThrottleRule[];
+}
+
+/** 上游代理规则判定结果（test_upstream_proxy_rules 返回） */
+export type UpstreamRouteDecision =
+  | { route: "proxy"; rule: string | null }
+  | { route: "excluded"; rule: string }
+  | { route: "not_included" };
 
 export interface TlsWhitelistItem {
   domain: string;
@@ -54,6 +91,29 @@ export interface AuthzConfig {
   rules: AuthzRule[];
 }
 
+/** 反向代理规则：本地监听一个端口，把请求固定转发到指定的远程上游 */
+export interface ReverseProxyRule {
+  /** 是否启用该规则 */
+  enabled: boolean;
+  /** 本地监听地址 */
+  listen_host: string;
+  /** 本地监听端口 */
+  listen_port: number;
+  /** 上游协议："http" | "https" */
+  upstream_scheme: string;
+  /** 上游主机（IP 或域名） */
+  upstream_host: string;
+  /** 上游端口；0 = 使用 scheme 默认（http=80 / https=443） */
+  upstream_port: number;
+}
+
+/** 反向代理配置：全局开关 + 规则列表 */
+export interface ReverseConfig {
+  /** 反向代理总开关；关闭时忽略所有规则，不绑定本地监听端口 */
+  enabled: boolean;
+  rules: ReverseProxyRule[];
+}
+
 /** 规则内来源条目：来源名与其会话合并 header 成对。
  *  合并头按序参与会话分组（优先于全局配置），命中即确认来源。 */
 export interface AiRuleSource {
@@ -93,4 +153,5 @@ export interface Settings {
     theme: string;
     language: string;
   };
+  reverse: ReverseConfig;
 }

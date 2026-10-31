@@ -40,6 +40,7 @@
         { "command": "get_ai_config" },
         { "command": "save_ai_config" },
         { "command": "test_rule_match" },
+        { "command": "test_upstream_proxy_rules" },
         { "command": "load_traffic_history" },
         { "command": "resend_request" },
         { "command": "open_url" },

@@ -75,8 +75,21 @@ impl State {
 
     /// 上游 HTTP 客户端（含超时/解压/流标准化；OnceLock 缓存，首次调用时构建）。
     pub(crate) fn upstream_client(&self) -> BoxService<Request, Response, BoxError> {
-        let upstream_proxy = self.settings().proxy.upstream_proxy_address();
-        crate::proxy::client::build_upstream_service(upstream_proxy, true)
+        let settings = self.settings();
+        let proxy = &settings.proxy;
+        crate::proxy::client::build_upstream_service(
+            proxy.upstream_proxy_address(),
+            proxy.follows_system_proxy(),
+            proxy.upstream_rules(),
+            proxy.listen_port,
+            true,
+        )
+    }
+
+    /// 反向代理上游的**直连**客户端：忽略应用内的上游代理/系统代理设置，直连固定目标。
+    /// `self_listen_port` 传 0 —— 直连路径不会注入 `ProxyRoute`，回环守卫不触发。
+    pub(crate) fn direct_client(&self) -> BoxService<Request, Response, BoxError> {
+        crate::proxy::client::build_upstream_service(None, false, None, 0, true)
     }
 
     pub(crate) fn mitm_tls_service_data(&self) -> &TlsServerConfig {

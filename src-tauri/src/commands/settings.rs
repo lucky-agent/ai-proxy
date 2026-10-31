@@ -1,6 +1,10 @@
 use crate::AppState;
-use crate::config::{AiConfig, AuthzConfig, ProxyConfig, ScriptConfig, Settings, TlsConfig};
+use crate::config::{
+    AiConfig, AuthzConfig, ProxyConfig, ReverseConfig, ScriptConfig, Settings, ThrottleConfig,
+    TlsConfig,
+};
 use crate::utils::domain_match::{domain_match, url_candidate};
+use crate::utils::proxy_rules::{RouteDecision, UpstreamRules};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 #[tauri::command]
@@ -164,10 +168,86 @@ pub fn set_ai_enabled(state: tauri::State<'_, AppState>, enabled: bool) -> Resul
     let data_dir = state.store().data_dir();
     let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
     settings.ai.enabled = enabled;
+    // 与 save_ai_config 一致：AI 检测依赖 MITM 解密，启用时联动打开 TLS 并补齐白名单
+    crate::config::sync_tls_for_ai(&mut settings.tls, &settings.ai);
     settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
 
     state.set_settings(settings);
 
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_reverse_config(state: tauri::State<'_, AppState>) -> Result<ReverseConfig, String> {
+    Ok(state.settings().reverse)
+}
+
+#[tauri::command]
+pub fn save_reverse_config(
+    state: tauri::State<'_, AppState>,
+    reverse: ReverseConfig,
+) -> Result<(), String> {
+    let data_dir = state.store().data_dir();
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
+
+    // 校验：启用规则必须有上游 host 与合法的本地监听端口；scheme 归一化小写。
+    let mut reverse = reverse;
+    for rule in &mut reverse.rules {
+        rule.listen_host = rule.listen_host.trim().to_string();
+        rule.upstream_scheme = rule.upstream_scheme.trim().to_lowercase();
+        rule.upstream_host = rule.upstream_host.trim().to_string();
+        if rule.enabled && rule.upstream_host.is_empty() {
+            return Err("Reverse proxy upstream host is required when enabled".into());
+        }
+        if rule.enabled && rule.listen_port == 0 {
+            return Err("Reverse proxy listen port is required when enabled".into());
+        }
+    }
+
+    settings.reverse = reverse;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
+
+    state.set_settings(settings);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_throttle_config(state: tauri::State<'_, AppState>) -> Result<ThrottleConfig, String> {
+    Ok(state.settings().throttle)
+}
+
+/// 保存网络节流配置（总开关 + 域名规则）。对新请求 / 新隧道立即生效，无需重启代理。
+#[tauri::command]
+pub fn save_throttle_config(
+    state: tauri::State<'_, AppState>,
+    mut throttle: ThrottleConfig,
+) -> Result<(), String> {
+    for rule in &mut throttle.rules {
+        rule.domain = rule.domain.trim().to_string();
+        if rule.enabled && rule.domain.is_empty() {
+            return Err("Throttle rule domain is required when enabled".into());
+        }
+    }
+    let data_dir = state.store().data_dir();
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
+    settings.throttle = throttle;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
+    state.set_settings(settings);
+    Ok(())
+}
+
+/// 仅切换节流总开关；规则列表原样保留（供「网络」菜单快捷切换使用）。
+#[tauri::command]
+pub fn set_throttle_enabled(
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    let data_dir = state.store().data_dir();
+    let mut settings = Settings::load_from_path(data_dir).map_err(|e| e.to_string())?;
+    settings.throttle.enabled = enabled;
+    settings.save_to_path(data_dir).map_err(|e| e.to_string())?;
+    state.set_settings(settings);
     Ok(())
 }
 
@@ -203,6 +283,19 @@ pub fn save_script_content(
 /// 测试 url 对一组 pattern 的命中情况（配置弹窗「匹配测试」行使用）。
 /// 与运行时同走 domain_match：match_path=false 仅取 host（TLS/脚本语义），
 /// true 取 host+path（AI 检测语义）。url 无法解析时全部返回 false。
+/// 测试一个 URL / 主机在给定的上游代理包含/排除规则下是否走代理（设置页「测试」使用）。
+/// 规则由前端传入（尚未保存的草稿），与运行时同走 `UpstreamRules::decide`。
+/// URL 无法解析时返回 `None`。
+#[tauri::command]
+pub fn test_upstream_proxy_rules(
+    include: Vec<String>,
+    exclude: Vec<String>,
+    url: String,
+) -> Option<RouteDecision> {
+    let host = url_candidate(&url, false)?;
+    Some(UpstreamRules::compile(&include, &exclude).decide(&host))
+}
+
 #[tauri::command]
 pub fn test_rule_match(patterns: Vec<String>, url: String, match_path: bool) -> Vec<bool> {
     let Some(candidate) = url_candidate(&url, match_path) else {
