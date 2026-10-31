@@ -183,7 +183,10 @@ The config file lives at `~/.ai-proxy/setting.json` (override the root directory
     "listen_port": 5201,          // proxy listen port
     "upstream_proxy_enabled": true, // upstream proxy toggle, off = direct
     "upstream_proxy_host": "",    // upstream proxy address, empty = direct
-    "upstream_proxy_port": 0      // upstream proxy port
+    "upstream_proxy_port": 0,      // upstream proxy port
+    "upstream_proxy_follow_system": false, // follow the OS system proxy (ignores host/port)
+    "upstream_proxy_include": [],  // include rules: empty = proxy all, else only matching hosts are proxied
+    "upstream_proxy_exclude": ["localhost", "127.0.0.1", "::1", "*.local", "<local>"] // exclude rules: match = direct, wins over include
   },
   "ui": {
     "theme": "system",            // light / dark / system
@@ -242,21 +245,28 @@ Adding a new protocol requires only implementing the `AiProtocol` trait and addi
 <details>
 <summary><strong>What can the script engine do?</strong></summary>
 
-Scripts run in JavaScript (rquickjs runtime) and can intercept requests and responses. Example:
+Scripts run in JavaScript (rquickjs runtime) and can intercept requests and responses. Define `onRequest` and/or `onResponse` (both may be `async`) and mutate the argument in place:
+
+- `req`: `method`, `uri` (full URL), `headers` (object with lowercase keys), `body`
+- `res`: `status`, `headers`, `body`
+- `body` is a parsed object when Content-Type is JSON or `application/x-www-form-urlencoded` (repeated form keys become arrays), otherwise a string; it is serialized back automatically
+- Binary (non UTF-8) bodies show up as an empty string and are forwarded unchanged unless the script assigns a new body
+- Returning `null` / `undefined` from `onRequest` blocks the request (client receives 403)
+- Use `log()` for output — it goes to the app log
 
 ```js
-// Modify request body
-function onRequest(ctx) {
-    const body = JSON.parse(ctx.request.body);
-    body.max_tokens = 1000;
-    ctx.request.body = JSON.stringify(body);
-    return ctx;
+// Modify request
+async function onRequest(req) {
+    req.headers["x-new-header"] = "my-value";
+    req.body["max_tokens"] = 1000;
+    return req;
 }
 
-// Log responses
-function onResponse(ctx) {
-    console.log("Status:", ctx.response.status);
-    return ctx;
+// Modify response
+async function onResponse(res) {
+    log("status: " + res.status);
+    res.body["new-key"] = "new-value";
+    return res;
 }
 ```
 </details>

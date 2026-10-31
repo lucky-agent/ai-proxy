@@ -18,14 +18,17 @@ mod theme;
 pub use locale::{get_locale, set_locale, sync_tray_locale};
 pub use proxy::{get_status, start_proxy, stop_proxy, subscribe_proxy_events};
 pub use resend::resend_request;
+pub use settings::test_upstream_proxy_rules;
 pub use settings::{export_ca_cert, install_ca_cert, read_ca_cert_pem, test_rule_match};
 pub use settings::{get_ai_config, save_ai_config, set_ai_enabled};
 pub use settings::{get_authz_config, save_authz_config};
+pub use settings::{get_reverse_config, save_reverse_config};
 pub use settings::{
     get_script_config, get_script_content, save_script_config, save_script_content,
     set_script_enabled,
 };
 pub use settings::{get_settings, save_settings};
+pub use settings::{get_throttle_config, save_throttle_config, set_throttle_enabled};
 pub use settings::{get_tls_config, save_tls_config, set_tls_enabled};
 pub use theme::{get_prose_font_size, get_theme, set_prose_font_size, set_theme};
 mod traffic;

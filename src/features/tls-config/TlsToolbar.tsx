@@ -3,6 +3,7 @@ import { ShieldCheckIcon, ShieldOffIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocale } from "@/hooks/useLocale";
+import { notifyConfigChanged } from "@/lib/config-events";
 import type { TlsConfig } from "@/types/settings";
 
 interface Props {
@@ -28,6 +29,7 @@ export function TlsToolbar({ onOpenFullConfig }: Props) {
     setTlsConfig(updated);
     try {
       await invoke("save_tls_config", { tls: updated });
+      notifyConfigChanged();
     } catch (_) {}
   }
 

@@ -6,6 +6,7 @@ import { CopyButton } from "@/components/core/CopyButton";
 import { Empty, EmptyTitle } from "@/components/core/Empty";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/hooks/useLocale";
+import { notifyConfigChanged } from "@/lib/config-events";
 import { extractHost } from "@/lib/format";
 import { formatTrafficForAi } from "@/lib/format-for-ai";
 import { isStreamingContentType } from "@/lib/sse";
@@ -54,6 +55,7 @@ function DecryptPrompt({ host, t }: { host: string; t: (key: string) => string }
         whitelist: exists ? config.whitelist : [...config.whitelist, { domain: host, enabled: true }],
       };
       await invoke("save_tls_config", { tls: updated });
+      notifyConfigChanged();
       setDone(true);
     } catch (_) {
       // 静默失败
